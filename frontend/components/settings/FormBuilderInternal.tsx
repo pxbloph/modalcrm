@@ -27,7 +27,7 @@ interface FieldOption {
 
 export interface FormField {
     id: string;
-    type: 'text' | 'textarea' | 'number' | 'email' | 'select' | 'radio' | 'checkbox' | 'date';
+    type: 'text' | 'textarea' | 'number' | 'email' | 'select' | 'radio' | 'checkbox' | 'date' | 'datetime-local';
     label: string;
     required: boolean;
     options?: FieldOption[]; // For select, radio
@@ -227,6 +227,7 @@ export default function FormBuilderInternal({
                                 <option value="radio">Múltipla Escolha (Radio)</option>
                                 <option value="checkbox">Checkbox (Sim/Não)</option>
                                 <option value="date">Data</option>
+                                <option value="datetime-local">Data e Hora</option>
                             </select>
                         </div>
 
