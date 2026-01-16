@@ -145,7 +145,7 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
         let finalValue = value;
 
         if (field?.systemField === 'cnpj') {
-            finalValue = value.replace(/\D/g, ''); // Numbers only for CNPJ
+            finalValue = value.replace(/\D/g, '').slice(0, 14); // Numbers only, max 14 digits
         }
         if (field?.systemField === 'phone') {
             finalValue = formatPhone(value);
