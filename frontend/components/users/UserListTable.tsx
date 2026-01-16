@@ -50,6 +50,9 @@ interface UserListTableProps {
     onRefresh: () => void;
 }
 
+// --- Constants ---
+const DEFAULT_COLUMN_ORDER = ['select', 'user_info', 'email', 'role', 'is_active', 'supervisor', 'actions'];
+
 // --- Draggable Header Component (Table) ---
 const DraggableTableHeader = ({ header }: { header: Header<User, unknown> }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -69,22 +72,14 @@ const DraggableTableHeader = ({ header }: { header: Header<User, unknown> }) => 
             ref={setNodeRef}
             style={style}
             colSpan={header.colSpan}
+            {...attributes}
+            {...listeners}
             className={cn(
-                "relative text-left text-sm font-semibold text-gray-900 border-b border-gray-200 bg-gray-50 group select-none",
+                "relative text-left text-sm font-semibold text-gray-900 border-b border-gray-200 bg-gray-50 group select-none cursor-grab active:cursor-grabbing hover:bg-gray-100/50 transition-colors",
                 isDragging && "bg-gray-100 shadow-lg"
             )}
         >
-            <div className="flex items-center gap-2 px-3 py-3.5 h-full">
-                {header.column.id !== 'select' && header.column.id !== 'actions' && (
-                    <button
-                        {...attributes}
-                        {...listeners}
-                        className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
-                        title="Arrastar para reordenar"
-                    >
-                        <GripVertical className="h-4 w-4" />
-                    </button>
-                )}
+            <div className="flex items-center gap-2 px-3 py-3 h-full">
                 <span className="flex-1 truncate">
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                 </span>
@@ -151,18 +146,102 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
     const [columnSelectorOpen, setColumnSelectorOpen] = useState(false);
     const [columnSearch, setColumnSearch] = useState('');
 
+    // State
+    const [columnOrder, setColumnOrder] = useState<string[]>(DEFAULT_COLUMN_ORDER);
+    const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+
+    // Load Preferences
+    useEffect(() => {
+        const saved = localStorage.getItem('user-table-config');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                if (parsed.order) {
+                    // Merge saved order with default/current columns to ensure new columns show up
+                    const savedSet = new Set(parsed.order);
+                    const newColumns = DEFAULT_COLUMN_ORDER.filter(colId => !savedSet.has(colId));
+                    const existingSavedColumns = parsed.order.filter((colId: string) => DEFAULT_COLUMN_ORDER.includes(colId));
+                    setColumnOrder([...existingSavedColumns, ...newColumns]);
+                }
+                if (parsed.visibility) setColumnVisibility(parsed.visibility);
+            } catch (e) {
+                console.error("Failed to load user table config", e);
+            }
+        }
+    }, []);
+
+    const savePreferences = (newOrder: string[], newVisibility: VisibilityState) => {
+        localStorage.setItem('user-table-config', JSON.stringify({
+            order: newOrder,
+            visibility: newVisibility
+        }));
+    };
+
+    // Temp state for selector (to allow "Cancel"/"Apply")
+    const [tempOrder, setTempOrder] = useState<string[]>([]);
+    const [tempVisibility, setTempVisibility] = useState<VisibilityState>({});
+
+    // --- Selection Logic ---
+    const toggleAll = () => {
+        if (selectedIds.size === users.length && users.length > 0) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(users.map(u => u.id)));
+        }
+    };
+
+    const toggleRow = (id: string) => {
+        const newSelected = new Set(selectedIds);
+        if (newSelected.has(id)) {
+            newSelected.delete(id);
+        } else {
+            newSelected.add(id);
+        }
+        setSelectedIds(newSelected);
+    };
+
+    const openColumnSelector = () => {
+        setTempOrder([...columnOrder]);
+        setTempVisibility({ ...columnVisibility });
+        setColumnSelectorOpen(true);
+    };
+
+    const applyColumnPreferences = () => {
+        setColumnOrder(tempOrder);
+        setColumnVisibility(tempVisibility);
+        savePreferences(tempOrder, tempVisibility);
+        setColumnSelectorOpen(false);
+    };
+
+    const resetColumnPreferences = () => {
+        setTempOrder([...DEFAULT_COLUMN_ORDER]);
+        setTempVisibility({});
+    };
+
     // --- Column Definitions ---
     const columns = useMemo<ColumnDef<User>[]>(
         () => [
             {
                 id: 'select',
                 header: ({ table }) => (
-                    <input
-                        type="checkbox"
-                        checked={users.length > 0 && selectedIds.size === users.length}
-                        onChange={toggleAll}
-                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 h-4 w-4 cursor-pointer"
-                    />
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                openColumnSelector();
+                            }}
+                            className="text-gray-400 hover:text-gray-600 p-0.5 rounded-sm hover:bg-gray-100"
+                            title="Configurar Colunas"
+                        >
+                            <Settings className="h-3.5 w-3.5" />
+                        </button>
+                        <input
+                            type="checkbox"
+                            checked={users.length > 0 && selectedIds.size === users.length}
+                            onChange={toggleAll}
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 h-4 w-4 cursor-pointer"
+                        />
+                    </div>
                 ),
                 cell: ({ row }) => (
                     <div className="flex items-center justify-center">
@@ -175,7 +254,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                         />
                     </div>
                 ),
-                size: 40,
+                size: 50,
                 enableResizing: false,
             },
             {
@@ -270,93 +349,8 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                 enableResizing: false,
             }
         ],
-        [onEdit, onDelete, selectedIds, users]
+        [onEdit, onDelete, selectedIds, users, columnSelectorOpen] //Added columnSelectorOpen dependency
     );
-
-    // Initial State Calculation
-    const defaultColumnOrder = columns.map(c => c.id || (c as any).accessorKey as string);
-    const defaultColumnVisibility = {};
-
-    // State
-    const [columnOrder, setColumnOrder] = useState<string[]>(defaultColumnOrder);
-    const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(defaultColumnVisibility);
-
-    // Load Preferences
-    useEffect(() => {
-        const saved = localStorage.getItem('user-table-config');
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                if (parsed.order) setColumnOrder(parsed.order);
-                if (parsed.visibility) setColumnVisibility(parsed.visibility);
-            } catch (e) {
-                console.error("Failed to load user table config", e);
-            }
-        }
-    }, []);
-
-    const savePreferences = (newOrder: string[], newVisibility: VisibilityState) => {
-        localStorage.setItem('user-table-config', JSON.stringify({
-            order: newOrder,
-            visibility: newVisibility
-        }));
-    };
-
-    // Temp state for selector (to allow "Cancel"/"Apply")
-    const [tempOrder, setTempOrder] = useState<string[]>([]);
-    const [tempVisibility, setTempVisibility] = useState<VisibilityState>({});
-
-    const openColumnSelector = () => {
-        setTempOrder([...columnOrder]);
-        setTempVisibility({ ...columnVisibility });
-        setColumnSelectorOpen(true);
-    };
-
-    const applyColumnPreferences = () => {
-        setColumnOrder(tempOrder);
-        setColumnVisibility(tempVisibility);
-        savePreferences(tempOrder, tempVisibility);
-        setColumnSelectorOpen(false);
-    };
-
-    const resetColumnPreferences = () => {
-        setTempOrder([...defaultColumnOrder]);
-        setTempVisibility({ ...defaultColumnVisibility });
-    };
-
-    // Table Instance
-    const table = useReactTable({
-        data: users,
-        columns,
-        getCoreRowModel: getCoreRowModel(),
-        columnResizeMode: 'onChange',
-        state: {
-            columnOrder,
-            columnVisibility,
-        },
-        onColumnOrderChange: setColumnOrder,
-        onColumnVisibilityChange: setColumnVisibility,
-        enableColumnResizing: true,
-    });
-
-    // --- Selection Logic ---
-    const toggleAll = () => {
-        if (selectedIds.size === users.length && users.length > 0) {
-            setSelectedIds(new Set());
-        } else {
-            setSelectedIds(new Set(users.map(u => u.id)));
-        }
-    };
-
-    const toggleRow = (id: string) => {
-        const newSelected = new Set(selectedIds);
-        if (newSelected.has(id)) {
-            newSelected.delete(id);
-        } else {
-            newSelected.add(id);
-        }
-        setSelectedIds(newSelected);
-    };
 
     // --- Bulk Actions ---
     const handleBulkDelete = async () => {
@@ -403,8 +397,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
 
     const handleBulkSupervisorSubmit = async () => {
         const count = selectedIds.size;
-        if (!selectedSupervisorId && selectedSupervisorId !== null) return; // Allow null for "no supervisor"? Let's assume selecting "None" or a user. 
-        // For now, require selection.
+        if (!selectedSupervisorId && selectedSupervisorId !== null) return;
         if (!selectedSupervisorId) {
             alert('Selecione um supervisor.');
             return;
@@ -480,6 +473,21 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
 
     const isFixedColumn = (id: string) => id === 'select' || id === 'actions';
 
+    // Table Instance
+    const table = useReactTable({
+        data: users,
+        columns,
+        getCoreRowModel: getCoreRowModel(),
+        columnResizeMode: 'onChange',
+        state: {
+            columnOrder,
+            columnVisibility,
+        },
+        onColumnOrderChange: setColumnOrder,
+        onColumnVisibilityChange: setColumnVisibility,
+        enableColumnResizing: true,
+    });
+
     // --- Render ---
     if (loading && users.length === 0) {
         return (
@@ -491,105 +499,92 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
 
     return (
         <div className="relative space-y-4">
-            {/* Toolbar */}
-            <div className="flex justify-end">
-                <div className="relative">
-                    <button
-                        onClick={openColumnSelector}
-                        className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                        <Settings className="h-4 w-4 text-gray-500" />
-                        Colunas
-                    </button>
+            {/* Column Selector Popover (Relocated) */}
+            {columnSelectorOpen && (
+                <>
+                    <div className="fixed inset-0 z-30" onClick={() => setColumnSelectorOpen(false)} />
+                    <div className="absolute left-0 top-8 z-40 w-80 bg-white rounded-lg shadow-2xl ring-1 ring-black ring-opacity-5 p-4 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-100 origin-top-left">
+                        <div className="flex items-center justify-between border-b pb-2">
+                            <h3 className="font-semibold text-gray-900">Personalizar Colunas</h3>
+                            <button onClick={() => setColumnSelectorOpen(false)} className="text-gray-400 hover:text-gray-600">
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
 
-                    {/* Column Selector Modal/Popover */}
-                    {columnSelectorOpen && (
-                        <>
-                            <div className="fixed inset-0 z-30" onClick={() => setColumnSelectorOpen(false)} />
-                            <div className="absolute right-0 top-12 z-40 w-80 bg-white rounded-lg shadow-2xl ring-1 ring-black ring-opacity-5 p-4 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
-                                <div className="flex items-center justify-between border-b pb-2">
-                                    <h3 className="font-semibold text-gray-900">Personalizar Colunas</h3>
-                                    <button onClick={() => setColumnSelectorOpen(false)} className="text-gray-400 hover:text-gray-600">
-                                        <X className="h-4 w-4" />
-                                    </button>
-                                </div>
+                        {/* Search */}
+                        <div className="relative">
+                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Procurar coluna..."
+                                className="w-full pl-8 pr-3 py-2 border rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                value={columnSearch}
+                                onChange={(e) => setColumnSearch(e.target.value)}
+                            />
+                        </div>
 
-                                {/* Search */}
-                                <div className="relative">
-                                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-                                    <input
-                                        type="text"
-                                        placeholder="Procurar coluna..."
-                                        className="w-full pl-8 pr-3 py-2 border rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                        value={columnSearch}
-                                        onChange={(e) => setColumnSearch(e.target.value)}
-                                    />
-                                </div>
+                        {/* List */}
+                        <div className="max-h-60 overflow-y-auto space-y-1">
+                            <DndContext
+                                sensors={selectorSensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={handleSelectorDragEnd}
+                            >
+                                <SortableContext
+                                    items={tempOrder}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    {tempOrder
+                                        .filter(id => {
+                                            const label = getColumnLabel(id).toLowerCase();
+                                            return label.includes(columnSearch.toLowerCase());
+                                        })
+                                        .map(id => (
+                                            <SortableColumnItem
+                                                key={id}
+                                                id={id}
+                                                label={getColumnLabel(id)}
+                                                isVisible={tempVisibility[id] !== false} // Default true if undefined
+                                                isFixed={isFixedColumn(id)}
+                                                onToggle={(clickedId: string) => {
+                                                    setTempVisibility(prev => ({
+                                                        ...prev,
+                                                        [clickedId]: prev[clickedId] === false ? true : false
+                                                    }));
+                                                }}
+                                            />
+                                        ))}
+                                </SortableContext>
+                            </DndContext>
+                        </div>
 
-                                {/* List */}
-                                <div className="max-h-60 overflow-y-auto space-y-1">
-                                    <DndContext
-                                        sensors={selectorSensors}
-                                        collisionDetection={closestCenter}
-                                        onDragEnd={handleSelectorDragEnd}
-                                    >
-                                        <SortableContext
-                                            items={tempOrder}
-                                            strategy={verticalListSortingStrategy}
-                                        >
-                                            {tempOrder
-                                                .filter(id => {
-                                                    const label = getColumnLabel(id).toLowerCase();
-                                                    return label.includes(columnSearch.toLowerCase());
-                                                })
-                                                .map(id => (
-                                                    <SortableColumnItem
-                                                        key={id}
-                                                        id={id}
-                                                        label={getColumnLabel(id)}
-                                                        isVisible={tempVisibility[id] !== false} // Default true if undefined
-                                                        isFixed={isFixedColumn(id)}
-                                                        onToggle={(clickedId: string) => {
-                                                            setTempVisibility(prev => ({
-                                                                ...prev,
-                                                                [clickedId]: prev[clickedId] === false ? true : false
-                                                            }));
-                                                        }}
-                                                    />
-                                                ))}
-                                        </SortableContext>
-                                    </DndContext>
-                                </div>
-
-                                {/* Footer */}
-                                <div className="flex justify-between items-center pt-2 border-t mt-1">
-                                    <button
-                                        onClick={resetColumnPreferences}
-                                        className="text-xs text-gray-500 hover:text-indigo-600 flex items-center gap-1"
-                                    >
-                                        <RotateCcw className="h-3 w-3" />
-                                        Restaurar
-                                    </button>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => setColumnSelectorOpen(false)}
-                                            className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded"
-                                        >
-                                            Cancelar
-                                        </button>
-                                        <button
-                                            onClick={applyColumnPreferences}
-                                            className="px-3 py-1.5 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm"
-                                        >
-                                            Aplicar
-                                        </button>
-                                    </div>
-                                </div>
+                        {/* Footer */}
+                        <div className="flex justify-between items-center pt-2 border-t mt-1">
+                            <button
+                                onClick={resetColumnPreferences}
+                                className="text-xs text-gray-500 hover:text-indigo-600 flex items-center gap-1"
+                            >
+                                <RotateCcw className="h-3 w-3" />
+                                Restaurar
+                            </button>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setColumnSelectorOpen(false)}
+                                    className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={applyColumnPreferences}
+                                    className="px-3 py-1.5 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm"
+                                >
+                                    Aplicar
+                                </button>
                             </div>
-                        </>
-                    )}
-                </div>
-            </div>
+                        </div>
+                    </div>
+                </>
+            )}
 
             {/* Floating Action Bar */}
             {selectedIds.size > 0 && (
@@ -701,7 +696,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                                             {row.getVisibleCells().map((cell) => (
                                                 <td
                                                     key={cell.id}
-                                                    className="truncate px-3 py-4 text-sm text-gray-500 first:pl-4 first:text-gray-900 first:font-medium sm:first:pl-6"
+                                                    className="break-words whitespace-normal px-3 py-3 text-sm text-gray-500 first:pl-4 first:text-gray-900 first:font-medium sm:first:pl-6"
                                                     style={{
                                                         width: cell.column.getSize(),
                                                     }}

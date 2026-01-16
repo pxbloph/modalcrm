@@ -41,6 +41,7 @@ interface Client {
     created_at: string;
     created_by?: {
         name: string;
+        surname?: string;
         email: string;
     };
     surname?: string;
@@ -58,6 +59,11 @@ interface ClientListTableProps {
     loading: boolean;
     onClientClick: (clientId: string) => void;
     onRefresh?: () => void;
+    currentPage: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+    limit: number;
+    onLimitChange: (limit: number) => void;
 }
 
 // --- Draggable Header Component (Table) ---
@@ -79,22 +85,14 @@ const DraggableTableHeader = ({ header }: { header: Header<Client, unknown> }) =
             ref={setNodeRef}
             style={style}
             colSpan={header.colSpan}
+            {...attributes}
+            {...listeners}
             className={cn(
-                "relative text-left text-sm font-semibold text-gray-900 border-b border-gray-200 bg-gray-50 group select-none",
+                "relative text-left text-sm font-semibold text-gray-900 border-b border-gray-200 bg-gray-50 group select-none cursor-grab active:cursor-grabbing hover:bg-gray-100/50 transition-colors",
                 isDragging && "bg-gray-100 shadow-lg"
             )}
         >
             <div className="flex items-center gap-2 px-3 py-3.5 h-full">
-                {header.column.id !== 'select' && header.column.id !== 'actions' && (
-                    <button
-                        {...attributes}
-                        {...listeners}
-                        className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
-                        title="Arrastar para reordenar"
-                    >
-                        <GripVertical className="h-4 w-4" />
-                    </button>
-                )}
                 <span className="flex-1 truncate">
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                 </span>
@@ -150,7 +148,31 @@ const SortableColumnItem = ({ id, label, isVisible, isFixed, onToggle }: any) =>
 };
 
 
-export default function ClientListTable({ clients, loading, onClientClick, onRefresh }: ClientListTableProps) {
+const DEFAULT_COLUMN_ORDER = [
+    'select',
+    'name',
+    'surname',
+    'cnpj',
+    'email',
+    'integration_status',
+    'responsible',
+    'tabulacao',
+    'agendamento',
+    'created_at',
+    'actions'
+];
+
+export default function ClientListTable({
+    clients,
+    loading,
+    onClientClick,
+    onRefresh,
+    currentPage,
+    totalPages,
+    onPageChange,
+    limit,
+    onLimitChange
+}: ClientListTableProps) {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [actionLoading, setActionLoading] = useState(false);
 
@@ -158,18 +180,82 @@ export default function ClientListTable({ clients, loading, onClientClick, onRef
     const [columnSelectorOpen, setColumnSelectorOpen] = useState(false);
     const [columnSearch, setColumnSearch] = useState('');
 
-    // --- Column Definitions ---
+    // State
+    const [columnOrder, setColumnOrder] = useState<string[]>(DEFAULT_COLUMN_ORDER);
+    const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ 'cnpj': false });
+
+    // Load Preferences
+    useEffect(() => {
+        const saved = localStorage.getItem('client-table-config');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                if (parsed.order) {
+                    // Merge saved order with default/current columns to ensure new columns show up
+                    const savedSet = new Set(parsed.order);
+                    const newColumns = DEFAULT_COLUMN_ORDER.filter(colId => !savedSet.has(colId));
+                    // Filter out any saved columns that no longer exist
+                    const existingSavedColumns = parsed.order.filter((colId: string) => DEFAULT_COLUMN_ORDER.includes(colId));
+
+                    setColumnOrder([...existingSavedColumns, ...newColumns]);
+                }
+                if (parsed.visibility) setColumnVisibility(parsed.visibility);
+            } catch (e) {
+                console.error("Failed to load table config", e);
+            }
+        }
+    }, []);
+
+    const savePreferences = (newOrder: string[], newVisibility: VisibilityState) => {
+        localStorage.setItem('client-table-config', JSON.stringify({
+            order: newOrder,
+            visibility: newVisibility
+        }));
+    };
+
+    // Temp state for selector (to allow "Cancel"/"Apply")
+    const [tempOrder, setTempOrder] = useState<string[]>([]);
+    const [tempVisibility, setTempVisibility] = useState<VisibilityState>({});
+
+    const openColumnSelector = () => {
+        setTempOrder([...columnOrder]);
+        setTempVisibility({ ...columnVisibility });
+        setColumnSelectorOpen(true);
+    };
+
+    const applyColumnPreferences = () => {
+        setColumnOrder(tempOrder);
+        setColumnVisibility(tempVisibility);
+        savePreferences(tempOrder, tempVisibility);
+        setColumnSelectorOpen(false);
+    };
+
+    const resetColumnPreferences = () => {
+        setTempOrder([...DEFAULT_COLUMN_ORDER]);
+        setTempVisibility({ 'cnpj': false });
+    };
+
+    // --- Column Definitions (Moved here to access openColumnSelector) ---
     const columns = useMemo<ColumnDef<Client>[]>(
         () => [
             {
                 id: 'select',
                 header: ({ table }) => (
-                    <input
-                        type="checkbox"
-                        checked={clients.length > 0 && selectedIds.size === clients.length}
-                        onChange={toggleAll}
-                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 h-4 w-4 cursor-pointer"
-                    />
+                    <div className="flex items-center gap-2 pl-1">
+                        <input
+                            type="checkbox"
+                            checked={clients.length > 0 && selectedIds.size === clients.length}
+                            onChange={toggleAll}
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 h-4 w-4 cursor-pointer"
+                        />
+                        <button
+                            onClick={(e) => { e.stopPropagation(); openColumnSelector(); }}
+                            className="p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-200/50 transition-colors"
+                            title="Colunas"
+                        >
+                            <Settings className="h-3.5 w-3.5" />
+                        </button>
+                    </div>
                 ),
                 cell: ({ row }) => (
                     <div className="flex items-center justify-center">
@@ -182,7 +268,7 @@ export default function ClientListTable({ clients, loading, onClientClick, onRef
                         />
                     </div>
                 ),
-                size: 40,
+                size: 65,
                 enableResizing: false,
             },
             {
@@ -239,7 +325,7 @@ export default function ClientListTable({ clients, loading, onClientClick, onRef
             {
                 id: 'responsible',
                 header: 'Responsável',
-                accessorFn: (row) => row.created_by?.name || '-',
+                accessorFn: (row) => row.created_by ? `${row.created_by.name} ${row.created_by.surname || ''}`.trim() : '-',
                 minSize: 150,
             },
             {
@@ -283,67 +369,8 @@ export default function ClientListTable({ clients, loading, onClientClick, onRef
                 enableResizing: false,
             }
         ],
-        [onClientClick, selectedIds, clients]
+        [onClientClick, selectedIds, clients, openColumnSelector]
     );
-
-    // Initial State Calculation
-    const defaultColumnOrder = columns.map(c => c.id || (c as any).accessorKey as string);
-    const defaultColumnVisibility = { 'cnpj': false }; // CNPJ hidden by default
-
-    // State
-    const [columnOrder, setColumnOrder] = useState<string[]>(defaultColumnOrder);
-    const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(defaultColumnVisibility);
-
-    // Load Preferences
-    useEffect(() => {
-        const saved = localStorage.getItem('client-table-config');
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                if (parsed.order) {
-                    // Merge saved order with default/current columns to ensure new columns show up
-                    const savedSet = new Set(parsed.order);
-                    const newColumns = defaultColumnOrder.filter(colId => !savedSet.has(colId));
-                    // Filter out any saved columns that no longer exist
-                    const existingSavedColumns = parsed.order.filter((colId: string) => defaultColumnOrder.includes(colId));
-
-                    setColumnOrder([...existingSavedColumns, ...newColumns]);
-                }
-                if (parsed.visibility) setColumnVisibility(parsed.visibility);
-            } catch (e) {
-                console.error("Failed to load table config", e);
-            }
-        }
-    }, []);
-
-    const savePreferences = (newOrder: string[], newVisibility: VisibilityState) => {
-        localStorage.setItem('client-table-config', JSON.stringify({
-            order: newOrder,
-            visibility: newVisibility
-        }));
-    };
-
-    // Temp state for selector (to allow "Cancel"/"Apply")
-    const [tempOrder, setTempOrder] = useState<string[]>([]);
-    const [tempVisibility, setTempVisibility] = useState<VisibilityState>({});
-
-    const openColumnSelector = () => {
-        setTempOrder([...columnOrder]);
-        setTempVisibility({ ...columnVisibility });
-        setColumnSelectorOpen(true);
-    };
-
-    const applyColumnPreferences = () => {
-        setColumnOrder(tempOrder);
-        setColumnVisibility(tempVisibility);
-        savePreferences(tempOrder, tempVisibility);
-        setColumnSelectorOpen(false);
-    };
-
-    const resetColumnPreferences = () => {
-        setTempOrder([...defaultColumnOrder]);
-        setTempVisibility({ ...defaultColumnVisibility });
-    };
 
     // Table Instance
     const table = useReactTable({
@@ -474,106 +501,93 @@ export default function ClientListTable({ clients, loading, onClientClick, onRef
     }
 
     return (
-        <div className="relative space-y-4">
-            {/* Toolbar */}
-            <div className="flex justify-end">
-                <div className="relative">
-                    <button
-                        onClick={openColumnSelector}
-                        className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                        <Settings className="h-4 w-4 text-gray-500" />
-                        Colunas
-                    </button>
+        <div className="relative">
+            {/* Column Selector Popover (Relocated) */}
+            {columnSelectorOpen && (
+                <>
+                    <div className="fixed inset-0 z-30" onClick={() => setColumnSelectorOpen(false)} />
+                    <div className="absolute left-0 top-8 z-40 w-80 bg-white rounded-lg shadow-2xl ring-1 ring-black ring-opacity-5 p-4 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-100 origin-top-left">
+                        <div className="flex items-center justify-between border-b pb-2">
+                            <h3 className="font-semibold text-gray-900">Personalizar Colunas</h3>
+                            <button onClick={() => setColumnSelectorOpen(false)} className="text-gray-400 hover:text-gray-600">
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
 
-                    {/* Column Selector Modal/Popover */}
-                    {columnSelectorOpen && (
-                        <>
-                            <div className="fixed inset-0 z-30" onClick={() => setColumnSelectorOpen(false)} />
-                            <div className="absolute right-0 top-12 z-40 w-80 bg-white rounded-lg shadow-2xl ring-1 ring-black ring-opacity-5 p-4 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
-                                <div className="flex items-center justify-between border-b pb-2">
-                                    <h3 className="font-semibold text-gray-900">Personalizar Colunas</h3>
-                                    <button onClick={() => setColumnSelectorOpen(false)} className="text-gray-400 hover:text-gray-600">
-                                        <X className="h-4 w-4" />
-                                    </button>
-                                </div>
+                        {/* Search */}
+                        <div className="relative">
+                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Procurar coluna..."
+                                className="w-full pl-8 pr-3 py-2 border rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                value={columnSearch}
+                                onChange={(e) => setColumnSearch(e.target.value)}
+                            />
+                        </div>
 
-                                {/* Search */}
-                                <div className="relative">
-                                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-                                    <input
-                                        type="text"
-                                        placeholder="Procurar coluna..."
-                                        className="w-full pl-8 pr-3 py-2 border rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                        value={columnSearch}
-                                        onChange={(e) => setColumnSearch(e.target.value)}
-                                    />
-                                </div>
+                        {/* List */}
+                        <div className="max-h-60 overflow-y-auto space-y-1">
+                            <DndContext
+                                sensors={selectorSensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={handleSelectorDragEnd}
+                            >
+                                <SortableContext
+                                    items={tempOrder}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    {tempOrder
+                                        .filter(id => {
+                                            const label = getColumnLabel(id).toLowerCase();
+                                            return label.includes(columnSearch.toLowerCase());
+                                        })
+                                        .map(id => (
+                                            <SortableColumnItem
+                                                key={id}
+                                                id={id}
+                                                label={getColumnLabel(id)}
+                                                isVisible={tempVisibility[id] !== false} // Default true if undefined
+                                                isFixed={isFixedColumn(id)}
+                                                onToggle={(clickedId: string) => {
+                                                    setTempVisibility(prev => ({
+                                                        ...prev,
+                                                        [clickedId]: prev[clickedId] === false ? true : false
+                                                    }));
+                                                }}
+                                            />
+                                        ))}
+                                </SortableContext>
+                            </DndContext>
+                        </div>
 
-                                {/* List */}
-                                <div className="max-h-60 overflow-y-auto space-y-1">
-                                    <DndContext
-                                        sensors={selectorSensors}
-                                        collisionDetection={closestCenter}
-                                        onDragEnd={handleSelectorDragEnd}
-                                    >
-                                        <SortableContext
-                                            items={tempOrder}
-                                            strategy={verticalListSortingStrategy}
-                                        >
-                                            {tempOrder
-                                                .filter(id => {
-                                                    const label = getColumnLabel(id).toLowerCase();
-                                                    return label.includes(columnSearch.toLowerCase());
-                                                })
-                                                .map(id => (
-                                                    <SortableColumnItem
-                                                        key={id}
-                                                        id={id}
-                                                        label={getColumnLabel(id)}
-                                                        isVisible={tempVisibility[id] !== false} // Default true if undefined
-                                                        isFixed={isFixedColumn(id)}
-                                                        onToggle={(clickedId: string) => {
-                                                            setTempVisibility(prev => ({
-                                                                ...prev,
-                                                                [clickedId]: prev[clickedId] === false ? true : false
-                                                            }));
-                                                        }}
-                                                    />
-                                                ))}
-                                        </SortableContext>
-                                    </DndContext>
-                                </div>
-
-                                {/* Footer */}
-                                <div className="flex justify-between items-center pt-2 border-t mt-1">
-                                    <button
-                                        onClick={resetColumnPreferences}
-                                        className="text-xs text-gray-500 hover:text-indigo-600 flex items-center gap-1"
-                                    >
-                                        <RotateCcw className="h-3 w-3" />
-                                        Restaurar
-                                    </button>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => setColumnSelectorOpen(false)}
-                                            className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded"
-                                        >
-                                            Cancelar
-                                        </button>
-                                        <button
-                                            onClick={applyColumnPreferences}
-                                            className="px-3 py-1.5 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm"
-                                        >
-                                            Aplicar
-                                        </button>
-                                    </div>
-                                </div>
+                        {/* Footer */}
+                        <div className="flex justify-between items-center pt-2 border-t mt-1">
+                            <button
+                                onClick={resetColumnPreferences}
+                                className="text-xs text-gray-500 hover:text-indigo-600 flex items-center gap-1"
+                            >
+                                <RotateCcw className="h-3 w-3" />
+                                Restaurar
+                            </button>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setColumnSelectorOpen(false)}
+                                    className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={applyColumnPreferences}
+                                    className="px-3 py-1.5 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm"
+                                >
+                                    Aplicar
+                                </button>
                             </div>
-                        </>
-                    )}
-                </div>
-            </div>
+                        </div>
+                    </div>
+                </>
+            )}
 
             {/* Floating Action Bar */}
             {selectedIds.size > 0 && (
@@ -668,7 +682,7 @@ export default function ClientListTable({ clients, loading, onClientClick, onRef
                                             {row.getVisibleCells().map((cell) => (
                                                 <td
                                                     key={cell.id}
-                                                    className="truncate px-3 py-4 text-sm text-gray-500 first:pl-4 first:text-gray-900 first:font-medium sm:first:pl-6"
+                                                    className="break-words whitespace-normal px-3 py-3 text-sm text-gray-500 first:pl-4 first:text-gray-900 first:font-medium sm:first:pl-6"
                                                     style={{
                                                         width: cell.column.getSize(),
                                                     }}
@@ -686,6 +700,72 @@ export default function ClientListTable({ clients, loading, onClientClick, onRef
                         </table>
                     </div>
                 </DndContext>
+
+                {/* Pagination Controls */}
+                {clients.length > 0 && (
+                    <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 sm:rounded-b-xl">
+                        <div className="flex flex-1 justify-between sm:hidden">
+                            <button
+                                onClick={() => onPageChange(currentPage - 1)}
+                                disabled={currentPage === 1}
+                                className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            >
+                                Anterior
+                            </button>
+                            <button
+                                onClick={() => onPageChange(currentPage + 1)}
+                                disabled={currentPage === totalPages}
+                                className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            >
+                                Próxima
+                            </button>
+                        </div>
+                        <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                            <div className="flex items-center gap-4">
+                                <p className="text-sm text-gray-700">
+                                    Página <span className="font-medium">{currentPage}</span> de <span className="font-medium">{totalPages}</span>
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm text-gray-700 whitespace-nowrap">Por página:</span>
+                                    <select
+                                        value={limit}
+                                        onChange={(e) => onLimitChange(Number(e.target.value))}
+                                        className="block w-auto rounded-md border-0 py-1 pl-2 pr-8 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                                    >
+                                        <option value={5}>5</option>
+                                        <option value={10}>10</option>
+                                        <option value={20}>20</option>
+                                        <option value={50}>50</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                                    <button
+                                        onClick={() => onPageChange(currentPage - 1)}
+                                        disabled={currentPage === 1}
+                                        className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
+                                    >
+                                        <span className="sr-only">Anterior</span>
+                                        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                            <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        onClick={() => onPageChange(currentPage + 1)}
+                                        disabled={currentPage === totalPages}
+                                        className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
+                                    >
+                                        <span className="sr-only">Próxima</span>
+                                        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                            <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+                                        </svg>
+                                    </button>
+                                </nav>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

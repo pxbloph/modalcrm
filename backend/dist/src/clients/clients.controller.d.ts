@@ -35,31 +35,40 @@ export declare class ClientsController {
     }[]>;
     removeBulk(ids: string[], req: any): Promise<import(".prisma/client").Prisma.BatchPayload>;
     openAccountBulk(ids: string[], req: any): Promise<import(".prisma/client").Prisma.BatchPayload>;
-    findAll(req: any, query: any): Promise<({
-        qualifications: {
-            tabulacao: string;
-            agendamento: Date;
-        }[];
-        created_by: {
+    findAll(req: any, query: any): Promise<{
+        data: ({
+            qualifications: {
+                tabulacao: string;
+                agendamento: Date;
+            }[];
+            created_by: {
+                email: string;
+                name: string;
+                surname: string;
+            };
+        } & {
+            id: string;
             email: string;
             name: string;
+            surname: string | null;
+            created_at: Date;
+            cnpj: string;
+            phone: string;
+            is_qualified: boolean;
+            has_open_account: boolean;
+            answers: import("@prisma/client/runtime/library").JsonValue | null;
+            integration_status: string;
+            updated_at: Date;
+            id_bitrix: number | null;
+            created_by_id: string;
+        })[];
+        meta: {
+            total: number;
+            page: number;
+            limit: number;
+            totalPages: number;
         };
-    } & {
-        id: string;
-        email: string;
-        name: string;
-        surname: string | null;
-        created_at: Date;
-        cnpj: string;
-        phone: string;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        answers: import("@prisma/client/runtime/library").JsonValue | null;
-        integration_status: string;
-        updated_at: Date;
-        id_bitrix: number | null;
-        created_by_id: string;
-    })[]>;
+    }>;
     findOne(id: string, req: any): Promise<{
         qualifications: {
             id: string;

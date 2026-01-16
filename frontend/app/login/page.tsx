@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import api from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 
@@ -38,6 +39,18 @@ export default function LoginPage() {
         <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
             <div className="w-full max-w-md space-y-8 rounded-xl bg-white p-10 shadow-lg border border-gray-100">
                 <div>
+                    <div className="flex justify-center mb-6">
+                        {/* AJUSTE DE TAMANHO DO LOGO LOGIN: Altere w-64 e h-20 */}
+                        <div className="relative w-64 h-25">
+                            <Image
+                                src="/logo_Logo_black.svg"
+                                alt="Modal CRM"
+                                fill
+                                className="object-contain"
+                                priority
+                            />
+                        </div>
+                    </div>
                     <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
                         Acesse sua conta
                     </h2>

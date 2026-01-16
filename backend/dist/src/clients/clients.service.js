@@ -37,7 +37,7 @@ let ClientsService = class ClientsService {
         }
     }
     buildFilterConditions(user, query = {}) {
-        const { search, startDate, endDate, responsibleId } = query;
+        const { search, startDate, endDate, responsibleId, status } = query;
         const andConditions = [];
         if (search) {
             andConditions.push({
@@ -48,6 +48,16 @@ let ClientsService = class ClientsService {
                     { email: { contains: search, mode: 'insensitive' } },
                 ]
             });
+        }
+        if (status) {
+            if (status === 'Erro') {
+                andConditions.push({
+                    integration_status: { contains: 'Erro', mode: 'insensitive' }
+                });
+            }
+            else {
+                andConditions.push({ integration_status: status });
+            }
         }
         if (responsibleId) {
             andConditions.push({ created_by_id: responsibleId });
@@ -81,18 +91,35 @@ let ClientsService = class ClientsService {
     }
     async findAll(user, query = {}) {
         const where = this.buildFilterConditions(user, query);
-        return this.prisma.client.findMany({
-            where,
-            include: {
-                created_by: { select: { name: true, email: true } },
-                qualifications: {
-                    orderBy: { created_at: 'desc' },
-                    take: 1,
-                    select: { agendamento: true, tabulacao: true }
-                }
-            },
-            orderBy: { created_at: 'desc' }
-        });
+        const page = Number(query.page) || 1;
+        const limit = Number(query.limit) || 50;
+        const skip = (page - 1) * limit;
+        const [data, total] = await Promise.all([
+            this.prisma.client.findMany({
+                where,
+                include: {
+                    created_by: { select: { name: true, surname: true, email: true } },
+                    qualifications: {
+                        orderBy: { created_at: 'desc' },
+                        take: 1,
+                        select: { agendamento: true, tabulacao: true }
+                    }
+                },
+                orderBy: { created_at: 'desc' },
+                take: limit,
+                skip: skip
+            }),
+            this.prisma.client.count({ where })
+        ]);
+        return {
+            data,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        };
     }
     async update(id, data, user) {
         const client = await this.findOne(id, user);

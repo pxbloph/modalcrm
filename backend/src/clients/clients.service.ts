@@ -28,7 +28,7 @@ export class ClientsService {
     }
 
     private buildFilterConditions(user: User, query: any = {}): Prisma.ClientWhereInput {
-        const { search, startDate, endDate, responsibleId } = query;
+        const { search, startDate, endDate, responsibleId, status } = query;
         const andConditions: Prisma.ClientWhereInput[] = [];
 
         // Search Logic
@@ -41,6 +41,17 @@ export class ClientsService {
                     { email: { contains: search, mode: 'insensitive' } },
                 ]
             });
+        }
+
+        // Status Filter
+        if (status) {
+            if (status === 'Erro') {
+                andConditions.push({
+                    integration_status: { contains: 'Erro', mode: 'insensitive' }
+                });
+            } else {
+                andConditions.push({ integration_status: status });
+            }
         }
 
         // Responsible Filter
@@ -81,20 +92,38 @@ export class ClientsService {
 
     async findAll(user: User, query: any = {}) {
         const where = this.buildFilterConditions(user, query);
+        const page = Number(query.page) || 1;
+        const limit = Number(query.limit) || 50;
+        const skip = (page - 1) * limit;
 
-        return this.prisma.client.findMany({
-            where,
-            include: {
-                created_by: { select: { name: true, email: true } },
-                qualifications: {
-                    orderBy: { created_at: 'desc' },
-                    take: 1,
-                    // @ts-ignore
-                    select: { agendamento: true, tabulacao: true }
-                }
-            },
-            orderBy: { created_at: 'desc' }
-        });
+        const [data, total] = await Promise.all([
+            this.prisma.client.findMany({
+                where,
+                include: {
+                    created_by: { select: { name: true, surname: true, email: true } },
+                    qualifications: {
+                        orderBy: { created_at: 'desc' },
+                        take: 1,
+                        // @ts-ignore
+                        select: { agendamento: true, tabulacao: true }
+                    }
+                },
+                orderBy: { created_at: 'desc' },
+                take: limit,
+                skip: skip
+            }),
+            this.prisma.client.count({ where })
+        ]);
+
+        return {
+            data,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        };
     }
 
     async update(id: string, data: Prisma.ClientUpdateInput, user: User) {

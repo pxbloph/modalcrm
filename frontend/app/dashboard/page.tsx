@@ -40,6 +40,25 @@ export default function DashboardPage() {
     const [clients, setClients] = useState<Client[]>([]);
     const [loading, setLoading] = useState(true);
 
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [limit, setLimit] = useState(50);
+
+    // Load limit preference on mount
+    useEffect(() => {
+        const savedLimit = localStorage.getItem('client-table-limit');
+        if (savedLimit) {
+            setLimit(Number(savedLimit));
+        }
+    }, []);
+
+    const handleLimitChange = (newLimit: number) => {
+        setLimit(newLimit);
+        localStorage.setItem('client-table-limit', newLimit.toString());
+        setCurrentPage(1); // Reset to first page on limit change
+    };
+
     // Admin Metrics
     const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
 
@@ -68,17 +87,14 @@ export default function DashboardPage() {
         if (user) {
             fetchData();
         }
-    }, [user, searchParams]);
+    }, [user, searchParams, currentPage, limit]); // Re-fetch on page/limit change
 
     const fetchData = async () => {
         setLoading(true);
         try {
             const params = new URLSearchParams(searchParams.toString());
-
-            const isOperator = user?.role === 'OPERATOR';
-
-            // If Operator, maybe we only need clients? 
-            // Reuse same endpoints. Backend handles RBAC scoping.
+            params.set('page', currentPage.toString());
+            params.set('limit', limit.toString());
 
             const promises = [api.get(`/clients?${params.toString()}`)];
 
@@ -86,7 +102,15 @@ export default function DashboardPage() {
             promises.push(api.get('/clients/dashboard-metrics'));
 
             const results = await Promise.all(promises);
-            setClients(results[0].data);
+
+            // Handle Paginated Response
+            if (results[0].data && results[0].data.data) {
+                setClients(results[0].data.data);
+                setTotalPages(results[0].data.meta.totalPages);
+            } else {
+                // Fallback if backend rollout isn't complete (shouldn't happen if sync)
+                setClients(Array.isArray(results[0].data) ? results[0].data : []);
+            }
 
             if (results[1]) {
                 setMetrics(results[1].data);
@@ -179,6 +203,11 @@ export default function DashboardPage() {
                                     loading={loading}
                                     onClientClick={handleClientClick}
                                     onRefresh={fetchData}
+                                    currentPage={currentPage}
+                                    totalPages={totalPages}
+                                    onPageChange={setCurrentPage}
+                                    limit={limit}
+                                    onLimitChange={handleLimitChange}
                                 />
                             </div>
                         </div>
@@ -202,15 +231,7 @@ export default function DashboardPage() {
     // --- VIEW PADRÃO (Admin / Supervisor) ---
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">
-                        Dashboard
-                    </h1>
-                    <p className="text-gray-500 mt-1">
-                        Visão geral e gestão de clientes.
-                    </p>
-                </div>
+            <div className="flex items-center justify-end">
                 {!isAdmin && (
                     <Link href="/dashboard/new-client" className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-500 text-sm font-semibold flex items-center gap-2">
                         <Users className="h-4 w-4" />
@@ -280,6 +301,11 @@ export default function DashboardPage() {
                 loading={loading}
                 onClientClick={handleClientClick}
                 onRefresh={fetchData}
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                limit={limit}
+                onLimitChange={handleLimitChange}
             />
 
             <ClientModal

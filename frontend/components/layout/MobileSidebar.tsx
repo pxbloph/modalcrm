@@ -2,6 +2,7 @@
 
 import { Fragment } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { X, LogOut, LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -43,7 +44,16 @@ export default function MobileSidebar({ open, setOpen, navigation, onLogout }: M
                 open ? "translate-x-0" : "-translate-x-full"
             )}>
                 <div className="flex items-center justify-between mb-8">
-                    <span className="text-xl font-bold text-indigo-600">MODAL</span>
+                    {/* AJUSTE DE TAMANHO DO LOGO MOBILE: Altere w-40 e h-12 */}
+                    <div className="relative w-40 h-12">
+                        <Image
+                            src="/logo_Logo_black.svg"
+                            alt="Modal CRM"
+                            fill
+                            className="object-contain object-left"
+                            priority
+                        />
+                    </div>
                     <button
                         type="button"
                         className="-m-2.5 p-2.5 text-gray-700 hover:text-gray-500"

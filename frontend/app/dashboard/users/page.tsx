@@ -72,11 +72,7 @@ export default function UsersPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Gestão de Usuários</h1>
-                    <p className="text-gray-500 mt-1">Gerencie os membros da sua organização.</p>
-                </div>
+            <div className="flex items-center justify-end">
                 <button
                     onClick={handleCreateClick}
                     className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-semibold shadow-sm transition-colors"

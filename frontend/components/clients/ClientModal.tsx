@@ -26,7 +26,7 @@ export default function ClientModal({ isOpen, onClose, onSuccess, clientId, user
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [cnpj, setCnpj] = useState('');
-    // status removed
+    const [integrationStatus, setIntegrationStatus] = useState(''); // New State
     const [surname, setSurname] = useState('');
 
     // Qualification States
@@ -37,6 +37,7 @@ export default function ClientModal({ isOpen, onClose, onSuccess, clientId, user
     const [emiteBoletos, setEmiteBoletos] = useState(false);
     const [receberOfertas, setReceberOfertas] = useState(false);
     const [informacoesAdicionais, setInformacoesAdicionais] = useState('');
+    const [tabulacao, setTabulacao] = useState(''); // New State
 
     useEffect(() => {
         if (isOpen && clientId) {
@@ -68,7 +69,7 @@ export default function ClientModal({ isOpen, onClose, onSuccess, clientId, user
         setEmail(data.email || '');
         setPhone(data.phone || '');
         setCnpj(data.cnpj || '');
-        // status removed
+        setIntegrationStatus(data.integration_status || '');
         setSurname(data.surname || '');
 
         // Populate Qualification Fields if available
@@ -80,6 +81,7 @@ export default function ClientModal({ isOpen, onClose, onSuccess, clientId, user
         setEmiteBoletos(!!qual.emite_boletos);
         setReceberOfertas(!!qual.deseja_receber_ofertas);
         setInformacoesAdicionais(qual.informacoes_adicionais || '');
+        setTabulacao(qual.tabulacao || '');
     };
 
     const resetForm = () => {
@@ -87,7 +89,7 @@ export default function ClientModal({ isOpen, onClose, onSuccess, clientId, user
         setEmail('');
         setPhone('');
         setCnpj('');
-        // status removed
+        setIntegrationStatus('');
         setSurname('');
         setFaturamentoMensal('');
         setFaturamentoMaquina('');
@@ -96,13 +98,14 @@ export default function ClientModal({ isOpen, onClose, onSuccess, clientId, user
         setEmiteBoletos(false);
         setReceberOfertas(false);
         setInformacoesAdicionais('');
+        setTabulacao('');
     };
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         setSaving(true);
         try {
-            await api.put(`/clients/${clientId}`, {
+            const payload: any = {
                 name,
                 surname,
                 email,
@@ -116,7 +119,14 @@ export default function ClientModal({ isOpen, onClose, onSuccess, clientId, user
                 emite_boletos: emiteBoletos,
                 deseja_receber_ofertas: receberOfertas,
                 informacoes_adicionais: informacoesAdicionais
-            });
+            };
+
+            // Only Admin allows changing status manually
+            if (userRole === 'ADMIN') {
+                payload.integration_status = integrationStatus;
+            }
+
+            await api.put(`/clients/${clientId}`, payload);
             await onSuccess();
             setIsEditing(false); // Exit edit mode
             fetchClientDetails(); // Refresh data
@@ -182,7 +192,7 @@ export default function ClientModal({ isOpen, onClose, onSuccess, clientId, user
 
     return (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50 flex-shrink-0">
                     <div>
@@ -199,251 +209,301 @@ export default function ClientModal({ isOpen, onClose, onSuccess, clientId, user
                 </div>
 
                 {/* Body */}
-                <div className="p-4 sm:p-6 overflow-y-auto flex-grow">
+                <div className="p-4 sm:p-6 overflow-y-auto flex-grow scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
                     {loading ? (
                         <div className="flex justify-center py-12">
                             <span className="text-indigo-600 font-semibold animate-pulse">Carregando informações...</span>
                         </div>
                     ) : (
                         <form onSubmit={handleSave} className="space-y-6">
-                            {/* Status Banner */}
-                            {/* Status Banner */}
-                            <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-indigo-100 p-2 rounded-full text-indigo-600">
-                                        <Shield className="h-5 w-5" />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-indigo-900">Status da Integração</p>
-                                        <p className="text-sm font-bold text-indigo-700">{client?.integration_status || 'Cadastrando...'}</p>
-                                    </div>
-                                </div>
-                                {/* Tags for Flags */}
-                                <div className="flex gap-2">
-                                    {client?.is_qualified && (
-                                        <span className="inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                                            Qualificado
-                                        </span>
-                                    )}
-                                    {client?.has_open_account && (
-                                        <span className="inline-flex items-center rounded-md bg-green-100 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
-                                            Conta Aberta
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
+                            {/* NEW LAYOUT: SIDE BY SIDE */}
+                            <div className="flex flex-col lg:flex-row gap-8">
 
-                            {/* Main Info */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                                        <User className="h-4 w-4 text-gray-400" /> Razão Social / Nome
-                                    </label>
-                                    <input
-                                        type="text"
-                                        disabled={!isEditing}
-                                        value={name}
-                                        onChange={(e) => setName(e.target.value)}
-                                        className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-3 px-3 text-gray-900 placeholder:text-gray-400 border disabled:bg-gray-50 disabled:text-gray-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Sobrenome / Fantasia</label>
-                                    <input
-                                        type="text"
-                                        disabled={!isEditing}
-                                        value={surname}
-                                        onChange={(e) => setSurname(e.target.value)}
-                                        className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-3 px-3 text-gray-900 placeholder:text-gray-400 border disabled:bg-gray-50 disabled:text-gray-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                                        <FileText className="h-4 w-4 text-gray-400" /> CNPJ / CPF
-                                    </label>
-                                    <input
-                                        type="text"
-                                        disabled={!isEditing}
-                                        value={cnpj}
-                                        onChange={(e) => setCnpj(e.target.value)}
-                                        className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-3 px-3 text-gray-900 placeholder:text-gray-400 border disabled:bg-gray-50 disabled:text-gray-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                                        <Mail className="h-4 w-4 text-gray-400" /> Email
-                                    </label>
-                                    <input
-                                        type="email"
-                                        disabled={!isEditing}
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-3 px-3 text-gray-900 placeholder:text-gray-400 border disabled:bg-gray-50 disabled:text-gray-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                                        <Phone className="h-4 w-4 text-gray-400" /> Telefone
-                                    </label>
-                                    <input
-                                        type="text"
-                                        disabled={!isEditing}
-                                        value={phone}
-                                        onChange={(e) => setPhone(e.target.value)}
-                                        className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-3 px-3 text-gray-900 placeholder:text-gray-400 border disabled:bg-gray-50 disabled:text-gray-500"
-                                    />
-                                </div>
-                            </div>
+                                {/* LEFT COLUMN: REGISTRATION INFO */}
+                                <div className="flex-1 space-y-6">
+                                    <div className="flex items-center gap-2 border-b pb-2 mb-4">
+                                        <User className="h-5 w-5 text-gray-500" />
+                                        <h4 className="text-sm font-bold text-gray-900 uppercase">Dados Cadastrais</h4>
+                                    </div>
 
-                            {/* Qualification Data */}
-                            {/* Qualification Data */}
-                            <div className="border-t border-gray-100 pt-4">
-                                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                    <ClipboardCheck className="h-4 w-4" /> Dados da Qualificação
-                                </h4>
-                                {!isEditing ? (
-                                    client?.qualifications && client.qualifications.length > 0 ? (
-                                        <div className="bg-gray-50 rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                            <div>
-                                                <span className="block text-xs text-gray-400">Faturamento Mensal</span>
-                                                <span className="font-medium text-gray-900">
-                                                    {client.qualifications[0].faturamento_mensal
-                                                        ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(client.qualifications[0].faturamento_mensal)
-                                                        : '-'}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <span className="block text-xs text-gray-400">Faturamento Máquina</span>
-                                                <span className="font-medium text-gray-900">
-                                                    {client.qualifications[0].faturamento_maquina
-                                                        ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(client.qualifications[0].faturamento_maquina)
-                                                        : '-'}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <span className="block text-xs text-gray-400">Maquininha Atual</span>
-                                                <span className="font-medium text-gray-900">{client.qualifications[0].maquininha_atual || '-'}</span>
-                                            </div>
-                                            <div>
-                                                <span className="block text-xs text-gray-400">Produto de Interesse</span>
-                                                <span className="font-medium text-gray-900">{client.qualifications[0].produto_interesse || '-'}</span>
-                                            </div>
-                                            <div>
-                                                <span className="block text-xs text-gray-400">Emite Boletos?</span>
-                                                <span className="font-medium text-gray-900">{client.qualifications[0].emite_boletos ? 'Sim' : 'Não'}</span>
-                                            </div>
-                                            <div>
-                                                <span className="block text-xs text-gray-400">Receber Ofertas?</span>
-                                                <span className="font-medium text-gray-900">{client.qualifications[0].deseja_receber_ofertas ? 'Sim' : 'Não'}</span>
-                                            </div>
-                                            {client.qualifications[0].informacoes_adicionais && (
-                                                <div className="col-span-1 md:col-span-2">
-                                                    <span className="block text-xs text-gray-400">Informações Adicionais</span>
-                                                    <p className="font-medium text-gray-900 mt-1 text-sm whitespace-pre-wrap">
-                                                        {client.qualifications[0].informacoes_adicionais}
-                                                    </p>
+                                    {/* Status Banner (Editable for Admin) */}
+                                    <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <div className="bg-indigo-100 p-1.5 rounded-full text-indigo-600">
+                                                    <Shield className="h-4 w-4" />
                                                 </div>
-                                            )}
+                                                <span className="text-xs font-semibold text-indigo-900 uppercase">Status Integração</span>
+                                            </div>
+                                            {/* Tags */}
+                                            <div className="flex gap-1">
+                                                {client?.is_qualified && (
+                                                    <span className="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                                                        Qualificado
+                                                    </span>
+                                                )}
+                                                {client?.has_open_account && (
+                                                    <span className="inline-flex items-center rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                                                        Conta Aberta
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
-                                    ) : (
-                                        <div className="text-sm text-gray-500 italic p-4 bg-gray-50 rounded-lg">
-                                            Nenhuma qualificação registrada.
-                                        </div>
-                                    )
-                                ) : (
-                                    /* EDIT MODE FOR QUALIFICATION */
-                                    <div className="bg-gray-50 rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                                        {isEditing && userRole === 'ADMIN' ? (
+                                            <select
+                                                value={integrationStatus}
+                                                onChange={(e) => setIntegrationStatus(e.target.value)}
+                                                className="w-full text-sm rounded bg-white border-indigo-200 text-indigo-900 focus:ring-0 focus:border-indigo-400 py-1.5"
+                                            >
+                                                <option value="Cadastrando...">Cadastrando...</option>
+                                                <option value="Pendente">Pendente</option>
+                                                <option value="Cadastro salvo com sucesso!">Cadastro salvo com sucesso!</option>
+                                                <option value="Erro">Erro</option>
+                                            </select>
+                                        ) : (
+                                            <p className="text-sm font-bold text-indigo-700 ml-1">
+                                                {integrationStatus || 'Cadastrando...'}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-4">
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">Faturamento Mensal</label>
-                                            <input
-                                                type="number"
-                                                value={faturamentoMensal}
-                                                onChange={(e) => setFaturamentoMensal(e.target.value)}
-                                                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-3 px-3 text-gray-900 placeholder:text-gray-400"
-                                                placeholder="0.00"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">Faturamento Máquina</label>
-                                            <input
-                                                type="number"
-                                                value={faturamentoMaquina}
-                                                onChange={(e) => setFaturamentoMaquina(e.target.value)}
-                                                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-3 px-3 text-gray-900 placeholder:text-gray-400"
-                                                placeholder="0.00"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">Maquininha Atual</label>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Razão Social / Nome</label>
                                             <input
                                                 type="text"
-                                                value={maquininhaAtual}
-                                                onChange={(e) => setMaquininhaAtual(e.target.value)}
-                                                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-3 px-3 text-gray-900 placeholder:text-gray-400"
-                                                placeholder="Ex: Stone, Cielo..."
+                                                disabled={!isEditing}
+                                                value={name}
+                                                onChange={(e) => setName(e.target.value)}
+                                                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2 px-3 text-gray-900 disabled:bg-gray-50 disabled:text-gray-500"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">Produto de Interesse</label>
-                                            <select
-                                                value={produtoInteresse}
-                                                onChange={(e) => setProdutoInteresse(e.target.value)}
-                                                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-3 px-3 text-gray-900"
-                                            >
-                                                <option value="">Selecione...</option>
-                                                <option value="Conta PJ">Conta PJ</option>
-                                                <option value="Maquininha">Maquininha</option>
-                                                <option value="Antecipação">Antecipação</option>
-                                                <option value="Seguros">Seguros</option>
-                                            </select>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Sobrenome / Fantasia</label>
+                                            <input
+                                                type="text"
+                                                disabled={!isEditing}
+                                                value={surname}
+                                                onChange={(e) => setSurname(e.target.value)}
+                                                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2 px-3 text-gray-900 disabled:bg-gray-50 disabled:text-gray-500"
+                                            />
                                         </div>
-                                        <div className="flex flex-col gap-2 pt-2">
-                                            <label className="flex items-center gap-2 text-sm text-gray-900 cursor-pointer">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">CNPJ / CPF</label>
                                                 <input
-                                                    type="checkbox"
-                                                    checked={emiteBoletos}
-                                                    onChange={(e) => setEmiteBoletos(e.target.checked)}
-                                                    className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                    type="text"
+                                                    disabled={!isEditing}
+                                                    value={cnpj}
+                                                    onChange={(e) => setCnpj(e.target.value)}
+                                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2 px-3 text-gray-900 disabled:bg-gray-50 disabled:text-gray-500"
                                                 />
-                                                Emite Boletos?
-                                            </label>
-                                            <label className="flex items-center gap-2 text-sm text-gray-900 cursor-pointer">
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">Telefone</label>
                                                 <input
-                                                    type="checkbox"
-                                                    checked={receberOfertas}
-                                                    onChange={(e) => setReceberOfertas(e.target.checked)}
-                                                    className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                    type="text"
+                                                    disabled={!isEditing}
+                                                    value={phone}
+                                                    onChange={(e) => setPhone(e.target.value)}
+                                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2 px-3 text-gray-900 disabled:bg-gray-50 disabled:text-gray-500"
                                                 />
-                                                Receber Ofertas?
-                                            </label>
+                                            </div>
                                         </div>
-                                        <div className="col-span-1 md:col-span-2">
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">Informações Adicionais</label>
-                                            <textarea
-                                                value={informacoesAdicionais}
-                                                onChange={(e) => setInformacoesAdicionais(e.target.value)}
-                                                rows={4}
-                                                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm p-3 text-gray-900 placeholder:text-gray-400"
-                                                placeholder="Observações importantes..."
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Email</label>
+                                            <input
+                                                type="email"
+                                                disabled={!isEditing}
+                                                value={email}
+                                                onChange={(e) => setEmail(e.target.value)}
+                                                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2 px-3 text-gray-900 disabled:bg-gray-50 disabled:text-gray-500"
                                             />
                                         </div>
                                     </div>
-                                )}
-                            </div>
 
-                            {/* Metadata Section */}
-                            <div className="border-t border-gray-100 pt-4">
-                                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Informações do Sistema</h4>
-                                <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
-                                    <div className="flex flex-col">
-                                        <span className="text-xs text-gray-400">Criado em</span>
-                                        <span>{client?.created_at ? format(new Date(client.created_at), 'dd/MM/yyyy HH:mm') : '-'}</span>
+                                    {/* Metadata Section - Moved here specifically for registration logic */}
+                                    <div className="pt-4 border-t border-dashed">
+                                        <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
+                                            <div>
+                                                <span className="block text-[10px] text-gray-400 uppercase">Criado em</span>
+                                                <span className="font-medium">{client?.created_at ? format(new Date(client.created_at), 'dd/MM/yyyy HH:mm') : '-'}</span>
+                                            </div>
+                                            <div>
+                                                <span className="block text-[10px] text-gray-400 uppercase">Responsável</span>
+                                                <span className="font-medium truncate block" title={client?.created_by?.email}>
+                                                    {client?.created_by?.name || '-'}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-xs text-gray-400">Responsável</span>
-                                        <span>{client?.created_by?.name || '-'} ({client?.created_by?.email})</span>
+                                </div>
+
+                                {/* RIGHT COLUMN: QUALIFICATION INFO */}
+                                <div className="flex-1 space-y-6 lg:border-l lg:pl-8 lg:border-gray-100">
+                                    <div className="flex items-center gap-2 border-b pb-2 mb-4">
+                                        <ClipboardCheck className="h-5 w-5 text-gray-500" />
+                                        <h4 className="text-sm font-bold text-gray-900 uppercase">Dados da Qualificação</h4>
                                     </div>
-                                    {/* Add more metadata if available, e.g. Team */}
+
+                                    {!isEditing ? (
+                                        client?.qualifications && client.qualifications.length > 0 ? (
+                                            <div className="space-y-4 text-sm">
+                                                {/* Tabulação Block - New */}
+                                                <div className="bg-amber-50 rounded-md p-3 border border-amber-100">
+                                                    <span className="block text-xs font-semibold text-amber-800 uppercase mb-1">Tabulação / Status do Lead</span>
+                                                    <span className="text-base font-bold text-gray-900">
+                                                        {tabulacao || 'Não tabulado'}
+                                                    </span>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <span className="block text-xs text-gray-400 mb-0.5">Faturamento Mensal</span>
+                                                        <span className="font-medium text-gray-900 block bg-gray-50 px-3 py-2 rounded border border-gray-100">
+                                                            {client.qualifications[0].faturamento_mensal
+                                                                ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(client.qualifications[0].faturamento_mensal)
+                                                                : '-'}
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-xs text-gray-400 mb-0.5">Faturamento Máquina</span>
+                                                        <span className="font-medium text-gray-900 block bg-gray-50 px-3 py-2 rounded border border-gray-100">
+                                                            {client.qualifications[0].faturamento_maquina
+                                                                ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(client.qualifications[0].faturamento_maquina)
+                                                                : '-'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <span className="block text-xs text-gray-400 mb-0.5">Maquininha Atual</span>
+                                                        <span className="font-medium text-gray-900 block bg-gray-50 px-3 py-2 rounded border border-gray-100">
+                                                            {client.qualifications[0].maquininha_atual || '-'}
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-xs text-gray-400 mb-0.5">Produto de Interesse</span>
+                                                        <span className="font-medium text-gray-900 block bg-gray-50 px-3 py-2 rounded border border-gray-100">
+                                                            {client.qualifications[0].produto_interesse || '-'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex gap-4 pt-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={cn("w-2 h-2 rounded-full", client.qualifications[0].emite_boletos ? "bg-green-500" : "bg-gray-300")} />
+                                                        <span className="text-gray-700">Emite Boletos? <strong>{client.qualifications[0].emite_boletos ? 'Sim' : 'Não'}</strong></span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={cn("w-2 h-2 rounded-full", client.qualifications[0].deseja_receber_ofertas ? "bg-green-500" : "bg-gray-300")} />
+                                                        <span className="text-gray-700">Receber Ofertas? <strong>{client.qualifications[0].deseja_receber_ofertas ? 'Sim' : 'Não'}</strong></span>
+                                                    </div>
+                                                </div>
+
+                                                {client.qualifications[0].informacoes_adicionais && (
+                                                    <div className="mt-4">
+                                                        <span className="block text-xs text-gray-400 mb-1">Informações Adicionais</span>
+                                                        <div className="bg-gray-50 p-3 rounded border border-gray-100 text-gray-700 whitespace-pre-wrap">
+                                                            {client.qualifications[0].informacoes_adicionais}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="text-sm text-gray-500 italic p-6 bg-gray-50 rounded-lg text-center border border-dashed border-gray-200">
+                                                Nenhuma qualificação registrada para este cliente.
+                                            </div>
+                                        )
+                                    ) : (
+                                        /* EDIT MODE FOR QUALIFICATION */
+                                        <div className="space-y-4">
+                                            {/* Note: Tabulação usually updated via specific action, so we keep it read-only or not shown in edit form if not requested. 
+                                                User request didn't specify editing tabulacao here, only displaying. 
+                                                Leaving tabulacao out of edit mode to avoid confusion, or can enable if needed.*/}
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-700 mb-1">Faturamento Mensal</label>
+                                                    <input
+                                                        type="number"
+                                                        value={faturamentoMensal}
+                                                        onChange={(e) => setFaturamentoMensal(e.target.value)}
+                                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2 px-3 text-gray-900 placeholder:text-gray-400"
+                                                        placeholder="0.00"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-700 mb-1">Faturamento Máquina</label>
+                                                    <input
+                                                        type="number"
+                                                        value={faturamentoMaquina}
+                                                        onChange={(e) => setFaturamentoMaquina(e.target.value)}
+                                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2 px-3 text-gray-900 placeholder:text-gray-400"
+                                                        placeholder="0.00"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-700 mb-1">Maquininha Atual</label>
+                                                    <input
+                                                        type="text"
+                                                        value={maquininhaAtual}
+                                                        onChange={(e) => setMaquininhaAtual(e.target.value)}
+                                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2 px-3 text-gray-900 placeholder:text-gray-400"
+                                                        placeholder="Ex: Stone, Cielo..."
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-700 mb-1">Produto de Interesse</label>
+                                                    <select
+                                                        value={produtoInteresse}
+                                                        onChange={(e) => setProdutoInteresse(e.target.value)}
+                                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2 px-3 text-gray-900"
+                                                    >
+                                                        <option value="">Selecione...</option>
+                                                        <option value="Conta PJ">Conta PJ</option>
+                                                        <option value="Maquininha">Maquininha</option>
+                                                        <option value="Antecipação">Antecipação</option>
+                                                        <option value="Seguros">Seguros</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-2 pt-2 bg-gray-50 p-2 rounded">
+                                                <label className="flex items-center gap-2 text-sm text-gray-900 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={emiteBoletos}
+                                                        onChange={(e) => setEmiteBoletos(e.target.checked)}
+                                                        className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                    />
+                                                    Emite Boletos?
+                                                </label>
+                                                <label className="flex items-center gap-2 text-sm text-gray-900 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={receberOfertas}
+                                                        onChange={(e) => setReceberOfertas(e.target.checked)}
+                                                        className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                    />
+                                                    Receber Ofertas?
+                                                </label>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 mb-1">Informações Adicionais</label>
+                                                <textarea
+                                                    value={informacoesAdicionais}
+                                                    onChange={(e) => setInformacoesAdicionais(e.target.value)}
+                                                    rows={4}
+                                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm p-3 text-gray-900 placeholder:text-gray-400"
+                                                    placeholder="Observações importantes..."
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

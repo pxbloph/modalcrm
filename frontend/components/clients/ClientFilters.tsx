@@ -15,7 +15,7 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
     // State initialized from URL params
     // State initialized from URL params
     const [search, setSearch] = useState(searchParams.get('search') || '');
-    // status filter removed
+    const [status, setStatus] = useState(searchParams.get('status') || '');
     const [startDate, setStartDate] = useState(searchParams.get('startDate') || '');
     const [endDate, setEndDate] = useState(searchParams.get('endDate') || '');
     const [responsibleId, setResponsibleId] = useState(searchParams.get('responsibleId') || '');
@@ -38,7 +38,7 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
     const applyFilters = () => {
         const params = new URLSearchParams();
         if (search) params.set('search', search);
-        // status removed
+        if (status) params.set('status', status);
         if (startDate) params.set('startDate', startDate);
         if (endDate) params.set('endDate', endDate);
         if (responsibleId) params.set('responsibleId', responsibleId);
@@ -55,7 +55,7 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
 
     const clearFilters = () => {
         setSearch('');
-        // status removed
+        setStatus('');
         setStartDate('');
         setEndDate('');
         setResponsibleId('');
@@ -63,7 +63,7 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
         setTimeout(onFilterChange, 100);
     };
 
-    const activeFiltersCount = [startDate, endDate, responsibleId].filter(Boolean).length;
+    const activeFiltersCount = [status, startDate, endDate, responsibleId].filter(Boolean).length;
 
     return (
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 space-y-4">
@@ -99,7 +99,21 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
             {/* Advanced Filters Grid */}
             {showFilters && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-gray-100">
-                    {/* Status Filter Removed */}
+                    {/* Status Filter */}
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                        <select
+                            value={status}
+                            onChange={(e) => setStatus(e.target.value)}
+                            className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                        >
+                            <option value="">Todos</option>
+                            <option value="Pendente">Pendente</option>
+                            <option value="Cadastrando...">Cadastrando...</option>
+                            <option value="Cadastro salvo com sucesso!">Cadastrado</option>
+                            <option value="Erro">Erro de Integração</option>
+                        </select>
+                    </div>
 
                     {(userRole === 'ADMIN' || userRole === 'SUPERVISOR') && (
                         <div>

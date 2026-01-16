@@ -20,31 +20,40 @@ export declare class ClientsService {
         created_by_id: string;
     }>;
     private buildFilterConditions;
-    findAll(user: User, query?: any): Promise<({
-        qualifications: {
-            tabulacao: string;
-            agendamento: Date;
-        }[];
-        created_by: {
+    findAll(user: User, query?: any): Promise<{
+        data: ({
+            qualifications: {
+                tabulacao: string;
+                agendamento: Date;
+            }[];
+            created_by: {
+                email: string;
+                name: string;
+                surname: string;
+            };
+        } & {
+            id: string;
             email: string;
             name: string;
+            surname: string | null;
+            created_at: Date;
+            cnpj: string;
+            phone: string;
+            is_qualified: boolean;
+            has_open_account: boolean;
+            answers: Prisma.JsonValue | null;
+            integration_status: string;
+            updated_at: Date;
+            id_bitrix: number | null;
+            created_by_id: string;
+        })[];
+        meta: {
+            total: number;
+            page: number;
+            limit: number;
+            totalPages: number;
         };
-    } & {
-        id: string;
-        email: string;
-        name: string;
-        surname: string | null;
-        created_at: Date;
-        cnpj: string;
-        phone: string;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        answers: Prisma.JsonValue | null;
-        integration_status: string;
-        updated_at: Date;
-        id_bitrix: number | null;
-        created_by_id: string;
-    })[]>;
+    }>;
     update(id: string, data: Prisma.ClientUpdateInput, user: User): Promise<{
         id: string;
         email: string;

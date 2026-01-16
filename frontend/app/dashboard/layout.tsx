@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { Users, LayoutDashboard, LogOut, PlusCircle, ShieldCheck, Menu, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -117,14 +118,38 @@ export default function DashboardLayout({
                     )}
                 >
                     {/* Header with Toggle */}
-                    <div className={cn("flex items-center h-16 shrink-0 border-b relative", isCollapsed ? "justify-center px-0" : "px-6 justify-between")}>
-                        {!isCollapsed && <span className="text-xl font-bold text-indigo-600 truncate">MODAL</span>}
+                    <div className={cn("flex items-center h-16 shrink-0 border-b relative transition-all duration-300", isCollapsed ? "justify-center px-0" : "px-6 justify-between")}>
+                        {/* 
+                            AJUSTE DE TAMANHO DO LOGO:
+                            Para o logo expandido (else), altere as classes 'w-40' (largura) e 'h-12' (altura).
+                            Para o ícone colapsado (if), altere 'w-10' e 'h-10'.
+                            Valores comuns: w-32, w-40, w-48, w-56 / h-10, h-12, h-14, h-16.
+                        */}
+                        <div className={cn("relative flex items-center transition-all duration-300", isCollapsed ? "w-13 h-15" : "w-40 h-40")}>
+                            {isCollapsed ? (
+                                <Image
+                                    src="/logo_icone.svg"
+                                    alt="Modal CRM"
+                                    width={40}
+                                    height={40}
+                                    className="object-contain"
+                                />
+                            ) : (
+                                <Image
+                                    src="/logo_Logo_black.svg"
+                                    alt="Modal CRM"
+                                    fill
+                                    className="object-contain object-left"
+                                    priority
+                                />
+                            )}
+                        </div>
 
                         <button
                             onClick={toggleSidebar}
                             className={cn(
                                 "p-1.5 rounded-full border border-gray-200 bg-white text-gray-500 hover:text-indigo-600 hover:bg-gray-50",
-                                isCollapsed ? "" : "absolute -right-3 top-1/2 -translate-y-1/2 shadow-sm z-50"
+                                isCollapsed ? "absolute -right-3 top-6 z-50 shadow-sm" : "absolute -right-3 top-1/2 -translate-y-1/2 shadow-sm z-50"
                             )}
                             title={isCollapsed ? "Expandir menu" : "Recolher menu"}
                         >
@@ -209,8 +234,16 @@ export default function DashboardLayout({
                             <span className="sr-only">Abrir menu</span>
                             <Menu className="h-6 w-6" aria-hidden="true" />
                         </button>
-                        <div className="flex-1 text-sm font-semibold leading-6 text-indigo-600">
-                            MODAL
+                        <div className="flex-1 flex items-center justify-center">
+                            <div className="relative w-28 h-8">
+                                <Image
+                                    src="/logo_Logo_black.svg"
+                                    alt="Modal CRM"
+                                    fill
+                                    className="object-contain"
+                                    priority
+                                />
+                            </div>
                         </div>
                     </div>
                 )}

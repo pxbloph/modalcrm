@@ -133,8 +133,21 @@ let UsersService = class UsersService {
     }
     async findAll(currentUser) {
         const where = {};
-        if (currentUser && currentUser.role !== 'ADMIN') {
-            where.role = { not: 'ADMIN' };
+        if (currentUser) {
+            if (currentUser.role === 'SUPERVISOR') {
+                where.AND = [
+                    { role: { not: 'ADMIN' } },
+                    {
+                        OR: [
+                            { id: currentUser.id },
+                            { supervisor_id: currentUser.id }
+                        ]
+                    }
+                ];
+            }
+            else if (currentUser.role !== 'ADMIN') {
+                where.role = { not: 'ADMIN' };
+            }
         }
         return this.prisma.user.findMany({
             where,
