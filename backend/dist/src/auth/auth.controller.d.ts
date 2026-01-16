@@ -13,6 +13,18 @@ export declare class AuthController {
     } | {
         message: string;
     }>;
-    register(body: any): Promise<$Result.DefaultSelection<import(".prisma/client").Prisma.$UserPayload<$Extensions.DefaultArgs>>>;
+    register(body: any): Promise<{
+        id: string;
+        cpf: string | null;
+        email: string;
+        name: string;
+        surname: string | null;
+        password_hash: string;
+        role: import(".prisma/client").$Enums.Role;
+        is_active: boolean;
+        created_at: Date;
+        supervisor_id: string | null;
+        team_id: string | null;
+    }>;
     getProfile(req: any): any;
 }

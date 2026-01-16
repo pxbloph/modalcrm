@@ -2,10 +2,70 @@ import { QualificationsService } from './qualifications.service';
 export declare class QualificationsController {
     private readonly qualificationsService;
     constructor(qualificationsService: QualificationsService);
-    getTemplate(): Promise<any>;
-    saveTemplate(body: any, req: any): Promise<$Result.GetResult<import(".prisma/client").Prisma.$FormTemplatePayload<ExtArgs>, T, "create">> | {
+    getTemplate(): Promise<{
+        id: string;
+        is_active: boolean;
+        created_at: Date;
+        title: string;
+        fields: import("@prisma/client/runtime/library").JsonValue;
+        type: string;
+    }>;
+    saveTemplate(body: any, req: any): Promise<{
+        id: string;
+        is_active: boolean;
+        created_at: Date;
+        title: string;
+        fields: import("@prisma/client/runtime/library").JsonValue;
+        type: string;
+    }> | {
         error: string;
     };
-    create(clientId: string, body: any, req: any): Promise<any>;
-    findByClient(clientId: string): Promise<$Public.PrismaPromise<T>>;
+    create(clientId: string, body: any, req: any): Promise<{
+        integration_status: string;
+        id: string;
+        created_at: Date;
+        answers: import("@prisma/client/runtime/library").JsonValue;
+        created_by_id: string;
+        emite_boletos: boolean | null;
+        maquininha_atual: string | null;
+        faturamento_maquina: import("@prisma/client/runtime/library").Decimal | null;
+        faturamento_mensal: import("@prisma/client/runtime/library").Decimal | null;
+        produto_interesse: string | null;
+        deseja_receber_ofertas: boolean | null;
+        informacoes_adicionais: string | null;
+        nome_do_cliente: string | null;
+        fase: string | null;
+        tabulacao: string | null;
+        agendamento: Date | null;
+        integration_attempts: number | null;
+        last_integration_attempt: Date | null;
+        webhook_response: string | null;
+        client_id: string;
+    }>;
+    findByClient(clientId: string): Promise<({
+        created_by: {
+            name: string;
+        };
+    } & {
+        id: string;
+        created_at: Date;
+        answers: import("@prisma/client/runtime/library").JsonValue;
+        integration_status: string | null;
+        created_by_id: string;
+        emite_boletos: boolean | null;
+        maquininha_atual: string | null;
+        faturamento_maquina: import("@prisma/client/runtime/library").Decimal | null;
+        faturamento_mensal: import("@prisma/client/runtime/library").Decimal | null;
+        produto_interesse: string | null;
+        deseja_receber_ofertas: boolean | null;
+        informacoes_adicionais: string | null;
+        nome_do_cliente: string | null;
+        fase: string | null;
+        tabulacao: string | null;
+        agendamento: Date | null;
+        integration_attempts: number | null;
+        last_integration_attempt: Date | null;
+        webhook_response: string | null;
+        client_id: string;
+    })[]>;
 }

@@ -300,7 +300,15 @@ export default function ClientListTable({ clients, loading, onClientClick, onRef
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                if (parsed.order) setColumnOrder(parsed.order);
+                if (parsed.order) {
+                    // Merge saved order with default/current columns to ensure new columns show up
+                    const savedSet = new Set(parsed.order);
+                    const newColumns = defaultColumnOrder.filter(colId => !savedSet.has(colId));
+                    // Filter out any saved columns that no longer exist
+                    const existingSavedColumns = parsed.order.filter((colId: string) => defaultColumnOrder.includes(colId));
+
+                    setColumnOrder([...existingSavedColumns, ...newColumns]);
+                }
                 if (parsed.visibility) setColumnVisibility(parsed.visibility);
             } catch (e) {
                 console.error("Failed to load table config", e);
