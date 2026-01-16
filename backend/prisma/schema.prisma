@@ -59,6 +59,10 @@ model Client {
   created_at DateTime     @default(now())
   updated_at DateTime     @updatedAt
   id_bitrix  Int?
+  
+  // Bitrix Legacy Fields (Preserved for Reference)
+  id_card_bitrix    String?
+  id_contact_bitrix String?
 
 
   created_by_id String
