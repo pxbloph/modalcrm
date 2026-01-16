@@ -41,7 +41,7 @@ export default function LoginPage() {
                 <div>
                     <div className="flex justify-center mb-6">
                         {/* AJUSTE DE TAMANHO DO LOGO LOGIN: Altere w-64 e h-20 */}
-                        <div className="relative w-64 h-25">
+                        <div className="relative w-64 h-24">
                             <Image
                                 src="/logo_Logo_black.svg"
                                 alt="Modal CRM"

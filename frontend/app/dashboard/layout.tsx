@@ -125,7 +125,7 @@ export default function DashboardLayout({
                             Para o ícone colapsado (if), altere 'w-10' e 'h-10'.
                             Valores comuns: w-32, w-40, w-48, w-56 / h-10, h-12, h-14, h-16.
                         */}
-                        <div className={cn("relative flex items-center transition-all duration-300", isCollapsed ? "w-13 h-15" : "w-40 h-40")}>
+                        <div className={cn("relative flex items-center transition-all duration-300", isCollapsed ? "w-10 h-10" : "w-40 h-12")}>
                             {isCollapsed ? (
                                 <Image
                                     src="/logo_icone.svg"
