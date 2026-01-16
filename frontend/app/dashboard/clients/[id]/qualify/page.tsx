@@ -110,6 +110,7 @@ export default function QualifyPage() {
     }, [params?.id]);
 
     const formatCurrency = (value: string) => {
+        if (!value) return '';
         const digits = value.replace(/\D/g, '');
         const number = parseInt(digits) / 100;
         if (isNaN(number)) return '';
@@ -117,10 +118,9 @@ export default function QualifyPage() {
     };
 
     const handleChange = (fieldId: string, value: any, type: string) => {
-        if (type === 'number' && typeof value === 'string' && value.includes('R$')) {
-            // It's a currency input potentially
-            // Simple currency mask logic
-            const formatted = formatCurrency(value);
+        if (type === 'number') {
+            // Apply currency mask to all number fields in this form
+            const formatted = formatCurrency(String(value));
             setFormData(prev => ({ ...prev, [fieldId]: formatted }));
         } else {
             setFormData(prev => ({ ...prev, [fieldId]: value }));
