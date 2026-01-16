@@ -6,28 +6,7 @@ export declare class FormTemplatesService {
         title: string;
         fields: any;
         type: string;
-    }): Promise<{
-        id: string;
-        is_active: boolean;
-        created_at: Date;
-        title: string;
-        fields: import("@prisma/client/runtime/library").JsonValue;
-        type: string;
-    }>;
-    findActive(type?: string): Promise<{
-        id: string;
-        is_active: boolean;
-        created_at: Date;
-        title: string;
-        fields: import("@prisma/client/runtime/library").JsonValue;
-        type: string;
-    }>;
-    findAll(): Promise<{
-        id: string;
-        is_active: boolean;
-        created_at: Date;
-        title: string;
-        fields: import("@prisma/client/runtime/library").JsonValue;
-        type: string;
-    }[]>;
+    }): Promise<$Result.GetResult<import(".prisma/client").Prisma.$FormTemplatePayload<ExtArgs>, T, "create">>;
+    findActive(type?: string): Promise<any>;
+    findAll(): Promise<$Public.PrismaPromise<T>>;
 }
