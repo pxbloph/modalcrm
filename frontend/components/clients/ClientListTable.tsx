@@ -47,6 +47,7 @@ interface Client {
     cnpj?: string; // New field
     qualifications?: {
         agendamento?: string;
+        tabulacao?: string;
     }[];
     has_open_account?: boolean;
     [key: string]: any;
@@ -239,6 +240,13 @@ export default function ClientListTable({ clients, loading, onClientClick, onRef
                 id: 'responsible',
                 header: 'Responsável',
                 accessorFn: (row) => row.created_by?.name || '-',
+                minSize: 150,
+            },
+            {
+                id: 'tabulacao',
+                header: 'Tabulação',
+                accessorFn: (row) => row.qualifications?.[0]?.tabulacao || '-',
+                cell: (info) => <span className="text-gray-700">{info.getValue() as string}</span>,
                 minSize: 150,
             },
             {

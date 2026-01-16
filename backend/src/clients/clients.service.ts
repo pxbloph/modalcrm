@@ -90,7 +90,7 @@ export class ClientsService {
                     orderBy: { created_at: 'desc' },
                     take: 1,
                     // @ts-ignore
-                    select: { agendamento: true }
+                    select: { agendamento: true, tabulacao: true }
                 }
             },
             orderBy: { created_at: 'desc' }

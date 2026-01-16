@@ -100,7 +100,7 @@ let QualificationsService = class QualificationsService {
                     email: client.email,
                     telefone: client.phone,
                     id_bitrix: client.id_bitrix,
-                    consultor_responsavel: client.created_by?.name,
+                    consultor_responsavel: client.created_by ? `${client.created_by.name}${client.created_by.surname ? ' ' + client.created_by.surname : ''}` : null,
                     consultor_email: client.created_by?.email
                 },
                 dados_qualificacao: {

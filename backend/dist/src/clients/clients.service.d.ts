@@ -22,6 +22,7 @@ export declare class ClientsService {
     private buildFilterConditions;
     findAll(user: User, query?: any): Promise<({
         qualifications: {
+            tabulacao: string;
             agendamento: Date;
         }[];
         created_by: {

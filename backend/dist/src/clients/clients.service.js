@@ -88,7 +88,7 @@ let ClientsService = class ClientsService {
                 qualifications: {
                     orderBy: { created_at: 'desc' },
                     take: 1,
-                    select: { agendamento: true }
+                    select: { agendamento: true, tabulacao: true }
                 }
             },
             orderBy: { created_at: 'desc' }

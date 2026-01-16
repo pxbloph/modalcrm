@@ -10,10 +10,10 @@ export declare class UsersService {
     remove(id: string, requestUserId?: string): Promise<User>;
     findAllSupervisors(): Promise<{
         id: string;
-        name: string;
-        surname: string | null;
         cpf: string | null;
         email: string;
+        name: string;
+        surname: string | null;
         password_hash: string;
         role: import(".prisma/client").$Enums.Role;
         is_active: boolean;
@@ -27,10 +27,10 @@ export declare class UsersService {
         };
     } & {
         id: string;
-        name: string;
-        surname: string | null;
         cpf: string | null;
         email: string;
+        name: string;
+        surname: string | null;
         password_hash: string;
         role: import(".prisma/client").$Enums.Role;
         is_active: boolean;

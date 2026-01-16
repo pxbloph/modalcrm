@@ -37,6 +37,7 @@ export declare class ClientsController {
     openAccountBulk(ids: string[], req: any): Promise<import(".prisma/client").Prisma.BatchPayload>;
     findAll(req: any, query: any): Promise<({
         qualifications: {
+            tabulacao: string;
             agendamento: Date;
         }[];
         created_by: {
