@@ -11,12 +11,12 @@ export class UsersController {
 
     @Get()
     async findAll(@Request() req) {
-        if (req.user.role !== Role.ADMIN) {
-            throw new ForbiddenException('Apenas administradores podem listar usuários');
+        // Allow Admin and Supervisor to list users (for Teams/Reports)
+        if (req.user.role !== Role.ADMIN && req.user.role !== Role.SUPERVISOR) {
+            throw new ForbiddenException('Apenas administradores podem listar todos os usuários');
         }
-        // Return all users (supervisors and operators)
-        // In a real app, exclude password_hash
-        return this.usersService.findAll();
+
+        return this.usersService.findAll(req.user);
     }
 
     @Post()
@@ -74,6 +74,17 @@ export class UsersController {
         }
         try {
             return await this.usersService.updateStatusBulk(body.ids, body.isActive, req.user.id);
+        } catch (error) {
+            throw new ForbiddenException(error.message);
+        }
+    }
+    @Patch('batch/bulk-supervisor')
+    async updateSupervisorBulk(@Body() body: { ids: string[], supervisorId: string | null }, @Request() req) {
+        if (req.user.role !== Role.ADMIN) {
+            throw new ForbiddenException('Apenas administradores podem atribuir supervisores.');
+        }
+        try {
+            return await this.usersService.updateSupervisorBulk(body.ids, body.supervisorId, req.user.id);
         } catch (error) {
             throw new ForbiddenException(error.message);
         }

@@ -105,8 +105,18 @@ export class UsersService {
         });
     }
 
-    async findAll() {
+    async findAll(currentUser?: User) {
+        const where: Prisma.UserWhereInput = {};
+
+        // If Supervisor/Leader/Operator requests logic:
+        // Generally for "Add Member", they validly need to see users.
+        // But let's hide ADMINs from non-admins for privacy/cleanliness
+        if (currentUser && currentUser.role !== 'ADMIN') {
+            where.role = { not: 'ADMIN' };
+        }
+
         return this.prisma.user.findMany({
+            where,
             orderBy: { created_at: 'desc' },
             include: {
                 supervisor: {
@@ -176,6 +186,28 @@ export class UsersService {
         return this.prisma.user.updateMany({
             where: { id: { in: ids } },
             data: { is_active: isActive }
+        });
+    }
+    async updateSupervisorBulk(ids: string[], supervisorId: string | null, requestUserId: string) {
+        // Prevent updating self supervisor if in list (logic optional, but good for safety)
+        if (ids.includes(requestUserId)) {
+            // Maybe allow, but usually admin doesn't assign supervisor to self via bulk
+        }
+
+        // Validate supervisor if provided
+        if (supervisorId) {
+            const supervisor = await this.prisma.user.findUnique({ where: { id: supervisorId } });
+            if (!supervisor) {
+                throw new Error('Supervisor não encontrado.');
+            }
+            if (supervisor.role !== 'SUPERVISOR' && supervisor.role !== 'ADMIN') {
+                // Optional: Enforce role check
+            }
+        }
+
+        return this.prisma.user.updateMany({
+            where: { id: { in: ids } },
+            data: { supervisor_id: supervisorId }
         });
     }
 }

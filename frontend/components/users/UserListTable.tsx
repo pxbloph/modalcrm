@@ -28,7 +28,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
-import { Loader2, GripVertical, Trash2, CheckCircle, Settings, RotateCcw, Search, X, Pencil, Ban, Check } from 'lucide-react';
+import { Loader2, GripVertical, Trash2, CheckCircle, Settings, RotateCcw, Search, X, Pencil, Ban, Check, UserPlus } from 'lucide-react';
 import api from '@/lib/api';
 
 interface User {
@@ -143,6 +143,9 @@ const SortableColumnItem = ({ id, label, isVisible, isFixed, onToggle }: any) =>
 export default function UserListTable({ users, loading, onEdit, onDelete, onRefresh }: UserListTableProps) {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [actionLoading, setActionLoading] = useState(false);
+    const [supervisorModalOpen, setSupervisorModalOpen] = useState(false);
+    const [selectedSupervisorId, setSelectedSupervisorId] = useState('');
+
 
     // Column Config State
     const [columnSelectorOpen, setColumnSelectorOpen] = useState(false);
@@ -393,6 +396,42 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
         }
     };
 
+    const handleBulkSupervisorOpen = () => {
+        setSupervisorModalOpen(true);
+        setSelectedSupervisorId('');
+    };
+
+    const handleBulkSupervisorSubmit = async () => {
+        const count = selectedIds.size;
+        if (!selectedSupervisorId && selectedSupervisorId !== null) return; // Allow null for "no supervisor"? Let's assume selecting "None" or a user. 
+        // For now, require selection.
+        if (!selectedSupervisorId) {
+            alert('Selecione um supervisor.');
+            return;
+        }
+
+        setActionLoading(true);
+        try {
+            await api.patch('/users/batch/bulk-supervisor', {
+                ids: Array.from(selectedIds),
+                supervisorId: selectedSupervisorId === 'none' ? null : selectedSupervisorId
+            });
+            alert(`${count} usuários atualizados com sucesso.`);
+            setSelectedIds(new Set());
+            setSupervisorModalOpen(false);
+            if (onRefresh) onRefresh();
+        } catch (error: any) {
+            console.error("Bulk supervisor update failed", error);
+            alert(error.response?.data?.message || "Erro ao atribuir supervisor.");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // Filter supervisors for the modal list
+    const supervisorsList = useMemo(() => users.filter(u => u.role === 'SUPERVISOR'), [users]);
+
+
     // --- DnD Sensors (Header) ---
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -581,6 +620,16 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                         </button>
                         <div className="h-4 w-px bg-gray-300 mx-2" />
                         <button
+                            onClick={handleBulkSupervisorOpen}
+                            disabled={actionLoading}
+                            className="flex items-center gap-2 text-sm font-medium text-blue-700 hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                            <UserPlus className="h-4 w-4" />
+                            Supervisor
+                        </button>
+
+                        <div className="h-4 w-px bg-gray-300 mx-2" />
+                        <button
                             onClick={handleBulkDelete}
                             disabled={actionLoading}
                             className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
@@ -671,6 +720,64 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                     </div>
                 </DndContext>
             </div>
+
+
+            {/* Supervisor Selection Modal */}
+            {
+                supervisorModalOpen && (
+                    <>
+                        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm" onClick={() => setSupervisorModalOpen(false)} />
+                        <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-full max-w-md bg-white rounded-xl shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-gray-900">Atribuir Supervisor</h3>
+                                <button onClick={() => setSupervisorModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+
+                            <p className="text-sm text-gray-500 mb-4">
+                                Selecione o supervisor para os <span className="font-medium text-gray-900">{selectedIds.size}</span> usuários selecionados.
+                            </p>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Supervisor
+                                    </label>
+                                    <select
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border text-gray-900"
+                                        value={selectedSupervisorId}
+                                        onChange={(e) => setSelectedSupervisorId(e.target.value)}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        <option value="none">-- Nenhum (Remover) --</option>
+                                        {supervisorsList.map(s => (
+                                            <option key={s.id} value={s.id}>{s.name} {s.surname ? s.surname : ''}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="flex justify-end gap-3 pt-2">
+                                    <button
+                                        onClick={() => setSupervisorModalOpen(false)}
+                                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        onClick={handleBulkSupervisorSubmit}
+                                        disabled={actionLoading || !selectedSupervisorId}
+                                        className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                                    >
+                                        {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                                        Salvar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </>
+                )
+            }
         </div>
     );
 }

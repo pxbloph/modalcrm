@@ -22,10 +22,10 @@ let UsersController = class UsersController {
         this.usersService = usersService;
     }
     async findAll(req) {
-        if (req.user.role !== client_1.Role.ADMIN) {
-            throw new common_1.ForbiddenException('Apenas administradores podem listar usuários');
+        if (req.user.role !== client_1.Role.ADMIN && req.user.role !== client_1.Role.SUPERVISOR) {
+            throw new common_1.ForbiddenException('Apenas administradores podem listar todos os usuários');
         }
-        return this.usersService.findAll();
+        return this.usersService.findAll(req.user);
     }
     async create(data, req) {
         if (req.user.role !== client_1.Role.ADMIN) {
@@ -73,6 +73,17 @@ let UsersController = class UsersController {
         }
         try {
             return await this.usersService.updateStatusBulk(body.ids, body.isActive, req.user.id);
+        }
+        catch (error) {
+            throw new common_1.ForbiddenException(error.message);
+        }
+    }
+    async updateSupervisorBulk(body, req) {
+        if (req.user.role !== client_1.Role.ADMIN) {
+            throw new common_1.ForbiddenException('Apenas administradores podem atribuir supervisores.');
+        }
+        try {
+            return await this.usersService.updateSupervisorBulk(body.ids, body.supervisorId, req.user.id);
         }
         catch (error) {
             throw new common_1.ForbiddenException(error.message);
@@ -136,6 +147,14 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], UsersController.prototype, "updateStatusBulk", null);
+__decorate([
+    (0, common_1.Patch)('batch/bulk-supervisor'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "updateSupervisorBulk", null);
 exports.UsersController = UsersController = __decorate([
     (0, common_1.Controller)('users'),
     (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),

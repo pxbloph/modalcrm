@@ -10,10 +10,10 @@ export declare class UsersService {
     remove(id: string, requestUserId?: string): Promise<User>;
     findAllSupervisors(): Promise<{
         id: string;
-        cpf: string | null;
-        email: string;
         name: string;
         surname: string | null;
+        cpf: string | null;
+        email: string;
         password_hash: string;
         role: import(".prisma/client").$Enums.Role;
         is_active: boolean;
@@ -21,16 +21,16 @@ export declare class UsersService {
         supervisor_id: string | null;
         team_id: string | null;
     }[]>;
-    findAll(): Promise<({
+    findAll(currentUser?: User): Promise<({
         supervisor: {
             name: string;
         };
     } & {
         id: string;
-        cpf: string | null;
-        email: string;
         name: string;
         surname: string | null;
+        cpf: string | null;
+        email: string;
         password_hash: string;
         role: import(".prisma/client").$Enums.Role;
         is_active: boolean;
@@ -40,4 +40,5 @@ export declare class UsersService {
     })[]>;
     removeBulk(ids: string[], requestUserId: string): Promise<Prisma.BatchPayload>;
     updateStatusBulk(ids: string[], isActive: boolean, requestUserId: string): Promise<Prisma.BatchPayload>;
+    updateSupervisorBulk(ids: string[], supervisorId: string | null, requestUserId: string): Promise<Prisma.BatchPayload>;
 }

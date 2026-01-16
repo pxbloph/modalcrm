@@ -15,10 +15,10 @@ export declare class AuthController {
     }>;
     register(body: any): Promise<{
         id: string;
-        cpf: string | null;
-        email: string;
         name: string;
         surname: string | null;
+        cpf: string | null;
+        email: string;
         password_hash: string;
         role: import(".prisma/client").$Enums.Role;
         is_active: boolean;

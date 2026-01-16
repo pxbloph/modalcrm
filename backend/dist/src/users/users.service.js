@@ -131,8 +131,13 @@ let UsersService = class UsersService {
             where: { role: 'SUPERVISOR' },
         });
     }
-    async findAll() {
+    async findAll(currentUser) {
+        const where = {};
+        if (currentUser && currentUser.role !== 'ADMIN') {
+            where.role = { not: 'ADMIN' };
+        }
         return this.prisma.user.findMany({
+            where,
             orderBy: { created_at: 'desc' },
             include: {
                 supervisor: {
@@ -188,6 +193,22 @@ let UsersService = class UsersService {
         return this.prisma.user.updateMany({
             where: { id: { in: ids } },
             data: { is_active: isActive }
+        });
+    }
+    async updateSupervisorBulk(ids, supervisorId, requestUserId) {
+        if (ids.includes(requestUserId)) {
+        }
+        if (supervisorId) {
+            const supervisor = await this.prisma.user.findUnique({ where: { id: supervisorId } });
+            if (!supervisor) {
+                throw new Error('Supervisor não encontrado.');
+            }
+            if (supervisor.role !== 'SUPERVISOR' && supervisor.role !== 'ADMIN') {
+            }
+        }
+        return this.prisma.user.updateMany({
+            where: { id: { in: ids } },
+            data: { supervisor_id: supervisorId }
         });
     }
 };

@@ -4,19 +4,19 @@ export declare class QualificationsController {
     constructor(qualificationsService: QualificationsService);
     getTemplate(): Promise<{
         id: string;
+        is_active: boolean;
+        created_at: Date;
         title: string;
         fields: import("@prisma/client/runtime/library").JsonValue;
         type: string;
-        is_active: boolean;
-        created_at: Date;
     }>;
     saveTemplate(body: any, req: any): Promise<{
         id: string;
+        is_active: boolean;
+        created_at: Date;
         title: string;
         fields: import("@prisma/client/runtime/library").JsonValue;
         type: string;
-        is_active: boolean;
-        created_at: Date;
     }> | {
         error: string;
     };
@@ -25,6 +25,7 @@ export declare class QualificationsController {
         id: string;
         created_at: Date;
         answers: import("@prisma/client/runtime/library").JsonValue;
+        created_by_id: string;
         emite_boletos: boolean | null;
         maquininha_atual: string | null;
         faturamento_maquina: import("@prisma/client/runtime/library").Decimal | null;
@@ -40,7 +41,6 @@ export declare class QualificationsController {
         last_integration_attempt: Date | null;
         webhook_response: string | null;
         client_id: string;
-        created_by_id: string;
     }>;
     findByClient(clientId: string): Promise<({
         created_by: {
@@ -50,6 +50,8 @@ export declare class QualificationsController {
         id: string;
         created_at: Date;
         answers: import("@prisma/client/runtime/library").JsonValue;
+        integration_status: string | null;
+        created_by_id: string;
         emite_boletos: boolean | null;
         maquininha_atual: string | null;
         faturamento_maquina: import("@prisma/client/runtime/library").Decimal | null;
@@ -61,11 +63,9 @@ export declare class QualificationsController {
         fase: string | null;
         tabulacao: string | null;
         agendamento: Date | null;
-        integration_status: string | null;
         integration_attempts: number | null;
         last_integration_attempt: Date | null;
         webhook_response: string | null;
         client_id: string;
-        created_by_id: string;
     })[]>;
 }

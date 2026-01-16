@@ -8,10 +8,10 @@ export declare class UsersController {
         };
     } & {
         id: string;
-        cpf: string | null;
-        email: string;
         name: string;
         surname: string | null;
+        cpf: string | null;
+        email: string;
         password_hash: string;
         role: import(".prisma/client").$Enums.Role;
         is_active: boolean;
@@ -21,10 +21,10 @@ export declare class UsersController {
     })[]>;
     create(data: any, req: any): Promise<{
         id: string;
-        cpf: string | null;
-        email: string;
         name: string;
         surname: string | null;
+        cpf: string | null;
+        email: string;
         password_hash: string;
         role: import(".prisma/client").$Enums.Role;
         is_active: boolean;
@@ -34,10 +34,10 @@ export declare class UsersController {
     }>;
     findOne(id: string, req: any): Promise<{
         id: string;
-        cpf: string | null;
-        email: string;
         name: string;
         surname: string | null;
+        cpf: string | null;
+        email: string;
         password_hash: string;
         role: import(".prisma/client").$Enums.Role;
         is_active: boolean;
@@ -47,10 +47,10 @@ export declare class UsersController {
     }>;
     update(id: string, data: any, req: any): Promise<{
         id: string;
-        cpf: string | null;
-        email: string;
         name: string;
         surname: string | null;
+        cpf: string | null;
+        email: string;
         password_hash: string;
         role: import(".prisma/client").$Enums.Role;
         is_active: boolean;
@@ -60,10 +60,10 @@ export declare class UsersController {
     }>;
     remove(id: string, req: any): Promise<{
         id: string;
-        cpf: string | null;
-        email: string;
         name: string;
         surname: string | null;
+        cpf: string | null;
+        email: string;
         password_hash: string;
         role: import(".prisma/client").$Enums.Role;
         is_active: boolean;
@@ -75,5 +75,9 @@ export declare class UsersController {
     updateStatusBulk(body: {
         ids: string[];
         isActive: boolean;
+    }, req: any): Promise<import(".prisma/client").Prisma.BatchPayload>;
+    updateSupervisorBulk(body: {
+        ids: string[];
+        supervisorId: string | null;
     }, req: any): Promise<import(".prisma/client").Prisma.BatchPayload>;
 }

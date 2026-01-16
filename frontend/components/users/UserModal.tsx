@@ -50,7 +50,7 @@ export default function UserModal({ isOpen, onClose, onSuccess, userToEdit }: Us
             const payload: any = {
                 name,
                 surname,
-                cpf,
+                cpf: cpf ? cpf : null, // Send null if empty to avoid unique constraint error
                 email,
                 role,
                 is_active: isActive,
