@@ -64,10 +64,10 @@ export default function QualificationSettingsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-200 dark:bg-zinc-900 dark:border-zinc-800">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Configurar Qualificação</h1>
-                    <p className="text-gray-500 mt-1">Personalize os campos e opções do formulário de qualificação.</p>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Configurar Qualificação</h1>
+                    <p className="text-gray-500 mt-1 dark:text-gray-400">Personalize os campos e opções do formulário de qualificação.</p>
                 </div>
                 <button
                     onClick={handleSave}
@@ -79,7 +79,7 @@ export default function QualificationSettingsPage() {
                 </button>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-h-[600px]">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-h-[600px] dark:bg-zinc-900 dark:border-zinc-800">
                 <FormBuilderInternal fields={fields} onChange={setFields} />
             </div>
         </div>

@@ -66,10 +66,10 @@ export default function RegistrationSettingsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-200 dark:bg-zinc-900 dark:border-zinc-800">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Configurar Cadastro</h1>
-                    <p className="text-gray-500 mt-1">Personalize os campos do formulário de novos clientes.</p>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Configurar Cadastro</h1>
+                    <p className="text-gray-500 mt-1 dark:text-gray-400">Personalize os campos do formulário de novos clientes.</p>
                 </div>
                 <button
                     onClick={handleSave}
@@ -81,9 +81,9 @@ export default function RegistrationSettingsPage() {
                 </button>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-h-[600px]">
-                <div className="mb-6 bg-blue-50 border border-blue-100 p-4 rounded-lg">
-                    <p className="text-sm text-blue-800">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-h-[600px] dark:bg-zinc-900 dark:border-zinc-800">
+                <div className="mb-6 bg-blue-50 border border-blue-100 p-4 rounded-lg dark:bg-blue-900/20 dark:border-blue-900/30">
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
                         <strong>Atenção:</strong> Campos como Razão Social, CNPJ, E-mail e Telefone são essenciais para o sistema.
                         Evite removê-los ou desativar sua obrigatoriedade para garantir o funcionamento correto das integrações.
                     </p>

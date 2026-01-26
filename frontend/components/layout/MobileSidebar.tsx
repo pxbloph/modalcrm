@@ -9,10 +9,17 @@ import { cn } from '@/lib/utils';
 
 interface NavigationItem {
     name: string;
-    href: string;
+    href?: string;
     icon: LucideIcon;
     show: boolean;
+    children?: {
+        name: string;
+        href: string;
+        icon: LucideIcon;
+        show: boolean;
+    }[];
 }
+
 
 interface MobileSidebarProps {
     open: boolean;
@@ -23,6 +30,7 @@ interface MobileSidebarProps {
 
 export default function MobileSidebar({ open, setOpen, navigation, onLogout }: MobileSidebarProps) {
     const pathname = usePathname();
+
 
     return (
         <div className={cn(
@@ -69,23 +77,60 @@ export default function MobileSidebar({ open, setOpen, navigation, onLogout }: M
                         <li>
                             <div className="text-xs font-semibold leading-6 text-gray-400">Menu</div>
                             <ul role="list" className="-mx-2 mt-2 space-y-1">
-                                {navigation.filter(item => item.show).map((item) => (
-                                    <li key={item.name}>
-                                        <Link
-                                            href={item.href}
-                                            onClick={() => setOpen(false)}
-                                            className={cn(
-                                                pathname === item.href
-                                                    ? 'bg-indigo-50 text-indigo-600'
-                                                    : 'text-gray-700 hover:text-indigo-600 hover:bg-gray-50',
-                                                'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
-                                            )}
-                                        >
-                                            <item.icon className="h-6 w-6 shrink-0" aria-hidden="true" />
-                                            {item.name}
-                                        </Link>
-                                    </li>
-                                ))}
+                                {navigation.filter(item => item.show).map((item) => {
+                                    if (item.children) {
+                                        // Render Group (simplified, always open or simple toggle if needed, but for mobile usually open or toggle)
+                                        // For simplicity in mobile, let's always show children indented if parent is "Settings" or similar, or just list.
+                                        // But user wants accordion.
+                                        return (
+                                            <li key={item.name}>
+                                                <div className="text-sm font-semibold text-gray-700 p-2 flex items-center gap-x-3">
+                                                    <item.icon className="h-6 w-6 shrink-0" aria-hidden="true" />
+                                                    {item.name}
+                                                </div>
+                                                <ul className="pl-6 mt-1 space-y-1">
+                                                    {item.children.filter(child => child.show).map(child => (
+                                                        <li key={child.name}>
+                                                            <Link
+                                                                href={child.href}
+                                                                onClick={() => setOpen(false)}
+                                                                className={cn(
+                                                                    pathname === child.href
+                                                                        ? 'bg-indigo-50 text-indigo-600'
+                                                                        : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-50',
+                                                                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-medium'
+                                                                )}
+                                                            >
+                                                                <child.icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                                                                {child.name}
+                                                            </Link>
+
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </li>
+                                        );
+                                    }
+
+                                    return (
+                                        <li key={item.name}>
+                                            <Link
+                                                href={item.href!}
+                                                onClick={() => setOpen(false)}
+                                                className={cn(
+                                                    pathname === item.href
+                                                        ? 'bg-indigo-50 text-indigo-600'
+                                                        : 'text-gray-700 hover:text-indigo-600 hover:bg-gray-50',
+                                                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                                                )}
+                                            >
+                                                <item.icon className="h-6 w-6 shrink-0" aria-hidden="true" />
+                                                {item.name}
+                                            </Link>
+                                        </li>
+                                    );
+                                })}
+
                             </ul>
                         </li>
                         <li className="mt-auto">

@@ -88,8 +88,8 @@ const DraggableTableHeader = ({ header }: { header: Header<Client, unknown> }) =
             {...attributes}
             {...listeners}
             className={cn(
-                "relative text-left text-sm font-semibold text-gray-900 border-b border-gray-200 bg-gray-50 group select-none cursor-grab active:cursor-grabbing hover:bg-gray-100/50 transition-colors",
-                isDragging && "bg-gray-100 shadow-lg"
+                "relative text-left text-sm font-semibold text-gray-900 border-b border-gray-200 bg-gray-50 group select-none cursor-grab active:cursor-grabbing hover:bg-gray-100/50 transition-colors dark:bg-zinc-900 dark:text-gray-100 dark:border-zinc-800 dark:hover:bg-zinc-800",
+                isDragging && "bg-gray-100 shadow-lg dark:bg-zinc-800"
             )}
         >
             <div className="flex items-center gap-2 px-3 py-3.5 h-full">
@@ -126,7 +126,7 @@ const SortableColumnItem = ({ id, label, isVisible, isFixed, onToggle }: any) =>
         <div
             ref={setNodeRef}
             style={style}
-            className="flex items-center gap-3 p-2 bg-white rounded-md border border-gray-100 mb-1 hover:border-gray-200"
+            className="flex items-center gap-3 p-2 bg-white rounded-md border border-gray-100 mb-1 hover:border-gray-200 dark:bg-zinc-800 dark:border-zinc-700 dark:hover:border-zinc-600"
         >
             <button
                 {...attributes}
@@ -142,7 +142,7 @@ const SortableColumnItem = ({ id, label, isVisible, isFixed, onToggle }: any) =>
                 onChange={() => onToggle(id)}
                 className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 disabled:opacity-50"
             />
-            <span className="text-sm text-gray-700 flex-1">{label}</span>
+            <span className="text-sm text-gray-700 flex-1 dark:text-gray-200">{label}</span>
         </div>
     );
 };
@@ -246,11 +246,11 @@ export default function ClientListTable({
                             type="checkbox"
                             checked={clients.length > 0 && selectedIds.size === clients.length}
                             onChange={toggleAll}
-                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 h-4 w-4 cursor-pointer"
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 h-4 w-4 cursor-pointer dark:bg-zinc-800 dark:border-zinc-600"
                         />
                         <button
                             onClick={(e) => { e.stopPropagation(); openColumnSelector(); }}
-                            className="p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-200/50 transition-colors"
+                            className="p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-200/50 transition-colors dark:text-gray-500 dark:hover:text-gray-300 dark:hover:bg-zinc-700"
                             title="Colunas"
                         >
                             <Settings className="h-3.5 w-3.5" />
@@ -264,7 +264,7 @@ export default function ClientListTable({
                             checked={selectedIds.has(row.original.id)}
                             onChange={() => toggleRow(row.original.id)}
                             onClick={(e) => e.stopPropagation()}
-                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 h-4 w-4 cursor-pointer"
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 h-4 w-4 cursor-pointer dark:bg-zinc-800 dark:border-zinc-600"
                         />
                     </div>
                 ),
@@ -274,7 +274,7 @@ export default function ClientListTable({
             {
                 accessorKey: 'name',
                 header: 'Razão Social',
-                cell: (info) => <span className="font-medium text-gray-900">{info.getValue() as string}</span>,
+                cell: (info) => <span className="font-medium text-gray-900 dark:text-gray-100">{info.getValue() as string}</span>,
                 minSize: 150,
             },
             {
@@ -307,13 +307,13 @@ export default function ClientListTable({
                             <span className={cn(
                                 "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset",
                                 (status === 'Pendente' || status === 'Cadastrando...') ? "bg-yellow-50 text-yellow-800 ring-yellow-600/20" :
-                                    status === 'Cadastro salvo com sucesso!' ? "bg-green-50 text-green-700 ring-green-600/20" :
-                                        "bg-gray-50 text-gray-600 ring-gray-500/10"
+                                    status === 'Cadastro salvo com sucesso!' ? "bg-green-50 text-green-700 ring-green-600/20 dark:bg-green-900/30 dark:text-green-400 dark:ring-green-500/30" :
+                                        "bg-gray-50 text-gray-600 ring-gray-500/10 dark:bg-zinc-800 dark:text-gray-400 dark:ring-gray-700"
                             )}>
                                 {status}
                             </span>
                             {hasOpenAccount && (
-                                <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10 dark:bg-blue-900/30 dark:text-blue-400 dark:ring-blue-500/30">
                                     Conta Aberta
                                 </span>
                             )}
@@ -332,7 +332,7 @@ export default function ClientListTable({
                 id: 'tabulacao',
                 header: 'Tabulação',
                 accessorFn: (row) => row.qualifications?.[0]?.tabulacao || '-',
-                cell: (info) => <span className="text-gray-700">{info.getValue() as string}</span>,
+                cell: (info) => <span className="text-gray-700 dark:text-gray-300">{info.getValue() as string}</span>,
                 minSize: 150,
             },
             {
@@ -360,7 +360,7 @@ export default function ClientListTable({
                             e.stopPropagation();
                             onClientClick(row.original.id);
                         }}
-                        className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 px-2 py-1 rounded text-sm font-medium"
+                        className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 px-2 py-1 rounded text-sm font-medium dark:text-indigo-400 dark:hover:text-indigo-200 dark:hover:bg-indigo-900/30"
                     >
                         Ver
                     </button>
@@ -494,7 +494,7 @@ export default function ClientListTable({
     // --- Render ---
     if (loading && clients.length === 0) {
         return (
-            <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl p-12 flex justify-center">
+            <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl p-12 flex justify-center dark:bg-zinc-900 dark:ring-zinc-800">
                 <Loader2 className="animate-spin h-8 w-8 text-indigo-600" />
             </div>
         );
@@ -506,9 +506,9 @@ export default function ClientListTable({
             {columnSelectorOpen && (
                 <>
                     <div className="fixed inset-0 z-30" onClick={() => setColumnSelectorOpen(false)} />
-                    <div className="absolute left-0 top-8 z-40 w-80 bg-white rounded-lg shadow-2xl ring-1 ring-black ring-opacity-5 p-4 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-100 origin-top-left">
+                    <div className="absolute left-0 top-8 z-40 w-80 bg-white rounded-lg shadow-2xl ring-1 ring-black ring-opacity-5 p-4 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-100 origin-top-left dark:bg-zinc-900 dark:ring-zinc-700">
                         <div className="flex items-center justify-between border-b pb-2">
-                            <h3 className="font-semibold text-gray-900">Personalizar Colunas</h3>
+                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Personalizar Colunas</h3>
                             <button onClick={() => setColumnSelectorOpen(false)} className="text-gray-400 hover:text-gray-600">
                                 <X className="h-4 w-4" />
                             </button>
@@ -520,7 +520,7 @@ export default function ClientListTable({
                             <input
                                 type="text"
                                 placeholder="Procurar coluna..."
-                                className="w-full pl-8 pr-3 py-2 border rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                className="w-full pl-8 pr-3 py-2 border rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-100"
                                 value={columnSearch}
                                 onChange={(e) => setColumnSearch(e.target.value)}
                             />
@@ -573,7 +573,7 @@ export default function ClientListTable({
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => setColumnSelectorOpen(false)}
-                                    className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded"
+                                    className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded dark:text-gray-400 dark:hover:bg-zinc-800"
                                 >
                                     Cancelar
                                 </button>
@@ -591,19 +591,19 @@ export default function ClientListTable({
 
             {/* Floating Action Bar */}
             {selectedIds.size > 0 && (
-                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-white shadow-2xl rounded-full border border-gray-200 px-6 py-3 flex items-center gap-6 animate-in slide-in-from-bottom-5 duration-200">
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-white shadow-2xl rounded-full border border-gray-200 px-6 py-3 flex items-center gap-6 animate-in slide-in-from-bottom-5 duration-200 dark:bg-zinc-900 dark:border-zinc-700">
                     <div className="flex items-center gap-2 border-r border-gray-200 pr-4">
                         <span className="bg-indigo-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                             {selectedIds.size}
                         </span>
-                        <span className="text-sm font-medium text-gray-700">selecionado(s)</span>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">selecionado(s)</span>
                     </div>
 
                     <div className="flex items-center gap-2">
                         <button
                             onClick={handleBulkOpenAccount}
                             disabled={actionLoading}
-                            className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                            className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 dark:text-gray-300 dark:hover:text-indigo-400 dark:hover:bg-zinc-800"
                         >
                             <CheckCircle className="h-4 w-4" />
                             Marcar Conta Aberta
@@ -629,7 +629,7 @@ export default function ClientListTable({
                 </div>
             )}
 
-            <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl">
+            <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl dark:bg-zinc-900 dark:ring-zinc-800">
                 <DndContext
                     collisionDetection={closestCenter}
                     modifiers={[]}
@@ -645,7 +645,7 @@ export default function ClientListTable({
                                 tableLayout: 'fixed',
                             }}
                         >
-                            <thead className="bg-gray-50">
+                            <thead className="bg-gray-50 dark:bg-zinc-900">
                                 {table.getHeaderGroups().map((headerGroup) => (
                                     <tr key={headerGroup.id}>
                                         <SortableContext
@@ -659,7 +659,7 @@ export default function ClientListTable({
                                     </tr>
                                 ))}
                             </thead>
-                            <tbody className="divide-y divide-gray-200 bg-white">
+                            <tbody className="divide-y divide-gray-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
                                 {clients.length === 0 ? (
                                     <tr>
                                         <td
@@ -674,15 +674,15 @@ export default function ClientListTable({
                                         <tr
                                             key={row.id}
                                             className={cn(
-                                                "hover:bg-gray-50 cursor-pointer transition-colors",
-                                                selectedIds.has(row.original.id) && "bg-indigo-50/40"
+                                                "hover:bg-gray-50 cursor-pointer transition-colors dark:hover:bg-zinc-900",
+                                                selectedIds.has(row.original.id) && "bg-indigo-50/40 dark:bg-indigo-900/20"
                                             )}
                                             onClick={() => onClientClick(row.original.id)}
                                         >
                                             {row.getVisibleCells().map((cell) => (
                                                 <td
                                                     key={cell.id}
-                                                    className="break-words whitespace-normal px-3 py-3 text-sm text-gray-500 first:pl-4 first:text-gray-900 first:font-medium sm:first:pl-6"
+                                                    className="break-words whitespace-normal px-3 py-3 text-sm text-gray-500 first:pl-4 first:text-gray-900 first:font-medium sm:first:pl-6 dark:text-gray-400 dark:first:text-gray-100"
                                                     style={{
                                                         width: cell.column.getSize(),
                                                     }}
@@ -703,34 +703,34 @@ export default function ClientListTable({
 
                 {/* Pagination Controls */}
                 {clients.length > 0 && (
-                    <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 sm:rounded-b-xl">
+                    <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 sm:rounded-b-xl dark:bg-zinc-900 dark:border-zinc-800">
                         <div className="flex flex-1 justify-between sm:hidden">
                             <button
                                 onClick={() => onPageChange(currentPage - 1)}
                                 disabled={currentPage === 1}
-                                className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700"
                             >
                                 Anterior
                             </button>
                             <button
                                 onClick={() => onPageChange(currentPage + 1)}
                                 disabled={currentPage === totalPages}
-                                className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700"
                             >
                                 Próxima
                             </button>
                         </div>
                         <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
                             <div className="flex items-center gap-4">
-                                <p className="text-sm text-gray-700">
+                                <p className="text-sm text-gray-700 dark:text-gray-400">
                                     Página <span className="font-medium">{currentPage}</span> de <span className="font-medium">{totalPages}</span>
                                 </p>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm text-gray-700 whitespace-nowrap">Por página:</span>
+                                    <span className="text-sm text-gray-700 whitespace-nowrap dark:text-gray-400">Por página:</span>
                                     <select
                                         value={limit}
                                         onChange={(e) => onLimitChange(Number(e.target.value))}
-                                        className="block w-auto rounded-md border-0 py-1 pl-2 pr-8 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                                        className="block w-auto rounded-md border-0 py-1 pl-2 pr-8 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-zinc-800 dark:text-gray-100 dark:ring-zinc-700"
                                     >
                                         <option value={5}>5</option>
                                         <option value={10}>10</option>
@@ -744,7 +744,7 @@ export default function ClientListTable({
                                     <button
                                         onClick={() => onPageChange(currentPage - 1)}
                                         disabled={currentPage === 1}
-                                        className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
+                                        className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 dark:bg-zinc-800 dark:ring-zinc-700 dark:hover:bg-zinc-700"
                                     >
                                         <span className="sr-only">Anterior</span>
                                         <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -754,7 +754,7 @@ export default function ClientListTable({
                                     <button
                                         onClick={() => onPageChange(currentPage + 1)}
                                         disabled={currentPage === totalPages}
-                                        className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
+                                        className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 dark:bg-zinc-800 dark:ring-zinc-700 dark:hover:bg-zinc-700"
                                     >
                                         <span className="sr-only">Próxima</span>
                                         <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">

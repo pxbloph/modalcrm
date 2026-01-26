@@ -75,8 +75,8 @@ const DraggableTableHeader = ({ header }: { header: Header<User, unknown> }) => 
             {...attributes}
             {...listeners}
             className={cn(
-                "relative text-left text-sm font-semibold text-gray-900 border-b border-gray-200 bg-gray-50 group select-none cursor-grab active:cursor-grabbing hover:bg-gray-100/50 transition-colors",
-                isDragging && "bg-gray-100 shadow-lg"
+                "relative text-left text-sm font-semibold text-gray-900 border-b border-gray-200 bg-gray-50 group select-none cursor-grab active:cursor-grabbing hover:bg-gray-100/50 transition-colors dark:bg-zinc-900 dark:border-zinc-800 dark:text-gray-100 dark:hover:bg-zinc-800",
+                isDragging && "bg-gray-100 shadow-lg dark:bg-zinc-800"
             )}
         >
             <div className="flex items-center gap-2 px-3 py-3 h-full">
@@ -113,7 +113,7 @@ const SortableColumnItem = ({ id, label, isVisible, isFixed, onToggle }: any) =>
         <div
             ref={setNodeRef}
             style={style}
-            className="flex items-center gap-3 p-2 bg-white rounded-md border border-gray-100 mb-1 hover:border-gray-200"
+            className="flex items-center gap-3 p-2 bg-white rounded-md border border-gray-100 mb-1 hover:border-gray-200 dark:bg-zinc-800 dark:border-zinc-700 dark:hover:border-zinc-600"
         >
             <button
                 {...attributes}
@@ -129,7 +129,7 @@ const SortableColumnItem = ({ id, label, isVisible, isFixed, onToggle }: any) =>
                 onChange={() => onToggle(id)}
                 className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 disabled:opacity-50"
             />
-            <span className="text-sm text-gray-700 flex-1">{label}</span>
+            <span className="text-sm text-gray-700 flex-1 dark:text-gray-300">{label}</span>
         </div>
     );
 };
@@ -269,7 +269,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                                 {user.name.charAt(0)}
                             </div>
                             <div className="ml-4">
-                                <div className="font-medium text-gray-900">{user.name} {user.surname}</div>
+                                <div className="font-medium text-gray-900 dark:text-gray-100">{user.name} {user.surname}</div>
                             </div>
                         </div>
                     );
@@ -279,7 +279,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
             {
                 accessorKey: 'email',
                 header: 'Email',
-                cell: (info) => <span className="text-gray-500">{info.getValue() as string}</span>,
+                cell: (info) => <span className="text-gray-500 dark:text-gray-400">{info.getValue() as string}</span>,
                 minSize: 200,
             },
             {
@@ -503,10 +503,10 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
             {columnSelectorOpen && (
                 <>
                     <div className="fixed inset-0 z-30" onClick={() => setColumnSelectorOpen(false)} />
-                    <div className="absolute left-0 top-8 z-40 w-80 bg-white rounded-lg shadow-2xl ring-1 ring-black ring-opacity-5 p-4 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-100 origin-top-left">
-                        <div className="flex items-center justify-between border-b pb-2">
-                            <h3 className="font-semibold text-gray-900">Personalizar Colunas</h3>
-                            <button onClick={() => setColumnSelectorOpen(false)} className="text-gray-400 hover:text-gray-600">
+                    <div className="absolute left-0 top-8 z-40 w-80 bg-white rounded-lg shadow-2xl ring-1 ring-black ring-opacity-5 p-4 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-100 origin-top-left dark:bg-zinc-900 dark:ring-zinc-700">
+                        <div className="flex items-center justify-between border-b pb-2 dark:border-zinc-800">
+                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Personalizar Colunas</h3>
+                            <button onClick={() => setColumnSelectorOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                                 <X className="h-4 w-4" />
                             </button>
                         </div>
@@ -517,7 +517,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                             <input
                                 type="text"
                                 placeholder="Procurar coluna..."
-                                className="w-full pl-8 pr-3 py-2 border rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                className="w-full pl-8 pr-3 py-2 border rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
                                 value={columnSearch}
                                 onChange={(e) => setColumnSearch(e.target.value)}
                             />
@@ -588,12 +588,12 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
 
             {/* Floating Action Bar */}
             {selectedIds.size > 0 && (
-                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-white shadow-2xl rounded-full border border-gray-200 px-6 py-3 flex items-center gap-6 animate-in slide-in-from-bottom-5 duration-200">
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-white shadow-2xl rounded-full border border-gray-200 px-6 py-3 flex items-center gap-6 animate-in slide-in-from-bottom-5 duration-200 dark:bg-zinc-900 dark:border-zinc-700">
                     <div className="flex items-center gap-2 border-r border-gray-200 pr-4">
                         <span className="bg-indigo-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                             {selectedIds.size}
                         </span>
-                        <span className="text-sm font-medium text-gray-700">selecionado(s)</span>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">selecionado(s)</span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -608,7 +608,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                         <button
                             onClick={() => handleBulkStatusChange(false)}
                             disabled={actionLoading}
-                            className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                            className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 dark:text-gray-300 dark:hover:text-white dark:hover:bg-zinc-800"
                         >
                             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
                             Desativar
@@ -644,7 +644,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                 </div>
             )}
 
-            <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl">
+            <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl dark:bg-zinc-900 dark:ring-white/10 overflow-hidden">
                 <DndContext
                     collisionDetection={closestCenter}
                     modifiers={[]}
@@ -660,7 +660,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                                 tableLayout: 'fixed',
                             }}
                         >
-                            <thead className="bg-gray-50">
+                            <thead className="bg-gray-50 dark:bg-zinc-900">
                                 {table.getHeaderGroups().map((headerGroup) => (
                                     <tr key={headerGroup.id}>
                                         <SortableContext
@@ -674,7 +674,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                                     </tr>
                                 ))}
                             </thead>
-                            <tbody className="divide-y divide-gray-200 bg-white">
+                            <tbody className="divide-y divide-gray-200 bg-white dark:divide-zinc-800 dark:bg-zinc-900">
                                 {users.length === 0 ? (
                                     <tr>
                                         <td
@@ -689,14 +689,14 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                                         <tr
                                             key={row.id}
                                             className={cn(
-                                                "hover:bg-gray-50 cursor-pointer transition-colors",
-                                                selectedIds.has(row.original.id) && "bg-indigo-50/40"
+                                                "hover:bg-gray-50 cursor-pointer transition-colors dark:hover:bg-zinc-800/50",
+                                                selectedIds.has(row.original.id) && "bg-indigo-50/40 dark:bg-indigo-900/20"
                                             )}
                                         >
                                             {row.getVisibleCells().map((cell) => (
                                                 <td
                                                     key={cell.id}
-                                                    className="break-words whitespace-normal px-3 py-3 text-sm text-gray-500 first:pl-4 first:text-gray-900 first:font-medium sm:first:pl-6"
+                                                    className="break-words whitespace-normal px-3 py-3 text-sm text-gray-500 first:pl-4 first:text-gray-900 first:font-medium sm:first:pl-6 dark:text-gray-400 dark:first:text-gray-100"
                                                     style={{
                                                         width: cell.column.getSize(),
                                                     }}

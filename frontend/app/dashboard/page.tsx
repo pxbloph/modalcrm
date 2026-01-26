@@ -6,12 +6,17 @@ import { Loader2, Users, CheckCircle, Clock, FolderOpen, X, LogOut } from 'lucid
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import ClientModal from '@/components/clients/ClientModal';
+import DealModal from '@/components/kanban/DealModal';
 import { ClientFilters } from '@/components/clients/ClientFilters';
 import ClientRegistrationForm from '@/components/clients/ClientRegistrationForm';
 import ClientListTable from '@/components/clients/ClientListTable';
 import { WalletMetrics } from '@/components/clients/WalletMetrics';
 import AppointmentNotification from '@/components/AppointmentNotification';
 import { useSearchParams, useRouter } from 'next/navigation';
+import ChatWidget from '@/components/chat/ChatWidget';
+
+
+
 
 interface Client {
     id: string;
@@ -68,6 +73,9 @@ export default function DashboardPage() {
 
     // Operator Wallet State
     const [walletOpen, setWalletOpen] = useState(false);
+
+
+
 
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -164,14 +172,25 @@ export default function DashboardPage() {
                     />
                 </div>
 
-                {/* FAB - Carteira */}
-                <button
-                    onClick={() => setWalletOpen(true)}
-                    className="fixed bottom-8 right-8 bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-lg transition-transform hover:scale-105 flex items-center justify-center z-40"
-                    title="Minha Carteira"
-                >
-                    <FolderOpen className="h-6 w-6" />
-                </button>
+                {/* Floating Action Buttons Container */}
+                <div className="fixed bottom-8 right-8 flex flex-col gap-4 z-40 items-end">
+                    {/* Chat Button (Above Wallet) */}
+                    {/* Chat Widget (Above Wallet) replaces simple button */}
+                    <ChatWidget
+                        currentUser={user}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-lg transition-transform hover:scale-105 flex items-center justify-center relative"
+                    />
+
+
+                    {/* FAB - Carteira */}
+                    <button
+                        onClick={() => setWalletOpen(true)}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-lg transition-transform hover:scale-105 flex items-center justify-center"
+                        title="Minha Carteira"
+                    >
+                        <FolderOpen className="h-6 w-6" />
+                    </button>
+                </div>
 
                 {/* Modal da Carteira (Full Screen ou Large) */}
                 {walletOpen && (
@@ -244,50 +263,52 @@ export default function DashboardPage() {
             {metrics && (
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
                     {/* Leads - Indigo/Purple */}
-                    <div className="bg-indigo-50 overflow-hidden rounded-xl p-5 border border-indigo-100">
+                    <div className="bg-indigo-50 overflow-hidden rounded-xl p-5 border border-indigo-100 dark:bg-indigo-950/30 dark:border-indigo-900">
                         <div className="flex items-center gap-2 mb-2">
                             <Users className="h-5 w-5 text-indigo-600" />
-                            <dt className="text-sm font-semibold text-indigo-900 truncate">Leads</dt>
+                            <dt className="text-sm font-semibold text-indigo-900 truncate dark:text-indigo-300">Leads</dt>
                         </div>
-                        <dd className="text-3xl font-bold text-indigo-700">{metrics.leads}</dd>
+                        <dd className="text-3xl font-bold text-indigo-700 dark:text-indigo-400">{metrics.leads}</dd>
                     </div>
 
                     {/* Conversão - Green */}
-                    <div className="bg-green-50 overflow-hidden rounded-xl p-5 border border-green-100">
+                    <div className="bg-green-50 overflow-hidden rounded-xl p-5 border border-green-100 dark:bg-green-950/30 dark:border-green-900">
                         <div className="flex items-center gap-2 mb-2">
                             <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <dt className="text-sm font-semibold text-green-900 truncate">Conversão</dt>
+                            <dt className="text-sm font-semibold text-green-900 truncate dark:text-green-300">Conversão</dt>
                         </div>
-                        <dd className="text-3xl font-bold text-green-700">
+                        <dd className="text-3xl font-bold text-green-700 dark:text-green-400">
                             {metrics.leads > 0 ? ((metrics.accounts / metrics.leads) * 100).toFixed(0) : '0'}%
                         </dd>
                     </div>
 
                     {/* Contas - Blue */}
-                    <div className="bg-blue-50 overflow-hidden rounded-xl p-5 border border-blue-100">
+                    <div className="bg-blue-50 overflow-hidden rounded-xl p-5 border border-blue-100 dark:bg-blue-950/30 dark:border-blue-900">
                         <div className="flex items-center gap-2 mb-2">
                             <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                             </svg>
-                            <dt className="text-sm font-semibold text-blue-900 truncate">Contas</dt>
+                            <dt className="text-sm font-semibold text-blue-900 truncate dark:text-blue-300">Contas</dt>
                         </div>
-                        <dd className="text-3xl font-bold text-blue-700">{metrics.accounts}</dd>
+                        <dd className="text-3xl font-bold text-blue-700 dark:text-blue-400">{metrics.accounts}</dd>
                     </div>
 
                     {/* Pendentes - Orange/Amber */}
-                    <div className="bg-amber-50 overflow-hidden rounded-xl p-5 border border-amber-100">
+                    <div className="bg-amber-50 overflow-hidden rounded-xl p-5 border border-amber-100 dark:bg-amber-950/30 dark:border-amber-900">
                         <div className="flex items-center gap-2 mb-2">
                             <Clock className="h-5 w-5 text-amber-600" />
-                            <dt className="text-sm font-semibold text-amber-900 truncate">Pendentes</dt>
+                            <dt className="text-sm font-semibold text-amber-900 truncate dark:text-amber-300">Pendentes</dt>
                         </div>
-                        <dd className="text-3xl font-bold text-amber-700">
+                        <dd className="text-3xl font-bold text-amber-700 dark:text-amber-400">
                             {metrics.pending}
                         </dd>
                     </div>
                 </div>
             )}
+
+            {/* Supervisor/Admin Chat Section */}
 
             {/* Configurable Filters Component */}
             <ClientFilters
@@ -308,15 +329,17 @@ export default function DashboardPage() {
                 onLimitChange={handleLimitChange}
             />
 
-            <ClientModal
-                isOpen={modalOpen}
-                onClose={() => setModalOpen(false)}
-                onSuccess={handleModalSuccess}
-                clientId={selectedClientId}
-                userRole={user.role}
-                canEdit={true}
-                canDelete={isAdmin}
-            />
+            {/* Replaced ClientModal with DealModal for unified UI */}
+            {modalOpen && (
+                <DealModal
+                    dealId={null}
+                    initialClientId={selectedClientId}
+                    pipelineId="" // Modal will try to find deal. If creation needed, it might need updating to select pipeline.
+                    onClose={() => setModalOpen(false)}
+                    onUpdate={handleModalSuccess}
+                />
+            )}
+
         </div>
     );
 }

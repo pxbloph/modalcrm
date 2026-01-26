@@ -82,12 +82,12 @@ export default function UsersPage() {
             </div>
 
             {users.length === 0 && !loading ? (
-                <div className="text-center py-12 bg-white rounded-xl border border-gray-200 border-dashed">
-                    <div className="bg-gray-50 h-12 w-12 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
+                <div className="text-center py-12 bg-white rounded-xl border border-gray-200 border-dashed dark:bg-zinc-900 dark:border-zinc-800">
+                    <div className="bg-gray-50 h-12 w-12 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400 dark:bg-zinc-800 dark:text-gray-500">
                         <Users className="h-6 w-6" />
                     </div>
-                    <h3 className="text-lg font-medium text-gray-900">Nenhum usuário encontrado</h3>
-                    <p className="text-gray-500 mt-1 mb-4">Comece criando o primeiro usuário.</p>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Nenhum usuário encontrado</h3>
+                    <p className="text-gray-500 mt-1 mb-4 dark:text-gray-400">Comece criando o primeiro usuário.</p>
                 </div>
             ) : (
                 <UserListTable
