@@ -26,6 +26,10 @@ let UsersController = class UsersController {
             throw new common_1.ForbiddenException('Apenas administradores podem listar todos os usuários');
         }
         return this.usersService.findAll(req.user);
+        return this.usersService.findAll(req.user);
+    }
+    async getChatAssociates(req) {
+        return this.usersService.findChatAssociates(req.user);
     }
     async create(data, req) {
         if (req.user.role !== client_1.Role.ADMIN) {
@@ -98,6 +102,13 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], UsersController.prototype, "findAll", null);
+__decorate([
+    (0, common_1.Get)('chat-associates'),
+    __param(0, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "getChatAssociates", null);
 __decorate([
     (0, common_1.Post)(),
     __param(0, (0, common_1.Body)()),

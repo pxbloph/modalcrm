@@ -224,6 +224,24 @@ let UsersService = class UsersService {
             data: { supervisor_id: supervisorId }
         });
     }
+    async findChatAssociates(currentUser) {
+        if (currentUser.role === 'OPERATOR') {
+            return this.prisma.user.findMany({
+                where: {
+                    role: { in: ['SUPERVISOR', 'ADMIN'] },
+                    is_active: true
+                },
+                select: { id: true, name: true, surname: true, role: true, email: true }
+            });
+        }
+        return this.prisma.user.findMany({
+            where: {
+                role: { in: ['OPERATOR'] },
+                is_active: true
+            },
+            select: { id: true, name: true, surname: true, role: true, email: true }
+        });
+    }
 };
 exports.UsersService = UsersService;
 exports.UsersService = UsersService = __decorate([

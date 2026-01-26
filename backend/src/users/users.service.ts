@@ -222,4 +222,28 @@ export class UsersService {
             data: { supervisor_id: supervisorId }
         });
     }
+
+    async findChatAssociates(currentUser: any) {
+        if (currentUser.role === 'OPERATOR') {
+            // Operator sees Supervisors and Admins
+            return this.prisma.user.findMany({
+                where: {
+                    role: { in: ['SUPERVISOR', 'ADMIN'] },
+                    is_active: true
+                },
+                select: { id: true, name: true, surname: true, role: true, email: true }
+            });
+        }
+
+        // Supervisors/Admins see Operators
+        // (Could be refined to "My Team" later if needed, but "All Operators" is safer for now)
+        return this.prisma.user.findMany({
+            where: {
+                role: { in: ['OPERATOR'] },
+                is_active: true
+            },
+            select: { id: true, name: true, surname: true, role: true, email: true }
+        });
+    }
 }
+

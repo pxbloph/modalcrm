@@ -11,23 +11,23 @@ export declare class FormTemplatesController {
         is_active: boolean;
         created_at: Date;
         title: string;
-        fields: import("@prisma/client/runtime/library").JsonValue;
         type: string;
+        fields: import("@prisma/client/runtime/library").JsonValue;
     }>;
     findActive(req: any): Promise<{
         id: string;
         is_active: boolean;
         created_at: Date;
         title: string;
-        fields: import("@prisma/client/runtime/library").JsonValue;
         type: string;
+        fields: import("@prisma/client/runtime/library").JsonValue;
     }>;
     findAll(req: any): Promise<{
         id: string;
         is_active: boolean;
         created_at: Date;
         title: string;
-        fields: import("@prisma/client/runtime/library").JsonValue;
         type: string;
+        fields: import("@prisma/client/runtime/library").JsonValue;
     }[]>;
 }

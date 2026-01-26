@@ -19,6 +19,13 @@ export declare class UsersController {
         supervisor_id: string | null;
         team_id: string | null;
     })[]>;
+    getChatAssociates(req: any): Promise<{
+        id: string;
+        email: string;
+        name: string;
+        surname: string;
+        role: import(".prisma/client").$Enums.Role;
+    }[]>;
     create(data: any, req: any): Promise<{
         id: string;
         cpf: string | null;

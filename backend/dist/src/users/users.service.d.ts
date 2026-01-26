@@ -41,4 +41,11 @@ export declare class UsersService {
     removeBulk(ids: string[], requestUserId: string): Promise<Prisma.BatchPayload>;
     updateStatusBulk(ids: string[], isActive: boolean, requestUserId: string): Promise<Prisma.BatchPayload>;
     updateSupervisorBulk(ids: string[], supervisorId: string | null, requestUserId: string): Promise<Prisma.BatchPayload>;
+    findChatAssociates(currentUser: any): Promise<{
+        id: string;
+        email: string;
+        name: string;
+        surname: string;
+        role: import(".prisma/client").$Enums.Role;
+    }[]>;
 }

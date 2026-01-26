@@ -13,6 +13,11 @@ export class QualificationsController {
         return this.qualificationsService.getActiveTemplate();
     }
 
+    @Get('tabulations')
+    getTabulations() {
+        return this.qualificationsService.getTabulationOptions();
+    }
+
     @Post('template')
     saveTemplate(@Body() body, @Request() req) {
         if (req.user.role !== 'ADMIN') {

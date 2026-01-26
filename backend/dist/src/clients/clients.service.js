@@ -13,19 +13,23 @@ exports.ClientsService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
 const client_1 = require("@prisma/client");
+const deals_service_1 = require("../deals/deals.service");
 let ClientsService = class ClientsService {
-    constructor(prisma) {
+    constructor(prisma, dealsService) {
         this.prisma = prisma;
+        this.dealsService = dealsService;
     }
     async create(data, user) {
         try {
-            return await this.prisma.client.create({
+            const client = await this.prisma.client.create({
                 data: {
                     ...data,
                     answers: data['answers'] || {},
                     created_by: { connect: { id: user.id } },
                 },
             });
+            this.createDefaultDeal(client, user.id);
+            return client;
         }
         catch (error) {
             if (error.code === 'P2002') {
@@ -34,6 +38,26 @@ let ClientsService = class ClientsService {
             }
             console.error('Erro ao criar cliente:', error);
             throw new common_1.InternalServerErrorException('Erro ao criar cliente no banco de dados');
+        }
+    }
+    async createDefaultDeal(client, userId) {
+        try {
+            const pipeline = await this.prisma.pipeline.findFirst({
+                where: { is_default: true }
+            });
+            if (!pipeline)
+                return;
+            await this.dealsService.create({
+                title: `${client.name}`,
+                client_id: client.id,
+                pipeline_id: pipeline.id,
+                responsible_id: userId,
+                priority: 'NORMAL'
+            });
+            console.log(`Deal created for client ${client.id}`);
+        }
+        catch (e) {
+            console.error("Error auto-creating deal:", e);
         }
     }
     buildFilterConditions(user, query = {}) {
@@ -125,6 +149,30 @@ let ClientsService = class ClientsService {
         const client = await this.findOne(id, user);
         if (!client) {
             throw new common_1.InternalServerErrorException('Cliente não encontrado ou acesso negado');
+        }
+        const inputData = data;
+        if (inputData.integration_status === 'Cadastro salvo com sucesso!' && inputData.cnpj) {
+            const duplicate = await this.prisma.client.findUnique({
+                where: { cnpj: inputData.cnpj }
+            });
+            if (duplicate && duplicate.id !== id) {
+                console.log(`Merging Lead ${id} into existing Client ${duplicate.id} (CNPJ ${inputData.cnpj}) - Triggered by Success Status`);
+                await this.prisma.qualification.updateMany({
+                    where: { client_id: id },
+                    data: { client_id: duplicate.id }
+                });
+                const { cnpj, ...mergeData } = inputData;
+                const { faturamento_mensal, faturamento_maquina, maquininha_atual, produto_interesse, emite_boletos, deseja_receber_ofertas, informacoes_adicionais, ...cleanClientData } = mergeData;
+                const updatedExisting = await this.prisma.client.update({
+                    where: { id: duplicate.id },
+                    data: {
+                        ...cleanClientData,
+                        integration_status: 'Cadastro salvo com sucesso!',
+                    }
+                });
+                await this.prisma.client.delete({ where: { id } });
+                return updatedExisting;
+            }
         }
         const { faturamento_mensal, faturamento_maquina, maquininha_atual, produto_interesse, emite_boletos, deseja_receber_ofertas, informacoes_adicionais, ...clientData } = data;
         const hasQualificationInfo = faturamento_mensal !== undefined ||
@@ -347,6 +395,7 @@ let ClientsService = class ClientsService {
 exports.ClientsService = ClientsService;
 exports.ClientsService = ClientsService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        deals_service_1.DealsService])
 ], ClientsService);
 //# sourceMappingURL=clients.service.js.map

@@ -17,9 +17,17 @@ export class UsersController {
         }
 
         return this.usersService.findAll(req.user);
+        return this.usersService.findAll(req.user);
+    }
+
+    @Get('chat-associates')
+    async getChatAssociates(@Request() req) {
+        // Available for all authenticated users (Operator needs it)
+        return this.usersService.findChatAssociates(req.user);
     }
 
     @Post()
+
     async create(@Body() data: any, @Request() req) {
         if (req.user.role !== Role.ADMIN) {
             throw new ForbiddenException('Apenas administradores podem criar usuários');

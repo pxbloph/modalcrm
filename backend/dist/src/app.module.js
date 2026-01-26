@@ -16,6 +16,16 @@ const clients_module_1 = require("./clients/clients.module");
 const qualifications_module_1 = require("./qualifications/qualifications.module");
 const teams_module_1 = require("./teams/teams.module");
 const form_templates_module_1 = require("./form-templates/form-templates.module");
+const reports_module_1 = require("./reports/reports.module");
+const imports_module_1 = require("./imports/imports.module");
+const chat_module_1 = require("./chat/chat.module");
+const schedule_1 = require("@nestjs/schedule");
+const pipelines_module_1 = require("./pipelines/pipelines.module");
+const stages_module_1 = require("./stages/stages.module");
+const custom_fields_module_1 = require("./custom-fields/custom-fields.module");
+const deals_module_1 = require("./deals/deals.module");
+const automations_module_1 = require("./automations/automations.module");
+const tags_module_1 = require("./tags/tags.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -32,6 +42,16 @@ exports.AppModule = AppModule = __decorate([
             qualifications_module_1.QualificationsModule,
             teams_module_1.TeamsModule,
             form_templates_module_1.FormTemplatesModule,
+            reports_module_1.ReportsModule,
+            imports_module_1.ImportsModule,
+            chat_module_1.ChatModule,
+            schedule_1.ScheduleModule.forRoot(),
+            pipelines_module_1.PipelinesModule,
+            stages_module_1.StagesModule,
+            custom_fields_module_1.CustomFieldsModule,
+            deals_module_1.DealsModule,
+            automations_module_1.AutomationsModule,
+            tags_module_1.TagsModule,
         ],
     })
 ], AppModule);

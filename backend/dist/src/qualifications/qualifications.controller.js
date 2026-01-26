@@ -23,6 +23,9 @@ let QualificationsController = class QualificationsController {
     getTemplate() {
         return this.qualificationsService.getActiveTemplate();
     }
+    getTabulations() {
+        return this.qualificationsService.getTabulationOptions();
+    }
     saveTemplate(body, req) {
         if (req.user.role !== 'ADMIN') {
             return { error: 'Only admin' };
@@ -43,6 +46,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], QualificationsController.prototype, "getTemplate", null);
+__decorate([
+    (0, common_1.Get)('tabulations'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], QualificationsController.prototype, "getTabulations", null);
 __decorate([
     (0, common_1.Post)('template'),
     __param(0, (0, common_1.Body)()),

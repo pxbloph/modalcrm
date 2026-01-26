@@ -2,15 +2,39 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
 
+import { DealsService } from '../deals/deals.service';
+
 @Injectable()
 export class QualificationsService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private dealsService: DealsService
+    ) { }
 
     async getActiveTemplate() {
         return this.prisma.formTemplate.findFirst({
             where: { is_active: true },
             orderBy: { created_at: 'desc' },
         });
+    }
+
+    async getTabulationOptions() {
+        const template = await this.getActiveTemplate();
+        // Extract from template fields if possible
+        if (template && template.fields) {
+            const fields: any[] = Array.isArray(template.fields) ? template.fields : [];
+            // Try to find field with common names for tabulation
+            const tabField = fields.find(f =>
+                (f.key && f.key.toLowerCase().includes('tabula')) ||
+                (f.label && f.label.toLowerCase().includes('tabula')) ||
+                (f.name && f.name.toLowerCase().includes('tabula'))
+            );
+            if (tabField && tabField.options) {
+                return tabField.options;
+            }
+        }
+        // Fallback default list
+        return ['Aguardando abertura', 'Retornar outro horário', 'Conta aberta', 'Sem interesse'];
     }
 
     async saveTemplate(fields: any) {
@@ -96,71 +120,10 @@ export class QualificationsService {
                 } as any,
             });
 
-            // 2. Prepare Webhook Payload
-            const payload = {
-                lead_id: client.id,
-                client_id: client.id, // Redundancy
-                tabulacao: data.tabulacao,
-                dados_cliente: {
-                    razao_social: client.name,
-                    nome_fantasia: client.surname,
-                    cnpj: client.cnpj,
-                    email: client.email,
-                    telefone: client.phone,
-                    id_bitrix: client.id_bitrix,
-                    consultor_responsavel: client.created_by ? `${client.created_by.name}${client.created_by.surname ? ' ' + client.created_by.surname : ''}` : null,
-                    consultor_email: client.created_by?.email
-                },
-                dados_qualificacao: {
-                    possui_maquininha: data.maquininha_atual,
-                    produto_interesse: data.produto_interesse,
-                    faturamento_maquina_mensal: data.faturamento_maquina,
-                    faturamento_total_mensal: data.faturamento_mensal,
-                    emite_boletos: data.emite_boletos,
-                    deseja_proposta_maquininha: data.deseja_receber_ofertas,
-                    informacoes_adicionais: data.informacoes_adicionais,
-                    answers: data.answers,
-                    agendamento: agendamentoData
-                },
-                metadados: {
-                    qualified_at: new Date().toISOString(),
-                    qualified_by: userId,
-                    source: "modalcrm",
-                    qualification_id: qualification.id
-                }
-            };
+            // 2. Prepare & Send Webhook via reusable method
+            await this.buildAndSendWebhook(client, qualification, data, userId, 'modalcrm');
 
-            // 3. Send Webhook (Async/Non-blocking but we want result to update DB)
-            try {
-                await axios.post('https://n8n.upscales.com.br/webhook/modalcrm-qualificacao', payload);
-
-                // Update Success
-                await this.prisma.qualification.update({
-                    where: { id: qualification.id },
-                    data: {
-                        integration_status: 'SENT',
-                        last_integration_attempt: new Date(),
-                        integration_attempts: 1,
-                        webhook_response: '200 OK'
-                    }
-                });
-                return { ...qualification, integration_status: 'SENT' };
-
-            } catch (webhookError: any) {
-                console.error("Webhook Error:", webhookError.message);
-                // Update Failure
-                await this.prisma.qualification.update({
-                    where: { id: qualification.id },
-                    data: {
-                        integration_status: 'FAILED',
-                        last_integration_attempt: new Date(),
-                        integration_attempts: 1,
-                        webhook_response: webhookError.message || 'Unknown Error'
-                    }
-                });
-                // Return qualification but with failed status so front knows
-                return { ...qualification, integration_status: 'FAILED' };
-            }
+            return qualification;
 
         } catch (err) {
             console.error("CRITICAL ERROR in create qualification:", err);
@@ -168,10 +131,188 @@ export class QualificationsService {
         }
     }
 
+    async updateTabulation(clientId: string, newTabulation: string, user: any) {
+        // 1. Find latest qualification
+        const quals = await this.prisma.qualification.findMany({
+            where: { client_id: clientId },
+            orderBy: { created_at: 'desc' },
+            take: 1
+        });
+
+        if (!quals || quals.length === 0) {
+            throw new Error('Nenhuma qualificação encontrada para este cliente.');
+        }
+
+        const latestQual = quals[0];
+        const oldTabulation = latestQual.tabulacao;
+
+        // Idempotency check
+        if (oldTabulation === newTabulation) {
+            return { message: 'Tabulação já está atualizada.', status: 'ignored' };
+        }
+
+        // 2. Update DB
+        const updatedQual = await this.prisma.qualification.update({
+            where: { id: latestQual.id },
+            data: { tabulacao: newTabulation }
+        });
+
+        // 3. Fetch Client for Webhook Data
+        const client = await this.prisma.client.findUnique({
+            where: { id: clientId },
+            include: { created_by: true }
+        });
+
+        if (!client) throw new Error('Cliente detectado mas não encontrado no DB??');
+
+        // 4. Send Webhook with manual flag
+        // Construct data object simulating the original data structure but with updates
+        const webhookData = {
+            ...latestQual.answers as any, // Spread exisitng JSON answers
+            // Override fields from Qual model
+            maquininha_atual: latestQual.maquininha_atual,
+            produto_interesse: latestQual.produto_interesse,
+            faturamento_maquina: latestQual.faturamento_maquina ? Number(latestQual.faturamento_maquina) : 0,
+            faturamento_mensal: latestQual.faturamento_mensal ? Number(latestQual.faturamento_mensal) : 0,
+            emite_boletos: latestQual.emite_boletos,
+            deseja_receber_ofertas: latestQual.deseja_receber_ofertas,
+            informacoes_adicionais: latestQual.informacoes_adicionais,
+            tabulacao: newTabulation,
+            agendamento: latestQual.agendamento
+        };
+
+        const extraMetadata = {
+            manual_update: true,
+            tabulacao_anterior: oldTabulation,
+            updated_by_email: user.email,
+            origin: 'manual_supervisor'
+        };
+
+        await this.buildAndSendWebhook(client, updatedQual, webhookData, user.id, 'manual_supervisor', extraMetadata);
+
+        return { prior_tabulation: oldTabulation, new_tabulation: newTabulation };
+    }
+
+    private async buildAndSendWebhook(client: any, qualification: any, data: any, userId: string, source: string, extraMetadata: any = {}) {
+        const payload = {
+            lead_id: client.id,
+            client_id: client.id,
+            tabulacao: data.tabulacao,
+            dados_cliente: {
+                razao_social: client.name,
+                nome_fantasia: client.surname,
+                cnpj: client.cnpj,
+                email: client.email,
+                telefone: client.phone,
+                id_bitrix: client.id_bitrix,
+                consultor_responsavel: client.created_by ? `${client.created_by.name}${client.created_by.surname ? ' ' + client.created_by.surname : ''}` : null,
+                consultor_email: client.created_by?.email
+            },
+            dados_qualificacao: {
+                possui_maquininha: data.maquininha_atual,
+                produto_interesse: data.produto_interesse,
+                faturamento_maquina_mensal: data.faturamento_maquina,
+                faturamento_total_mensal: data.faturamento_mensal,
+                emite_boletos: data.emite_boletos,
+                deseja_proposta_maquininha: data.deseja_receber_ofertas,
+                informacoes_adicionais: data.informacoes_adicionais,
+                answers: data.answers,
+                agendamento: data.agendamento
+            },
+            metadados: {
+                qualified_at: new Date().toISOString(),
+                qualified_by: userId,
+                source: source,
+                qualification_id: qualification.id,
+                ...extraMetadata
+            }
+        };
+
+        try {
+            await axios.post('https://n8n.upscales.com.br/webhook/modalcrm-qualificacao', payload);
+
+            await this.prisma.qualification.update({
+                where: { id: qualification.id },
+                data: {
+                    integration_status: 'SENT',
+                    last_integration_attempt: new Date(),
+                    integration_attempts: (qualification.integration_attempts || 0) + 1,
+                    webhook_response: '200 OK'
+                }
+            });
+
+            // Async sync with Kanban (only on create usually, but safe to call)
+            if (source === 'modalcrm') { // Only sync kanban creation on original flow
+                await this.syncWithKanban(client, data, userId);
+            }
+
+        } catch (webhookError: any) {
+            console.error("Webhook Error:", webhookError.message);
+            await this.prisma.qualification.update({
+                where: { id: qualification.id },
+                data: {
+                    integration_status: 'FAILED',
+                    last_integration_attempt: new Date(),
+                    integration_attempts: (qualification.integration_attempts || 0) + 1,
+                    webhook_response: webhookError.message || 'Unknown Error'
+                }
+            });
+            // Not re-throwing to avoid breaking the user flow, but logging
+        }
+
+    }
+
     async findByClient(clientId: string) {
         return this.prisma.qualification.findMany({
             where: { client_id: clientId },
             include: { created_by: { select: { name: true } } },
         });
+    }
+
+    private async syncWithKanban(client: any, data: any, userId: string) {
+        try {
+            // 1. Get default pipeline
+            const pipeline = await this.prisma.pipeline.findFirst({
+                where: { is_default: true }
+            });
+
+            if (!pipeline) {
+                console.warn("No default pipeline found. Skipping Kanban sync.");
+                return;
+            }
+
+            // 2. Check for existing OPEN deal
+            const existingDeal = await this.prisma.deal.findFirst({
+                where: {
+                    client_id: client.id,
+                    pipeline_id: pipeline.id,
+                    status: 'OPEN'
+                }
+            });
+
+            if (existingDeal) {
+                console.log(`Open deal already exists for client ${client.id}. Skipping creation.`);
+                return;
+            }
+
+            // 3. Create Deal
+            await this.dealsService.create({
+                title: `${client.name || 'Novo Lead'} - Oportunidade`,
+                client_id: client.id,
+                pipeline_id: pipeline.id,
+                value: data.faturamento_mensal ? Number(data.faturamento_mensal) : undefined,
+                responsible_id: userId, // The user performing qualification becomes responsible
+                priority: 'NORMAL',
+                custom_fields: {
+                    // Map known fields if needed, e.g. key: 'valor'
+                }
+            } as any); // Type assertion until DTO matches perfectly or we fix strictness
+
+            console.log(`Deal created for client ${client.id} in pipeline ${pipeline.name}`);
+
+        } catch (error) {
+            console.error("Error syncing with Kanban:", error);
+            // Non-blocking error
+        }
     }
 }

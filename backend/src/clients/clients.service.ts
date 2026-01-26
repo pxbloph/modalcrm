@@ -3,13 +3,18 @@ import { Injectable, ConflictException, InternalServerErrorException } from '@ne
 import { PrismaService } from '../prisma/prisma.service';
 import { User, Role, Prisma } from '@prisma/client';
 
+import { DealsService } from '../deals/deals.service';
+
 @Injectable()
 export class ClientsService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private dealsService: DealsService
+    ) { }
 
     async create(data: Prisma.ClientCreateInput, user: User) {
         try {
-            return await this.prisma.client.create({
+            const client = await this.prisma.client.create({
                 data: {
                     ...data,
                     answers: data['answers'] || {},
@@ -17,6 +22,11 @@ export class ClientsService {
                     created_by: { connect: { id: user.id } },
                 },
             });
+
+            // Auto-create Deal (Kanban)
+            this.createDefaultDeal(client, user.id);
+
+            return client;
         } catch (error) {
             if (error.code === 'P2002') {
                 const fields = error.meta?.target?.join(', ');
@@ -24,6 +34,27 @@ export class ClientsService {
             }
             console.error('Erro ao criar cliente:', error);
             throw new InternalServerErrorException('Erro ao criar cliente no banco de dados');
+        }
+    }
+
+    private async createDefaultDeal(client: any, userId: string) {
+        try {
+            const pipeline = await this.prisma.pipeline.findFirst({
+                where: { is_default: true }
+            });
+
+            if (!pipeline) return;
+
+            await this.dealsService.create({
+                title: `${client.name}`,
+                client_id: client.id,
+                pipeline_id: pipeline.id,
+                responsible_id: userId,
+                priority: 'NORMAL'
+            } as any);
+            console.log(`Deal created for client ${client.id}`);
+        } catch (e) {
+            console.error("Error auto-creating deal:", e);
         }
     }
 
@@ -130,6 +161,61 @@ export class ClientsService {
         const client = await this.findOne(id, user);
         if (!client) {
             throw new InternalServerErrorException('Cliente não encontrado ou acesso negado');
+        }
+
+        // Check for Upsert/Merge Trigger (Lead -> Client promotion)
+        const inputData = data as any;
+        if (inputData.integration_status === 'Cadastro salvo com sucesso!' && inputData.cnpj) {
+            const duplicate = await this.prisma.client.findUnique({
+                where: { cnpj: inputData.cnpj }
+            });
+
+            // If a different client with same CNPJ exists, merge into it
+            if (duplicate && duplicate.id !== id) {
+                console.log(`Merging Lead ${id} into existing Client ${duplicate.id} (CNPJ ${inputData.cnpj}) - Triggered by Success Status`);
+
+                // 1. Move qualifications from Lead to Existing Client
+                await this.prisma.qualification.updateMany({
+                    where: { client_id: id },
+                    data: { client_id: duplicate.id }
+                });
+
+                // 2. Prepare data for generic update on existing client
+                // Remove CNPJ from update to avoid unique constraint if it's identical (it is)
+                // Remove ID as well obviously
+                const { cnpj, ...mergeData } = inputData;
+
+                // We should also exclude qualification fields from this update payload if they are mixed in 'data'
+                // But the 'data' here is ClientUpdateInput which theoretically shouldn't have qual fields unless typed loosely.
+                // However, in this controller/service, 'data' seems to include everything mixed.
+                // So let's extract client-specific fields using the same destructuring logic as below, 
+                // but we need to do it inside here or replicate it.
+
+                // Let's rely on the extraction below. We can refactor a bit??
+                // No, simpler to just clean 'mergeData' roughly or let Prisma ignore unknown fields? 
+                // Prisma throws on unknown fields in 'data'.
+                // So we MUST separate them.
+
+                const {
+                    faturamento_mensal, faturamento_maquina, maquininha_atual, produto_interesse,
+                    emite_boletos, deseja_receber_ofertas, informacoes_adicionais,
+                    ...cleanClientData
+                } = mergeData;
+
+                const updatedExisting = await this.prisma.client.update({
+                    where: { id: duplicate.id },
+                    data: {
+                        ...cleanClientData,
+                        integration_status: 'Cadastro salvo com sucesso!', // Ensure status is set
+                        // Preserve original creation info or update? Usually preserve original creator.
+                    }
+                });
+
+                // 3. Delete the temporary Lead
+                await this.prisma.client.delete({ where: { id } });
+
+                return updatedExisting;
+            }
         }
 
         // Separate Client data from Qualification data

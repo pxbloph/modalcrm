@@ -11,14 +11,16 @@ const common_1 = require("@nestjs/common");
 const qualifications_service_1 = require("./qualifications.service");
 const qualifications_controller_1 = require("./qualifications.controller");
 const prisma_module_1 = require("../prisma/prisma.module");
+const deals_module_1 = require("../deals/deals.module");
 let QualificationsModule = class QualificationsModule {
 };
 exports.QualificationsModule = QualificationsModule;
 exports.QualificationsModule = QualificationsModule = __decorate([
     (0, common_1.Module)({
-        imports: [prisma_module_1.PrismaModule],
+        imports: [prisma_module_1.PrismaModule, (0, common_1.forwardRef)(() => deals_module_1.DealsModule)],
         controllers: [qualifications_controller_1.QualificationsController],
         providers: [qualifications_service_1.QualificationsService],
+        exports: [qualifications_service_1.QualificationsService],
     })
 ], QualificationsModule);
 //# sourceMappingURL=qualifications.module.js.map
