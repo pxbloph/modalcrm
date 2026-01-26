@@ -444,13 +444,17 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
                                                 <div className="p-1 rounded-full border-2 border-indigo-600 dark:border-indigo-400"></div>
                                                 <span className="font-bold text-xs uppercase tracking-wider">STATUS INTEGRAÇÃO</span>
                                             </div>
-                                            <div className="text-indigo-700 dark:text-indigo-300 font-bold text-lg">
-                                                Cadastro salvo com sucesso!
+                                            <div className="text-indigo-700 dark:text-indigo-300 font-bold text-lg break-all">
+                                                {client.integration_status || "Status desconhecido"}
                                             </div>
                                         </div>
                                         <div className="flex gap-2">
-                                            <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded">Qualificado</span>
-                                            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded">Conta Aberta</span>
+                                            <span className={cn("px-2 py-1 text-xs font-bold rounded", client.is_qualified ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500")}>
+                                                {client.is_qualified ? "Qualificado" : "Não Qualificado"}
+                                            </span>
+                                            <span className={cn("px-2 py-1 text-xs font-bold rounded", client.has_open_account ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500")}>
+                                                {client.has_open_account ? "Conta Aberta" : "Sem Conta"}
+                                            </span>
                                         </div>
                                     </div>
 
@@ -566,12 +570,12 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
                                                 </div>
                                             ) : (
                                                 <div className="text-xl font-bold text-[#1e293b] dark:text-[#fffbeb]">
-                                                    {lastQual?.tabulacao || 'Aguardando abertura'}
+                                                    {lastQual?.tabulacao || 'Não tabulado'}
                                                 </div>
                                             )}
                                         </div>
 
-                                        {(userRole === 'ADMIN' || userRole === 'SUPERVISOR') && (
+                                        {(userRole === 'ADMIN' || userRole === 'SUPERVISOR' || userRole === 'OPERATOR') && (
                                             <div className="ml-4 flex gap-2">
                                                 {isEditingTab ? (
                                                     <>
