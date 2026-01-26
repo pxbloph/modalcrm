@@ -221,11 +221,23 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
     };
 
     const handleSaveTab = async () => {
-        if (!dealId || !editTabValue.trim()) return;
+        if (!editTabValue.trim()) return;
         try {
-            await api.patch(`/deals/${dealId}/tabulation`, { tabulacao: editTabValue });
+            if (dealId) {
+                await api.patch(`/deals/${dealId}/tabulation`, { tabulacao: editTabValue });
+                fetchDeal(dealId);
+            } else if (initialClientId) {
+                // MODO SEM KANBAN: Salva direto na qualificação
+                // Cria uma nova qualificação apenas com a tabulação atualizada
+                await api.post(`/qualifications/${initialClientId}`, {
+                    answers: {},
+                    tabulacao: editTabValue
+                });
+                // Recarrega dados do cliente
+                fetchClientStandalone(initialClientId);
+            }
+
             setIsEditingTab(false);
-            if (dealId) fetchDeal(dealId); // Refresh local data to show new tab
             alert("Tabulação atualizada com sucesso!");
         } catch (e: any) {
             console.error(e);
@@ -236,6 +248,16 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
     const handleSave = async () => {
         setSaving(true);
         try {
+            // MODO SEM KANBAN (Solicitado pelo usuário):
+            // Se não tem Deal ID e estamos visualizando um cliente, NÃO criar deal automaticamente.
+            if (!dealId && initialClientId) {
+                // Apenas fecha o modal, assumindo que as edições de tabulação foram feitas via handleSaveTab
+                // ou que o usuário apenas visualizou.
+                onUpdate();
+                onClose();
+                return;
+            }
+
             const payload: any = {
                 title,
                 value: value ? parseFloat(value) : null,
@@ -245,9 +267,6 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
             };
 
             if (!dealId && initialClientId) {
-                // This path (direct save without dealId) might happen if we cancel pipeline selector?
-                // No, if pipeline selector, we force create first.
-                // But for pure 'New Card' button on Kanban, dealId is null.
                 payload.client_id = initialClientId;
             }
 
@@ -260,6 +279,12 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
             onClose();
         } catch (error: any) {
             console.error("Erro ao salvar:", error);
+            // Se o erro for de pipeline sem estágios, ignorar e fechar se for criação
+            if (error.response?.data?.message === 'Pipeline has no stages defined' && !dealId) {
+                onUpdate();
+                onClose();
+                return;
+            }
             const msg = error.response?.data?.message || "Erro ao salvar alterações.";
             alert(msg);
         } finally {
