@@ -41,6 +41,17 @@ model User {
 
   clients        Client[]
   qualifications Qualification[]
+  import_jobs    ImportJob[]
+
+  // Kanban Relations
+  responsible_deals Deal[]
+  deal_actions      DealHistory[]
+
+  // Chat Relations
+  conversations_as_operator   Conversation[] @relation("OperatorConversations")
+  conversations_as_supervisor Conversation[] @relation("SupervisorConversations")
+  sent_messages               Message[]      @relation("SentMessages")
+  audit_logs                  ChatAuditLog[]
 
   @@map("users")
 }
@@ -60,6 +71,16 @@ model Client {
   updated_at DateTime     @updatedAt
   id_bitrix  Int?
   
+  // Extended Company Details
+  address           String?
+  cnae_main         String?
+  cnae_secondary    String?
+  legal_nature      String?
+  registration_status String? // ATIVA, BAIXADA, etc
+  registration_status_date DateTime?
+  opening_date      DateTime?
+  share_capital     Decimal? @db.Decimal(15, 2)
+  
   // Bitrix Legacy Fields (Preserved for Reference)
   id_card_bitrix    String?
   id_contact_bitrix String?
@@ -69,6 +90,7 @@ model Client {
   created_by    User   @relation(fields: [created_by_id], references: [id])
 
   qualifications Qualification[]
+  deals          Deal[]
 
   @@map("clients")
 }
@@ -133,3 +155,299 @@ model Team {
 
   @@map("teams")
 }
+
+model ImportJob {
+  id                String   @id @default(uuid()) @db.Uuid
+  type              String   // 'OPEN_ACCOUNTS'
+  status            String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  file_name         String
+  total_records     Int      @default(0)
+  processed_records Int      @default(0)
+  success_count     Int      @default(0)
+  error_count       Int      @default(0)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  created_by_id     String
+  created_by        User     @relation(fields: [created_by_id], references: [id])
+
+  results           ImportResult[]
+
+  @@map("import_jobs")
+}
+
+model ImportResult {
+  id          String    @id @default(uuid()) @db.Uuid
+  job_id      String    @db.Uuid
+  job         ImportJob @relation(fields: [job_id], references: [id], onDelete: Cascade)
+  
+  row_data    Json?
+  status      String    // UPDATED, NOT_FOUND, INVALID, DUPLICATE, ERROR
+  message     String?
+  created_at  DateTime  @default(now())
+
+  @@map("import_results")
+}
+
+model Conversation {
+  id              String   @id @default(uuid())
+  operator_id     String
+  operator        User     @relation("OperatorConversations", fields: [operator_id], references: [id])
+  supervisor_id   String
+  supervisor      User     @relation("SupervisorConversations", fields: [supervisor_id], references: [id])
+  last_message_at DateTime @default(now())
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  messages        Message[]
+
+  @@unique([operator_id, supervisor_id])
+  @@index([operator_id])
+  @@index([supervisor_id])
+  @@index([last_message_at])
+  @@map("conversations")
+}
+
+model Message {
+  id                String   @id @default(uuid())
+  conversation_id   String
+  conversation      Conversation @relation(fields: [conversation_id], references: [id])
+  sender_id         String
+  sender            User     @relation("SentMessages", fields: [sender_id], references: [id])
+  body              String
+  is_read           Boolean  @default(false)
+  client_message_id String?
+  created_at        DateTime @default(now())
+  read_at           DateTime?
+
+  @@index([conversation_id, created_at])
+  @@map("messages")
+}
+
+model ChatAuditLog {
+  id         String   @id @default(uuid())
+  admin_id   String
+  admin      User     @relation(fields: [admin_id], references: [id])
+  action     String
+  target_id  String?
+  details    String?
+  created_at DateTime @default(now())
+
+  @@map("chat_audit_logs")
+}
+
+// KANBAN SYSTEM MODELS
+
+enum PipelineVisibility {
+  PUBLIC
+  PRIVATE
+  RESTRICTED
+}
+
+model Pipeline {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  is_active   Boolean  @default(true)
+  is_default  Boolean  @default(false)
+  visibility  PipelineVisibility @default(PUBLIC)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  stages       PipelineStage[]
+  deals        Deal[]
+  custom_fields CustomField[]
+  automations  Automation[]
+
+  @@map("pipelines")
+}
+
+model PipelineStage {
+  id          String   @id @default(uuid())
+  pipeline_id String
+  pipeline    Pipeline @relation(fields: [pipeline_id], references: [id], onDelete: Cascade)
+  
+  name        String
+  color       String   @default("#000000")
+  order_index Int
+  is_active   Boolean  @default(true)
+  
+  // Settings
+  is_locked   Boolean  @default(false)
+  sla_minutes Int?     @default(0)
+  
+  deals       Deal[]
+  automations Automation[]
+
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@index([pipeline_id, order_index])
+  @@map("pipeline_stages")
+}
+
+enum FieldType {
+  TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+  MULTI_SELECT
+  USER
+}
+
+model CustomField {
+  id          String    @id @default(uuid())
+  pipeline_id String
+  pipeline    Pipeline  @relation(fields: [pipeline_id], references: [id], onDelete: Cascade)
+  
+  key         String
+  label       String
+  type        FieldType
+  options     Json?     // ["Option A", "Option B"]
+  
+  is_required Boolean   @default(false)
+  is_visible  Boolean   @default(true)
+  config      Json?     @default("{}")
+
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  values      DealCustomFieldValue[]
+
+  @@unique([pipeline_id, key])
+  @@map("custom_fields")
+}
+
+enum DealStatus {
+  OPEN
+  WON
+  LOST
+  ABANDONED
+}
+
+enum DealPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+model Deal {
+  id           String   @id @default(uuid())
+  title        String
+  
+  pipeline_id  String
+  pipeline     Pipeline @relation(fields: [pipeline_id], references: [id])
+  
+  stage_id     String
+  stage        PipelineStage @relation(fields: [stage_id], references: [id])
+  
+  client_id    String?
+  client       Client?   @relation(fields: [client_id], references: [id])
+  
+  responsible_id String?
+  responsible    User?   @relation(fields: [responsible_id], references: [id])
+
+  status       DealStatus   @default(OPEN)
+  value        Decimal? @db.Decimal(15, 2)
+  priority     DealPriority   @default(NORMAL)
+  is_overdue   Boolean        @default(false)
+
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  
+  stage_entered_at DateTime @default(now())
+  
+  custom_values DealCustomFieldValue[]
+  history       DealHistory[]
+  tags          DealTag[]
+
+  @@map("deals")
+}
+
+model DealCustomFieldValue {
+  id              String      @id @default(uuid())
+  deal_id         String
+  deal            Deal        @relation(fields: [deal_id], references: [id], onDelete: Cascade)
+  
+  field_id        String
+  field           CustomField @relation(fields: [field_id], references: [id], onDelete: Restrict)
+  
+  value           String?
+  value_json      Json?
+  
+  updated_at      DateTime    @updatedAt
+
+  @@unique([deal_id, field_id])
+  @@map("deal_custom_field_values")
+}
+
+model DealHistory {
+  id          String   @id @default(uuid())
+  deal_id     String
+  deal        Deal     @relation(fields: [deal_id], references: [id], onDelete: Cascade)
+  
+  actor_id    String?
+  actor       User?    @relation(fields: [actor_id], references: [id])
+  
+  action      String
+  details     Json?
+  
+  created_at  DateTime @default(now())
+
+  @@map("deal_history")
+}
+
+enum AutomationTrigger {
+  ENTER_STAGE
+  LEAVE_STAGE
+  SLA_BREACH
+  FIELD_UPDATE
+}
+
+model Automation {
+  id          String   @id @default(uuid())
+  pipeline_id String
+  pipeline    Pipeline @relation(fields: [pipeline_id], references: [id], onDelete: Cascade)
+  
+  stage_id    String?
+  stage       PipelineStage? @relation(fields: [stage_id], references: [id])
+
+  name        String
+  trigger     AutomationTrigger
+  
+  conditions  Json?    @default("[]")
+  actions     Json
+  
+  is_active   Boolean  @default(true)
+  
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@map("automations")
+}
+
+model Tag {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  color       String   @default("#64748b") // Slate-500 default
+  created_at  DateTime @default(now())
+  
+  deals       DealTag[]
+
+  @@map("tags")
+}
+
+model DealTag {
+  deal_id     String
+  deal        Deal     @relation(fields: [deal_id], references: [id], onDelete: Cascade)
+  
+  tag_id      String
+  tag         Tag      @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+  
+  assigned_at DateTime @default(now())
+
+  @@id([deal_id, tag_id])
+  @@map("deal_tags")
+}
+
+
