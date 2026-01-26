@@ -321,12 +321,7 @@ model PipelineStage {
   is_active   Boolean  @default(true)
   
   // Settings
-  is_locked   Boolean  @default(false)
-  is_final_success Boolean @default(false)
-  is_final_failure Boolean @default(false)
-  
   sla_minutes Int?     @default(0)
-  config      Json?    @default("{}") // Per-stage rules
 
   
   deals       Deal[]

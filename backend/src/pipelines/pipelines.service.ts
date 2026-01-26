@@ -96,11 +96,7 @@ export class PipelinesService {
             name: stage.name,
             color: stage.color,
             order_index: stage.order_index,
-            is_locked: stage.is_locked,
-            is_final_success: stage.is_final_success,
-            is_final_failure: stage.is_final_failure,
             sla_minutes: stage.sla_minutes,
-            config: stage.config ?? undefined,
             is_active: stage.is_active
           }
         });
