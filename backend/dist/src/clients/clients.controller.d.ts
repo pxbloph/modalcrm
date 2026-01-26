@@ -4,17 +4,17 @@ export declare class ClientsController {
     constructor(clientsService: ClientsService);
     create(createClientDto: any, req: any): Promise<{
         id: string;
+        email: string;
         name: string;
         surname: string | null;
-        cnpj: string;
-        email: string;
-        phone: string;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        answers: import("@prisma/client/runtime/library").JsonValue | null;
-        integration_status: string;
         created_at: Date;
         updated_at: Date;
+        is_qualified: boolean;
+        has_open_account: boolean;
+        integration_status: string;
+        cnpj: string;
+        phone: string;
+        answers: import("@prisma/client/runtime/library").JsonValue | null;
         id_bitrix: number | null;
         address: string | null;
         cnae_main: string | null;
@@ -47,28 +47,28 @@ export declare class ClientsController {
     openAccountBulk(ids: string[], req: any): Promise<import(".prisma/client").Prisma.BatchPayload>;
     findAll(req: any, query: any): Promise<{
         data: ({
-            created_by: {
-                name: string;
-                surname: string;
-                email: string;
-            };
             qualifications: {
                 tabulacao: string;
                 agendamento: Date;
             }[];
+            created_by: {
+                email: string;
+                name: string;
+                surname: string;
+            };
         } & {
             id: string;
+            email: string;
             name: string;
             surname: string | null;
-            cnpj: string;
-            email: string;
-            phone: string;
-            is_qualified: boolean;
-            has_open_account: boolean;
-            answers: import("@prisma/client/runtime/library").JsonValue | null;
-            integration_status: string;
             created_at: Date;
             updated_at: Date;
+            is_qualified: boolean;
+            has_open_account: boolean;
+            integration_status: string;
+            cnpj: string;
+            phone: string;
+            answers: import("@prisma/client/runtime/library").JsonValue | null;
             id_bitrix: number | null;
             address: string | null;
             cnae_main: string | null;
@@ -90,24 +90,12 @@ export declare class ClientsController {
         };
     }>;
     findOne(id: string, req: any): Promise<{
-        created_by: {
-            id: string;
-            name: string;
-            surname: string | null;
-            email: string;
-            created_at: Date;
-            cpf: string | null;
-            password_hash: string;
-            role: import(".prisma/client").$Enums.Role;
-            is_active: boolean;
-            supervisor_id: string | null;
-            team_id: string | null;
-        };
         qualifications: {
             id: string;
-            answers: import("@prisma/client/runtime/library").JsonValue;
-            integration_status: string | null;
             created_at: Date;
+            client_id: string;
+            integration_status: string | null;
+            answers: import("@prisma/client/runtime/library").JsonValue;
             created_by_id: string;
             emite_boletos: boolean | null;
             maquininha_atual: string | null;
@@ -158,21 +146,33 @@ export declare class ClientsController {
             integration_attempts: number | null;
             last_integration_attempt: Date | null;
             webhook_response: string | null;
-            client_id: string;
         }[];
+        created_by: {
+            id: string;
+            cpf: string | null;
+            email: string;
+            name: string;
+            surname: string | null;
+            password_hash: string;
+            role: import(".prisma/client").$Enums.Role;
+            is_active: boolean;
+            created_at: Date;
+            supervisor_id: string | null;
+            team_id: string | null;
+        };
     } & {
         id: string;
+        email: string;
         name: string;
         surname: string | null;
-        cnpj: string;
-        email: string;
-        phone: string;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        answers: import("@prisma/client/runtime/library").JsonValue | null;
-        integration_status: string;
         created_at: Date;
         updated_at: Date;
+        is_qualified: boolean;
+        has_open_account: boolean;
+        integration_status: string;
+        cnpj: string;
+        phone: string;
+        answers: import("@prisma/client/runtime/library").JsonValue | null;
         id_bitrix: number | null;
         address: string | null;
         cnae_main: string | null;
@@ -188,17 +188,17 @@ export declare class ClientsController {
     }>;
     update(id: string, updateClientDto: any, req: any): Promise<{
         id: string;
+        email: string;
         name: string;
         surname: string | null;
-        cnpj: string;
-        email: string;
-        phone: string;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        answers: import("@prisma/client/runtime/library").JsonValue | null;
-        integration_status: string;
         created_at: Date;
         updated_at: Date;
+        is_qualified: boolean;
+        has_open_account: boolean;
+        integration_status: string;
+        cnpj: string;
+        phone: string;
+        answers: import("@prisma/client/runtime/library").JsonValue | null;
         id_bitrix: number | null;
         address: string | null;
         cnae_main: string | null;
@@ -214,17 +214,17 @@ export declare class ClientsController {
     }>;
     remove(id: string, req: any): Promise<{
         id: string;
+        email: string;
         name: string;
         surname: string | null;
-        cnpj: string;
-        email: string;
-        phone: string;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        answers: import("@prisma/client/runtime/library").JsonValue | null;
-        integration_status: string;
         created_at: Date;
         updated_at: Date;
+        is_qualified: boolean;
+        has_open_account: boolean;
+        integration_status: string;
+        cnpj: string;
+        phone: string;
+        answers: import("@prisma/client/runtime/library").JsonValue | null;
         id_bitrix: number | null;
         address: string | null;
         cnae_main: string | null;
@@ -240,17 +240,17 @@ export declare class ClientsController {
     }>;
     qualify(id: string, req: any): Promise<{
         id: string;
+        email: string;
         name: string;
         surname: string | null;
-        cnpj: string;
-        email: string;
-        phone: string;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        answers: import("@prisma/client/runtime/library").JsonValue | null;
-        integration_status: string;
         created_at: Date;
         updated_at: Date;
+        is_qualified: boolean;
+        has_open_account: boolean;
+        integration_status: string;
+        cnpj: string;
+        phone: string;
+        answers: import("@prisma/client/runtime/library").JsonValue | null;
         id_bitrix: number | null;
         address: string | null;
         cnae_main: string | null;
@@ -266,17 +266,17 @@ export declare class ClientsController {
     }>;
     openAccount(id: string, req: any): Promise<{
         id: string;
+        email: string;
         name: string;
         surname: string | null;
-        cnpj: string;
-        email: string;
-        phone: string;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        answers: import("@prisma/client/runtime/library").JsonValue | null;
-        integration_status: string;
         created_at: Date;
         updated_at: Date;
+        is_qualified: boolean;
+        has_open_account: boolean;
+        integration_status: string;
+        cnpj: string;
+        phone: string;
+        answers: import("@prisma/client/runtime/library").JsonValue | null;
         id_bitrix: number | null;
         address: string | null;
         cnae_main: string | null;

@@ -7,17 +7,17 @@ export declare class ClientsService {
     constructor(prisma: PrismaService, dealsService: DealsService);
     create(data: Prisma.ClientCreateInput, user: User): Promise<{
         id: string;
+        email: string;
         name: string;
         surname: string | null;
-        cnpj: string;
-        email: string;
-        phone: string;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        answers: Prisma.JsonValue | null;
-        integration_status: string;
         created_at: Date;
         updated_at: Date;
+        is_qualified: boolean;
+        has_open_account: boolean;
+        integration_status: string;
+        cnpj: string;
+        phone: string;
+        answers: Prisma.JsonValue | null;
         id_bitrix: number | null;
         address: string | null;
         cnae_main: string | null;
@@ -35,28 +35,28 @@ export declare class ClientsService {
     private buildFilterConditions;
     findAll(user: User, query?: any): Promise<{
         data: ({
-            created_by: {
-                name: string;
-                surname: string;
-                email: string;
-            };
             qualifications: {
                 tabulacao: string;
                 agendamento: Date;
             }[];
+            created_by: {
+                email: string;
+                name: string;
+                surname: string;
+            };
         } & {
             id: string;
+            email: string;
             name: string;
             surname: string | null;
-            cnpj: string;
-            email: string;
-            phone: string;
-            is_qualified: boolean;
-            has_open_account: boolean;
-            answers: Prisma.JsonValue | null;
-            integration_status: string;
             created_at: Date;
             updated_at: Date;
+            is_qualified: boolean;
+            has_open_account: boolean;
+            integration_status: string;
+            cnpj: string;
+            phone: string;
+            answers: Prisma.JsonValue | null;
             id_bitrix: number | null;
             address: string | null;
             cnae_main: string | null;
@@ -79,17 +79,17 @@ export declare class ClientsService {
     }>;
     update(id: string, data: Prisma.ClientUpdateInput, user: User): Promise<{
         id: string;
+        email: string;
         name: string;
         surname: string | null;
-        cnpj: string;
-        email: string;
-        phone: string;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        answers: Prisma.JsonValue | null;
-        integration_status: string;
         created_at: Date;
         updated_at: Date;
+        is_qualified: boolean;
+        has_open_account: boolean;
+        integration_status: string;
+        cnpj: string;
+        phone: string;
+        answers: Prisma.JsonValue | null;
         id_bitrix: number | null;
         address: string | null;
         cnae_main: string | null;
@@ -105,17 +105,17 @@ export declare class ClientsService {
     }>;
     remove(id: string, user: User): Promise<{
         id: string;
+        email: string;
         name: string;
         surname: string | null;
-        cnpj: string;
-        email: string;
-        phone: string;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        answers: Prisma.JsonValue | null;
-        integration_status: string;
         created_at: Date;
         updated_at: Date;
+        is_qualified: boolean;
+        has_open_account: boolean;
+        integration_status: string;
+        cnpj: string;
+        phone: string;
+        answers: Prisma.JsonValue | null;
         id_bitrix: number | null;
         address: string | null;
         cnae_main: string | null;
@@ -131,17 +131,17 @@ export declare class ClientsService {
     }>;
     qualify(id: string, user: User): Promise<{
         id: string;
+        email: string;
         name: string;
         surname: string | null;
-        cnpj: string;
-        email: string;
-        phone: string;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        answers: Prisma.JsonValue | null;
-        integration_status: string;
         created_at: Date;
         updated_at: Date;
+        is_qualified: boolean;
+        has_open_account: boolean;
+        integration_status: string;
+        cnpj: string;
+        phone: string;
+        answers: Prisma.JsonValue | null;
         id_bitrix: number | null;
         address: string | null;
         cnae_main: string | null;
@@ -157,17 +157,17 @@ export declare class ClientsService {
     }>;
     openAccount(id: string, user: User): Promise<{
         id: string;
+        email: string;
         name: string;
         surname: string | null;
-        cnpj: string;
-        email: string;
-        phone: string;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        answers: Prisma.JsonValue | null;
-        integration_status: string;
         created_at: Date;
         updated_at: Date;
+        is_qualified: boolean;
+        has_open_account: boolean;
+        integration_status: string;
+        cnpj: string;
+        phone: string;
+        answers: Prisma.JsonValue | null;
         id_bitrix: number | null;
         address: string | null;
         cnae_main: string | null;
@@ -188,24 +188,12 @@ export declare class ClientsService {
         conversionRate: number;
     }>;
     findOne(id: string, user: User): Promise<{
-        created_by: {
-            id: string;
-            name: string;
-            surname: string | null;
-            email: string;
-            created_at: Date;
-            cpf: string | null;
-            password_hash: string;
-            role: import(".prisma/client").$Enums.Role;
-            is_active: boolean;
-            supervisor_id: string | null;
-            team_id: string | null;
-        };
         qualifications: {
             id: string;
-            answers: Prisma.JsonValue;
-            integration_status: string | null;
             created_at: Date;
+            client_id: string;
+            integration_status: string | null;
+            answers: Prisma.JsonValue;
             created_by_id: string;
             emite_boletos: boolean | null;
             maquininha_atual: string | null;
@@ -256,21 +244,33 @@ export declare class ClientsService {
             integration_attempts: number | null;
             last_integration_attempt: Date | null;
             webhook_response: string | null;
-            client_id: string;
         }[];
+        created_by: {
+            id: string;
+            cpf: string | null;
+            email: string;
+            name: string;
+            surname: string | null;
+            password_hash: string;
+            role: import(".prisma/client").$Enums.Role;
+            is_active: boolean;
+            created_at: Date;
+            supervisor_id: string | null;
+            team_id: string | null;
+        };
     } & {
         id: string;
+        email: string;
         name: string;
         surname: string | null;
-        cnpj: string;
-        email: string;
-        phone: string;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        answers: Prisma.JsonValue | null;
-        integration_status: string;
         created_at: Date;
         updated_at: Date;
+        is_qualified: boolean;
+        has_open_account: boolean;
+        integration_status: string;
+        cnpj: string;
+        phone: string;
+        answers: Prisma.JsonValue | null;
         id_bitrix: number | null;
         address: string | null;
         cnae_main: string | null;
