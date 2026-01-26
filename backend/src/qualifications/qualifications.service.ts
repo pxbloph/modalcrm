@@ -34,7 +34,15 @@ export class QualificationsService {
             }
         }
         // Fallback default list
-        return ['Aguardando abertura', 'Retornar outro horário', 'Conta aberta', 'Sem interesse'];
+        return [
+            'Aguardando abertura',
+            'Retornar outro horário',
+            'Conta aberta',
+            'Sem interesse',
+            'Inapto na Receita Federal',
+            'Telefone Incorreto',
+            'Recusado pelo banco'
+        ];
     }
 
     async saveTemplate(fields: any) {
@@ -81,9 +89,9 @@ export class QualificationsService {
                 updateData.is_qualified = true;
             }
 
-            if (data.client_name) {
-                updateData.name = data.client_name;
-            }
+            // if (data.client_name) {
+            //     updateData.name = data.client_name;
+            // }
 
             // Only update if there is something to update
             if (Object.keys(updateData).length > 0) {

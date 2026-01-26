@@ -46,7 +46,10 @@ export default function QualifyPage() {
                     { label: 'Aguardando abertura', value: 'Aguardando abertura' },
                     { label: 'Retornar outro horário', value: 'Retornar outro horário' },
                     { label: 'Conta aberta', value: 'Conta aberta' },
-                    { label: 'Sem interesse', value: 'Sem interesse' }
+                    { label: 'Sem interesse', value: 'Sem interesse' },
+                    { label: 'Inapto na Receita Federal', value: 'Inapto na Receita Federal' },
+                    { label: 'Telefone Incorreto', value: 'Telefone Incorreto' },
+                    { label: 'Recusado pelo banco', value: 'Recusado pelo banco' }
                 ];
 
                 let finalFields: FormField[] = [];

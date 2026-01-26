@@ -7,9 +7,21 @@ import { PrismaService } from '../prisma/prisma.service';
 export class CustomFieldsService {
   constructor(private readonly prisma: PrismaService) { }
 
-  async create(createCustomFieldDto: CreateCustomFieldDto) {
+  async create(createCustomFieldDto: any) {
+    const { stage_configs, ...fieldData } = createCustomFieldDto;
+
     return this.prisma.customField.create({
-      data: createCustomFieldDto,
+      data: {
+        ...fieldData,
+        stage_configs: stage_configs ? {
+          create: stage_configs.map((cfg: any) => ({
+            stage: { connect: { id: cfg.stage_id } },
+            is_required: cfg.is_required,
+            is_visible: cfg.is_visible
+          }))
+        } : undefined
+      },
+      include: { stage_configs: true }
     });
   }
 
@@ -17,12 +29,14 @@ export class CustomFieldsService {
     const where = pipelineId ? { pipeline_id: pipelineId } : {};
     return this.prisma.customField.findMany({
       where,
+      include: { stage_configs: true }
     });
   }
 
   async findOne(id: string) {
     const field = await this.prisma.customField.findUnique({
       where: { id },
+      include: { stage_configs: true }
     });
 
     if (!field) {
@@ -32,10 +46,39 @@ export class CustomFieldsService {
     return field;
   }
 
-  async update(id: string, updateCustomFieldDto: UpdateCustomFieldDto) {
-    return this.prisma.customField.update({
-      where: { id },
-      data: updateCustomFieldDto,
+  async update(id: string, updateCustomFieldDto: any) {
+    const { stage_configs, ...fieldData } = updateCustomFieldDto;
+
+    // Transaction to update field data and upsert configs
+    return this.prisma.$transaction(async (tx) => {
+      const field = await tx.customField.update({
+        where: { id },
+        data: fieldData
+      });
+
+      if (stage_configs && Array.isArray(stage_configs)) {
+        // Upsert each config
+        for (const cfg of stage_configs) {
+          await tx.customFieldStageConfig.upsert({
+            where: { field_id_stage_id: { field_id: id, stage_id: cfg.stage_id } },
+            create: {
+              field_id: id,
+              stage_id: cfg.stage_id,
+              is_required: cfg.is_required,
+              is_visible: cfg.is_visible
+            },
+            update: {
+              is_required: cfg.is_required,
+              is_visible: cfg.is_visible
+            }
+          });
+        }
+      }
+
+      return tx.customField.findUnique({
+        where: { id },
+        include: { stage_configs: true }
+      });
     });
   }
 

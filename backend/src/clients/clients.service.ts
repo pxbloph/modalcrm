@@ -220,25 +220,44 @@ export class ClientsService {
 
         // Separate Client data from Qualification data
         const {
-            faturamento_mensal,
-            faturamento_maquina,
-            maquininha_atual,
-            produto_interesse,
-            emite_boletos,
-            deseja_receber_ofertas,
-            informacoes_adicionais,
+            // Original Qual Fields
+            faturamento_mensal, faturamento_maquina, maquininha_atual, produto_interesse,
+            emite_boletos, deseja_receber_ofertas, informacoes_adicionais, tabulacao, agendamento,
+
+            // NEW: Conta Corrente
+            cc_tipo_conta, cc_status, cc_numero, cc_saldo, cc_limite_utilizado, cc_limite_disponivel,
+
+            // NEW: Cartão
+            card_final, card_status, card_tipo, card_adicionais, card_fatura_aberta_data, card_fatura_aberta_valor,
+
+            // NEW: Global
+            global_dolar, global_euro,
+
+            // NEW: Produtos
+            prod_multiplos_acessos, prod_c6_pay, prod_c6_tag, prod_debito_automatico, prod_seguros,
+            prod_chaves_pix, prod_web_banking, prod_link_pagamento, prod_boleto_dda, prod_boleto_cobranca,
+
+            // NEW: Limites & Risco
+            credit_blocklist, credit_score_interno, credit_score_serasa, credit_inadimplencia,
+            limit_cartao_utilizado, limit_cartao_aprovado, limit_cheque_utilizado, limit_cheque_aprovado,
+            limit_parcelado_utilizado, limit_parcelado_aprovado, limit_anticipacao_disponivel,
+
             ...clientData
         } = data as any;
 
-        // Check if there is qualification data to update/create
-        const hasQualificationInfo =
-            faturamento_mensal !== undefined ||
-            faturamento_maquina !== undefined ||
-            maquininha_atual !== undefined ||
-            produto_interesse !== undefined ||
-            emite_boletos !== undefined ||
-            deseja_receber_ofertas !== undefined ||
-            informacoes_adicionais !== undefined;
+        // Check if there is ANY qualification data to update/create
+        // We check if any of these variables are NOT undefined
+        const qualFields = [
+            faturamento_mensal, faturamento_maquina, maquininha_atual, produto_interesse, emite_boletos, deseja_receber_ofertas, informacoes_adicionais, tabulacao, agendamento,
+            cc_tipo_conta, cc_status, cc_numero, cc_saldo, cc_limite_utilizado, cc_limite_disponivel,
+            card_final, card_status, card_tipo, card_adicionais, card_fatura_aberta_data, card_fatura_aberta_valor,
+            global_dolar, global_euro,
+            prod_multiplos_acessos, prod_c6_pay, prod_c6_tag, prod_debito_automatico, prod_seguros, prod_chaves_pix, prod_web_banking, prod_link_pagamento, prod_boleto_dda, prod_boleto_cobranca,
+            credit_blocklist, credit_score_interno, credit_score_serasa, credit_inadimplencia,
+            limit_cartao_utilizado, limit_cartao_aprovado, limit_cheque_utilizado, limit_cheque_aprovado, limit_parcelado_utilizado, limit_parcelado_aprovado, limit_anticipacao_disponivel
+        ];
+
+        const hasQualificationInfo = qualFields.some(f => f !== undefined);
 
         // Update Client Basic Info
         const updatedClient = await this.prisma.client.update({
@@ -248,56 +267,92 @@ export class ClientsService {
 
         // Update/Create Qualification if data provided
         if (hasQualificationInfo) {
-            // Logic: We want to update the latest qualification or create one.
-            // Since qualifications are essentially historical or functional snapshots, let's create a NEW one or update the latest?
-            // "Updated qualification" -> Usually means modifying the *current* state.
-            // Let's UPDATE the latest if exists, otherwise create.
-
-            const latestQual = await this.prisma.qualification.findFirst({
+            const latestQual: any = await this.prisma.qualification.findFirst({
                 where: { client_id: id },
                 orderBy: { created_at: 'desc' }
             });
 
+            // Helper to parse decimals/ints safely
+            const toDec = (val: any) => val ? new Prisma.Decimal(val) : undefined;
+            const toInt = (val: any) => val ? Number(val) : undefined;
+            const toBool = (val: any) => val === true || val === 'true';
+
+            const qualDataPayload = {
+                faturamento_mensal: toDec(faturamento_mensal) ?? latestQual?.faturamento_mensal,
+                faturamento_maquina: toDec(faturamento_maquina) ?? latestQual?.faturamento_maquina,
+                maquininha_atual: maquininha_atual ?? latestQual?.maquininha_atual,
+                produto_interesse: produto_interesse ?? latestQual?.produto_interesse,
+                emite_boletos: emite_boletos !== undefined ? toBool(emite_boletos) : latestQual?.emite_boletos,
+                deseja_receber_ofertas: deseja_receber_ofertas !== undefined ? toBool(deseja_receber_ofertas) : latestQual?.deseja_receber_ofertas,
+                informacoes_adicionais: informacoes_adicionais ?? latestQual?.informacoes_adicionais,
+                tabulacao: tabulacao ?? latestQual?.tabulacao,
+                agendamento: agendamento ? new Date(agendamento) : latestQual?.agendamento,
+
+                // New Fields
+                cc_tipo_conta: cc_tipo_conta ?? latestQual?.cc_tipo_conta,
+                cc_status: cc_status ?? latestQual?.cc_status,
+                cc_numero: cc_numero ?? latestQual?.cc_numero,
+                cc_saldo: toDec(cc_saldo) ?? latestQual?.cc_saldo,
+                cc_limite_utilizado: toDec(cc_limite_utilizado) ?? latestQual?.cc_limite_utilizado,
+                cc_limite_disponivel: toDec(cc_limite_disponivel) ?? latestQual?.cc_limite_disponivel,
+
+                card_final: card_final ?? latestQual?.card_final,
+                card_status: card_status ?? latestQual?.card_status,
+                card_tipo: card_tipo ?? latestQual?.card_tipo,
+                card_adicionais: toInt(card_adicionais) ?? latestQual?.card_adicionais,
+                card_fatura_aberta_data: card_fatura_aberta_data ? new Date(card_fatura_aberta_data) : latestQual?.card_fatura_aberta_data,
+                card_fatura_aberta_valor: toDec(card_fatura_aberta_valor) ?? latestQual?.card_fatura_aberta_valor,
+
+                global_dolar: global_dolar !== undefined ? toBool(global_dolar) : latestQual?.global_dolar,
+                global_euro: global_euro !== undefined ? toBool(global_euro) : latestQual?.global_euro,
+
+                prod_multiplos_acessos: prod_multiplos_acessos !== undefined ? toBool(prod_multiplos_acessos) : latestQual?.prod_multiplos_acessos,
+                prod_c6_pay: prod_c6_pay !== undefined ? toBool(prod_c6_pay) : latestQual?.prod_c6_pay,
+                prod_c6_tag: prod_c6_tag !== undefined ? toBool(prod_c6_tag) : latestQual?.prod_c6_tag,
+                prod_debito_automatico: prod_debito_automatico !== undefined ? toBool(prod_debito_automatico) : latestQual?.prod_debito_automatico,
+                prod_seguros: prod_seguros !== undefined ? toBool(prod_seguros) : latestQual?.prod_seguros,
+                prod_chaves_pix: prod_chaves_pix !== undefined ? toBool(prod_chaves_pix) : latestQual?.prod_chaves_pix,
+                prod_web_banking: prod_web_banking !== undefined ? toBool(prod_web_banking) : latestQual?.prod_web_banking,
+                prod_link_pagamento: prod_link_pagamento !== undefined ? toBool(prod_link_pagamento) : latestQual?.prod_link_pagamento,
+                prod_boleto_dda: prod_boleto_dda !== undefined ? toBool(prod_boleto_dda) : latestQual?.prod_boleto_dda,
+                prod_boleto_cobranca: prod_boleto_cobranca !== undefined ? toBool(prod_boleto_cobranca) : latestQual?.prod_boleto_cobranca,
+
+                credit_blocklist: credit_blocklist !== undefined ? toBool(credit_blocklist) : latestQual?.credit_blocklist,
+                credit_score_interno: credit_score_interno ?? latestQual?.credit_score_interno,
+                credit_score_serasa: credit_score_serasa ?? latestQual?.credit_score_serasa,
+                credit_inadimplencia: credit_inadimplencia ?? latestQual?.credit_inadimplencia,
+
+                limit_cartao_utilizado: toDec(limit_cartao_utilizado) ?? latestQual?.limit_cartao_utilizado,
+                limit_cartao_aprovado: toDec(limit_cartao_aprovado) ?? latestQual?.limit_cartao_aprovado,
+                limit_cheque_utilizado: toDec(limit_cheque_utilizado) ?? latestQual?.limit_cheque_utilizado,
+                limit_cheque_aprovado: toDec(limit_cheque_aprovado) ?? latestQual?.limit_cheque_aprovado,
+                limit_parcelado_utilizado: toDec(limit_parcelado_utilizado) ?? latestQual?.limit_parcelado_utilizado,
+                limit_parcelado_aprovado: toDec(limit_parcelado_aprovado) ?? latestQual?.limit_parcelado_aprovado,
+                limit_anticipacao_disponivel: limit_anticipacao_disponivel ?? latestQual?.limit_anticipacao_disponivel
+            };
+
             if (latestQual) {
                 await this.prisma.qualification.update({
                     where: { id: latestQual.id },
-                    data: {
-                        faturamento_mensal: faturamento_mensal ? Number(faturamento_mensal) : latestQual.faturamento_mensal,
-                        faturamento_maquina: faturamento_maquina ? Number(faturamento_maquina) : latestQual.faturamento_maquina,
-                        maquininha_atual: maquininha_atual ?? latestQual.maquininha_atual,
-                        produto_interesse: produto_interesse ?? latestQual.produto_interesse,
-                        emite_boletos: emite_boletos ?? latestQual.emite_boletos,
-                        deseja_receber_ofertas: deseja_receber_ofertas ?? latestQual.deseja_receber_ofertas,
-                        informacoes_adicionais: informacoes_adicionais ?? latestQual.informacoes_adicionais,
-                    }
+                    data: qualDataPayload
                 });
             } else {
                 await this.prisma.qualification.create({
                     data: {
                         client_id: id,
                         created_by_id: user.id,
-                        answers: {}, // Empty for manual edits via modal
-                        faturamento_mensal: faturamento_mensal ? Number(faturamento_mensal) : null,
-                        faturamento_maquina: faturamento_maquina ? Number(faturamento_maquina) : null,
-                        maquininha_atual: maquininha_atual || null,
-                        produto_interesse: produto_interesse || null,
-                        emite_boletos: !!emite_boletos,
-                        deseja_receber_ofertas: !!deseja_receber_ofertas,
-                        informacoes_adicionais: informacoes_adicionais || null,
+                        answers: {},
+                        ...qualDataPayload
                     }
                 });
             }
 
-            // Also check if we should set is_qualified = true on the client if it wasn't
-            // Using the same logic as in qualifications.service if needed, or simple check
-            // For now, let's just leave is_qualified as is, assuming Operator sets it explicitly or upon initial qualification flow.
-            // OR: if data is present, ensure it's qualified? 
-            // User Request: "Só deve mostrar a tag do qualificado, quando alguma informação for preenchida."
-            // So let's re-verify that logic here too.
+            // Check if we should qualify the client
             const hasRealData =
                 (maquininha_atual && maquininha_atual.trim() !== '') ||
                 (Number(faturamento_maquina) > 0) ||
                 (Number(faturamento_mensal) > 0) ||
+                (Number(cc_limite_disponivel) > 0) || // NEW
                 (produto_interesse && produto_interesse.trim() !== '') ||
                 (informacoes_adicionais && informacoes_adicionais.trim() !== '') ||
                 (emite_boletos === true);
@@ -461,7 +516,6 @@ export class ClientsService {
                 WHERE q.created_by_id = ${user.id}
                 AND q.agendamento >= ${oneMinuteAgo}
                 AND q.agendamento <= ${now}
-                AND q.tabulacao = 'Retornar outro horário'
             `;
 
             return qualifications.map(q => ({

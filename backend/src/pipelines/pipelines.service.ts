@@ -67,7 +67,11 @@ export class PipelinesService {
   async clone(id: string) {
     const source = await this.prisma.pipeline.findUnique({
       where: { id },
-      include: { stages: { orderBy: { order_index: 'asc' } }, custom_fields: true, automations: true }
+      include: {
+        stages: { orderBy: { order_index: 'asc' } },
+        custom_fields: { include: { stage_configs: true } },
+        automations: true
+      }
     });
 
     if (!source) throw new NotFoundException('Pipeline not found');
@@ -93,16 +97,19 @@ export class PipelinesService {
             color: stage.color,
             order_index: stage.order_index,
             is_locked: stage.is_locked,
+            is_final_success: stage.is_final_success,
+            is_final_failure: stage.is_final_failure,
             sla_minutes: stage.sla_minutes,
+            config: stage.config ?? undefined,
             is_active: stage.is_active
           }
         });
         stageMap.set(stage.id, newStage.id);
       }
 
-      // 3. Clone Custom Fields
+      // 3. Clone Custom Fields & Stage Configs
       for (const field of source.custom_fields) {
-        await tx.customField.create({
+        const newField = await tx.customField.create({
           data: {
             pipeline_id: newPipeline.id,
             key: field.key,
@@ -114,6 +121,24 @@ export class PipelinesService {
             config: field.config ?? undefined
           }
         });
+
+        // Clone Stage Configs for this field
+        // Note: usage of 'any' cast to avoid TS issues if type definition isn't fully updated yet in IDE context
+        const sourceFieldWithConfigs = field as any;
+        if (sourceFieldWithConfigs.stage_configs) {
+          for (const config of sourceFieldWithConfigs.stage_configs) {
+            if (stageMap.has(config.stage_id)) {
+              await tx.customFieldStageConfig.create({
+                data: {
+                  field_id: newField.id,
+                  stage_id: stageMap.get(config.stage_id)!,
+                  is_required: config.is_required,
+                  is_visible: config.is_visible
+                }
+              })
+            }
+          }
+        }
       }
 
       // 4. Clone Automations with ID Remapping

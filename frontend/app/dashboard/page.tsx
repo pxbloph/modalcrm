@@ -234,15 +234,15 @@ export default function DashboardPage() {
                 )}
 
                 {/* Mantemos o Client Modal para ver detalhes/editar quando clicar na tabela */}
-                <ClientModal
-                    isOpen={modalOpen}
-                    onClose={() => setModalOpen(false)}
-                    onSuccess={handleModalSuccess}
-                    clientId={selectedClientId}
-                    userRole={user.role}
-                    canEdit={true}
-                    canDelete={false}
-                />
+                {modalOpen && (
+                    <DealModal
+                        dealId={null}
+                        initialClientId={selectedClientId}
+                        pipelineId=""
+                        onClose={() => setModalOpen(false)}
+                        onUpdate={handleModalSuccess}
+                    />
+                )}
             </div>
         );
     }

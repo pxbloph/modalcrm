@@ -3,12 +3,14 @@
 import { useState, useEffect } from "react";
 import { DropResult } from "@hello-pangea/dnd";
 import api from "@/lib/api";
-import { Plus, LayoutGrid, List } from "lucide-react";
+import { Plus, LayoutGrid, List, Zap } from "lucide-react";
 import DealModal from "@/components/kanban/DealModal";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { KanbanList } from "@/components/kanban/KanbanList";
 import { KanbanFilterBar } from "@/components/kanban/KanbanFilterBar";
+import { AutomationEditor } from "@/components/automations/AutomationEditor";
 import { useChat } from "@/components/chat/ChatContext";
+import { useToast } from "@/components/ui/use-toast";
 
 interface Pipeline {
     id: string;
@@ -38,6 +40,7 @@ export default function KanbanPage() {
     const [deals, setDeals] = useState<Record<string, Deal[]>>({});
     const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [isAutomationEditorOpen, setIsAutomationEditorOpen] = useState(false);
 
     // WebSocket
     const { socket } = useChat();
@@ -185,6 +188,10 @@ export default function KanbanPage() {
         }
     };
 
+    const { toast } = useToast();
+
+    // ... existing code ...
+
     const onDragEnd = async (result: DropResult) => {
         if (!result.destination) return;
 
@@ -194,6 +201,8 @@ export default function KanbanPage() {
             const sourceStageId = source.droppableId;
             const destStageId = destination.droppableId;
 
+            // Optional: Block drop if stage is locked and user !admin (Future expanion)
+
             const sourceDeals = [...(deals[sourceStageId] || [])];
             const destDeals = [...(deals[destStageId] || [])];
 
@@ -202,7 +211,11 @@ export default function KanbanPage() {
 
             const [movedDeal] = sourceDeals.splice(movedItemIndex, 1);
 
-            // Update local state immediately
+            // Validate Required Fields locally? 
+            // Better to let backend validation fail, but we could check here if we have field config loaded.
+            // For now, optimistic update + revert.
+
+            // Update local state immediately (Optimistic)
             movedDeal.stage_id = destStageId;
             destDeals.splice(destination.index, 0, movedDeal);
 
@@ -215,9 +228,25 @@ export default function KanbanPage() {
             // Call API
             try {
                 await api.patch(`/deals/${draggableId}`, { stage_id: destStageId });
-            } catch (error) {
+            } catch (error: any) {
                 console.error("Erro ao mover deal:", error);
-                // Revert on error could be implemented here
+
+                // Revert
+                movedDeal.stage_id = sourceStageId;
+                sourceDeals.splice(movedItemIndex, 0, movedDeal);
+                destDeals.splice(destination.index, 1);
+
+                setDeals({
+                    ...deals,
+                    [sourceStageId]: sourceDeals,
+                    [destStageId]: destDeals,
+                });
+
+                toast({
+                    title: "Não foi possível mover o card",
+                    description: error.response?.data?.message || "Erro desconhecido ao atualizar etapa.",
+                    variant: "destructive"
+                });
             }
         }
     };
@@ -277,14 +306,25 @@ export default function KanbanPage() {
                             {pipelines.map(p => (
                                 <option key={p.id} value={p.id}>{p.name}</option>
                             ))}
+
                         </select>
                     </div>
-                    <button
-                        onClick={() => setIsCreateModalOpen(true)}
-                        className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-700 transition shadow-sm hover:shadow"
-                    >
-                        <Plus size={20} /> Novo Card
-                    </button>
+
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setIsAutomationEditorOpen(true)}
+                            className="bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-zinc-700 px-4 py-2 rounded flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-zinc-700 transition shadow-sm"
+                        >
+                            <Zap size={18} /> Automações
+                        </button>
+
+                        <button
+                            onClick={() => setIsCreateModalOpen(true)}
+                            className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-700 transition shadow-sm hover:shadow"
+                        >
+                            <Plus size={20} /> Novo Card
+                        </button>
+                    </div>
                 </div>
 
                 <KanbanFilterBar
@@ -323,23 +363,37 @@ export default function KanbanPage() {
             </div>
 
             {/* Modals */}
-            {(selectedDealId && selectedPipeline) && (
-                <DealModal
-                    dealId={selectedDealId}
-                    pipelineId={selectedPipeline}
-                    onClose={() => setSelectedDealId(null)}
-                    onUpdate={() => selectedPipeline && fetchStagesAndDeals(selectedPipeline)}
-                />
-            )}
+            {
+                (selectedDealId && selectedPipeline) && (
+                    <DealModal
+                        dealId={selectedDealId}
+                        pipelineId={selectedPipeline}
+                        onClose={() => setSelectedDealId(null)}
+                        onUpdate={() => selectedPipeline && fetchStagesAndDeals(selectedPipeline)}
+                    />
+                )
+            }
 
-            {(isCreateModalOpen && selectedPipeline) && (
-                <DealModal
-                    dealId={null}
-                    pipelineId={selectedPipeline}
-                    onClose={() => setIsCreateModalOpen(false)}
-                    onUpdate={() => selectedPipeline && fetchStagesAndDeals(selectedPipeline)}
-                />
-            )}
-        </div>
+            {
+                (isCreateModalOpen && selectedPipeline) && (
+                    <DealModal
+                        dealId={null}
+                        pipelineId={selectedPipeline}
+                        onClose={() => setIsCreateModalOpen(false)}
+                        onUpdate={() => selectedPipeline && fetchStagesAndDeals(selectedPipeline)}
+                    />
+                )
+            }
+
+            {
+                (isAutomationEditorOpen && selectedPipeline) && (
+                    <AutomationEditor
+                        pipelineId={selectedPipeline}
+                        stages={stages}
+                        onClose={() => setIsAutomationEditorOpen(false)}
+                    />
+                )
+            }
+        </div >
     );
 }

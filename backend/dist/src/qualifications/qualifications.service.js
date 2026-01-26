@@ -39,7 +39,15 @@ let QualificationsService = class QualificationsService {
                 return tabField.options;
             }
         }
-        return ['Aguardando abertura', 'Retornar outro horário', 'Conta aberta', 'Sem interesse'];
+        return [
+            'Aguardando abertura',
+            'Retornar outro horário',
+            'Conta aberta',
+            'Sem interesse',
+            'Inapto na Receita Federal',
+            'Telefone Incorreto',
+            'Recusado pelo banco'
+        ];
     }
     async saveTemplate(fields) {
         return this.prisma.formTemplate.create({
@@ -73,9 +81,6 @@ let QualificationsService = class QualificationsService {
             const updateData = {};
             if (hasQualificationData) {
                 updateData.is_qualified = true;
-            }
-            if (data.client_name) {
-                updateData.name = data.client_name;
             }
             if (Object.keys(updateData).length > 0) {
                 await this.prisma.client.update({

@@ -112,6 +112,54 @@ model Qualification {
   tabulacao             String?
   agendamento           DateTime?
   created_at DateTime @default(now())
+
+  // --- Extended Financial Data (Novo Painel) ---
+  
+  // A) Conta Corrente
+  cc_tipo_conta         String?
+  cc_status             String?
+  cc_numero             String?
+  cc_saldo              Decimal? @db.Decimal(15, 2)
+  cc_limite_utilizado   Decimal? @db.Decimal(15, 2)
+  cc_limite_disponivel  Decimal? @db.Decimal(15, 2)
+
+  // B) Cartão de Crédito
+  card_final            String?
+  card_status           String?
+  card_tipo             String?
+  card_adicionais       Int?
+  card_fatura_aberta_data DateTime?
+  card_fatura_aberta_valor Decimal? @db.Decimal(15, 2)
+
+  // C) Conta Global
+  global_dolar          Boolean? @default(false)
+  global_euro           Boolean? @default(false)
+
+  // D) Outros Produtos
+  prod_multiplos_acessos Boolean? @default(false)
+  prod_c6_pay           Boolean? @default(false)
+  prod_c6_tag           Boolean? @default(false)
+  prod_debito_automatico Boolean? @default(false)
+  prod_seguros          Boolean? @default(false)
+  prod_chaves_pix       Boolean? @default(false)
+  prod_web_banking      Boolean? @default(false)
+  prod_link_pagamento   Boolean? @default(false)
+  prod_boleto_dda       Boolean? @default(false)
+  prod_boleto_cobranca  Boolean? @default(false)
+
+  // E) Limites de Crédito
+  credit_blocklist      Boolean? @default(false)
+  credit_score_interno  String?  @default("Informação indisponível")
+  credit_score_serasa   String?  @default("Informação indisponível")
+  credit_inadimplencia  String?  @default("Em dia")
+
+  limit_cartao_utilizado Decimal? @db.Decimal(15, 2)
+  limit_cartao_aprovado  Decimal? @db.Decimal(15, 2)
+  limit_cheque_utilizado Decimal? @db.Decimal(15, 2)
+  limit_cheque_aprovado  Decimal? @db.Decimal(15, 2)
+  limit_parcelado_utilizado Decimal? @db.Decimal(15, 2)
+  limit_parcelado_aprovado  Decimal? @db.Decimal(15, 2)
+  limit_anticipacao_disponivel String? @default("Informação indisponível")
   
   // Integration Control
   integration_status       String?  @default("PENDING")
@@ -257,6 +305,7 @@ model Pipeline {
   deals        Deal[]
   custom_fields CustomField[]
   automations  Automation[]
+  tabulation_triggers DealTabulationTrigger[]
 
   @@map("pipelines")
 }
@@ -273,10 +322,16 @@ model PipelineStage {
   
   // Settings
   is_locked   Boolean  @default(false)
+  is_final_success Boolean @default(false)
+  is_final_failure Boolean @default(false)
+  
   sla_minutes Int?     @default(0)
+  config      Json?    @default("{}") // Per-stage rules
+
   
   deals       Deal[]
   automations Automation[]
+  field_configs CustomFieldStageConfig[]
 
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
@@ -313,9 +368,25 @@ model CustomField {
   updated_at  DateTime  @updatedAt
 
   values      DealCustomFieldValue[]
+  stage_configs CustomFieldStageConfig[]
 
   @@unique([pipeline_id, key])
   @@map("custom_fields")
+}
+
+model CustomFieldStageConfig {
+  id              String      @id @default(uuid())
+  field_id        String
+  field           CustomField @relation(fields: [field_id], references: [id], onDelete: Cascade)
+  
+  stage_id        String
+  stage           PipelineStage @relation(fields: [stage_id], references: [id], onDelete: Cascade)
+  
+  is_required     Boolean     @default(false)
+  is_visible      Boolean     @default(true)
+  
+  @@unique([field_id, stage_id])
+  @@map("custom_field_stage_configs")
 }
 
 enum DealStatus {
@@ -350,7 +421,11 @@ model Deal {
   status       DealStatus   @default(OPEN)
   value        Decimal? @db.Decimal(15, 2)
   priority     DealPriority   @default(NORMAL)
-  is_overdue   Boolean        @default(false)
+  
+  // SLA Control
+  is_overdue   Boolean      @default(false)
+  sla_start_date DateTime?
+  sla_due_date   DateTime?
 
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
@@ -400,8 +475,10 @@ model DealHistory {
 enum AutomationTrigger {
   ENTER_STAGE
   LEAVE_STAGE
+  SLA_WARNING
   SLA_BREACH
   FIELD_UPDATE
+  TABULATION_UPDATE
 }
 
 model Automation {
@@ -423,7 +500,24 @@ model Automation {
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
 
+  tabulation_triggers DealTabulationTrigger[]
+
   @@map("automations")
+}
+
+model DealTabulationTrigger {
+  id            String   @id @default(uuid())
+  tabulation    String   // "Conta aberta", etc
+  
+  pipeline_id   String
+  pipeline      Pipeline @relation(fields: [pipeline_id], references: [id], onDelete: Cascade)
+  
+  automation_id String
+  automation    Automation @relation(fields: [automation_id], references: [id], onDelete: Cascade)
+
+  created_at    DateTime @default(now())
+
+  @@map("deal_tabulation_triggers")
 }
 
 model Tag {
