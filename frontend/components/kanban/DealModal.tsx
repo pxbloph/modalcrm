@@ -1,113 +1,135 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Save, Trash, User, Building2, CreditCard, ShoppingBag, Globe, FileText, CheckCircle, AlertCircle, Phone, Mail, DollarSign, Calendar, Tag, Shield, MoreHorizontal, Landmark, RefreshCw, Briefcase, MapPin } from "lucide-react";
+import { X, Save, Trash, User, Building2, CreditCard, ShoppingBag, Globe, FileText, CheckCircle, AlertCircle, Phone, Mail, DollarSign, Calendar, Tag, Shield, MoreHorizontal, Landmark, RefreshCw, Briefcase, MapPin, Plus, List } from "lucide-react";
 import api from "@/lib/api";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/use-toast";
 
 type DealModalProps = {
     dealId?: string | null;
     pipelineId: string;
     initialClientId?: string;
+    initialData?: any; // Dados otimistas do Kanban
     onClose: () => void;
     onUpdate: () => void;
 };
 
-export default function DealModal({ dealId, pipelineId, initialClientId, onClose, onUpdate }: DealModalProps) {
-    const [deal, setDeal] = useState<any>(null);
-    const [loading, setLoading] = useState(false);
+export default function DealModal({ dealId, pipelineId, initialClientId, initialData, onClose, onUpdate }: DealModalProps) {
+    const { toast } = useToast();
+
+    // Optimistic Logic: If we have initialData, we are NOT loading initially.
+    const [deal, setDeal] = useState<any>(initialData || null);
+    const [loading, setLoading] = useState(!initialData && !!dealId);
     const [saving, setSaving] = useState(false);
     const [userRole, setUserRole] = useState<string>("");
 
+    useEffect(() => {
+        // Simple role check from storage
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+            try {
+                const u = JSON.parse(storedUser);
+                setUserRole(u.role || 'OPERATOR');
+            } catch (e) { setUserRole('OPERATOR'); }
+        }
+    }, []);
+
     // --- Form States for CLIENT (Synced on Load) ---
     const [clientData, setClientData] = useState({
-        name: "", // Razão Social
-        surname: "", // Fantasia / Sobrenome
-        cnpj: "",
-        email: "",
-        phone: "",
-        id: "",
+        name: initialData?.client?.name || "", // Optimistic
+        surname: initialData?.client?.surname || "",
+        cnpj: initialData?.client?.cnpj || "",
+        email: initialData?.client?.email || "",
+        phone: initialData?.client?.phone || "",
+        id: initialData?.client?.id || "",
         integration_status: "",
         is_qualified: false,
         has_open_account: false
     });
 
     // --- Form States for QUALIFICATION (Synced on Load) ---
+    const initialQual = initialData?.client?.qualifications?.[0] || {};
+
     const [qualData, setQualData] = useState<any>({
         // Old Financials
-        faturamento_mensal: "",
-        faturamento_maquina: "",
-        maquininha_atual: "",
-        produto_interesse: "",
-        emite_boletos: false,
-        deseja_receber_ofertas: false,
-        informacoes_adicionais: "",
-        tabulacao: "",
-        agendamento: "",
-
+        faturamento_mensal: initialQual.faturamento_mensal || "",
+        faturamento_maquina: initialQual.faturamento_maquina || "",
+        maquininha_atual: initialQual.maquininha_atual || "",
+        produto_interesse: initialQual.produto_interesse || "",
+        emite_boletos: !!initialQual.emite_boletos,
+        deseja_receber_ofertas: !!initialQual.deseja_receber_ofertas,
+        informacoes_adicionais: initialQual.informacoes_adicionais || "",
+        tabulacao: initialQual.tabulacao || "",
+        agendamento: initialQual.agendamento || "",
         // NEW: Conta Corrente (Read Only)
-        cc_tipo_conta: "Conta Corrente",
-        cc_status: "Ativa com senha",
-        cc_numero: "",
-        cc_saldo: 0,
-        cc_limite_utilizado: 0,
-        cc_limite_disponivel: 0,
-
+        cc_tipo_conta: initialQual.cc_tipo_conta || "Conta Corrente",
+        cc_status: initialQual.cc_status || "Ativa com senha",
+        cc_numero: initialQual.cc_numero || "",
+        cc_saldo: initialQual.cc_saldo || 0,
+        cc_limite_utilizado: initialQual.cc_limite_utilizado || 0,
+        cc_limite_disponivel: initialQual.cc_limite_disponivel || 0,
         // NEW: Cartão (Read Only)
-        card_final: "",
-        card_status: "",
-        card_tipo: "",
-        card_adicionais: 0,
-        card_fatura_aberta_data: "",
-        card_fatura_aberta_valor: 0,
-
+        card_final: initialQual.card_final || "",
+        card_status: initialQual.card_status || "",
+        card_tipo: initialQual.card_tipo || "",
+        card_adicionais: initialQual.card_adicionais || 0,
+        card_fatura_aberta_data: initialQual.card_fatura_aberta_data || "",
+        card_fatura_aberta_valor: initialQual.card_fatura_aberta_valor || 0,
         // NEW: Global (Read Only)
-        global_dolar: false,
-        global_euro: false,
-
+        global_dolar: !!initialQual.global_dolar,
+        global_euro: !!initialQual.global_euro,
         // NEW: Produtos (Read Only)
-        prod_multiplos_acessos: false,
-        prod_c6_pay: false,
-        prod_c6_tag: false,
-        prod_debito_automatico: false,
-        prod_seguros: false,
-        prod_chaves_pix: false,
-        prod_web_banking: false,
-        prod_link_pagamento: false,
-        prod_boleto_dda: false,
-        prod_boleto_cobranca: false,
-
+        prod_multiplos_acessos: !!initialQual.prod_multiplos_acessos,
+        prod_c6_pay: !!initialQual.prod_c6_pay,
+        prod_c6_tag: !!initialQual.prod_c6_tag,
+        prod_debito_automatico: !!initialQual.prod_debito_automatico,
+        prod_seguros: !!initialQual.prod_seguros,
+        prod_chaves_pix: !!initialQual.prod_chaves_pix,
+        prod_web_banking: !!initialQual.prod_web_banking,
+        prod_link_pagamento: !!initialQual.prod_link_pagamento,
+        prod_boleto_dda: !!initialQual.prod_boleto_dda,
+        prod_boleto_cobranca: !!initialQual.prod_boleto_cobranca,
         // NEW: Limites & Risco (Read Only)
-        credit_blocklist: false,
-        credit_score_interno: "Informação indisponível",
-        credit_score_serasa: "Informação indisponível",
-        credit_inadimplencia: "Em dia",
-
-        limit_cartao_utilizado: 0,
-        limit_cartao_aprovado: 0,
-        limit_cheque_utilizado: 0,
-        limit_cheque_aprovado: 0,
-        limit_parcelado_utilizado: 0,
-        limit_parcelado_aprovado: 0,
-        limit_anticipacao_disponivel: "N/A"
+        credit_blocklist: !!initialQual.credit_blocklist,
+        credit_score_interno: initialQual.credit_score_interno || "Informação indisponível",
+        credit_score_serasa: initialQual.credit_score_serasa || "Informação indisponível",
+        credit_inadimplencia: initialQual.credit_inadimplencia || "Em dia",
+        limit_cartao_utilizado: initialQual.limit_cartao_utilizado || 0,
+        limit_cartao_aprovado: initialQual.limit_cartao_aprovado || 0,
+        limit_cheque_utilizado: initialQual.limit_cheque_utilizado || 0,
+        limit_cheque_aprovado: initialQual.limit_cheque_aprovado || 0,
+        limit_parcelado_utilizado: initialQual.limit_parcelado_utilizado || 0,
+        limit_parcelado_aprovado: initialQual.limit_parcelado_aprovado || 0,
+        limit_anticipacao_disponivel: initialQual.limit_anticipacao_disponivel || "N/A"
     });
 
     // --- Form States for DEAL ---
-    const [title, setTitle] = useState("");
-    const [value, setValue] = useState("");
+    const [title, setTitle] = useState(initialData?.title || "");
+    const [value, setValue] = useState(initialData?.value || "");
     const [customValues, setCustomValues] = useState<Record<string, any>>({});
     const [fields, setFields] = useState<any[]>([]);
 
     // --- Tags ---
     const [availableTags, setAvailableTags] = useState<{ id: string, name: string, color: string }[]>([]);
-    const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+    const [selectedTagIds, setSelectedTagIds] = useState<string[]>(
+        initialData?.tags?.map((t: any) => t.tag.id) || []
+    );
     const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
 
     // --- Metadata / UI ---
     const [isEditingTab, setIsEditingTab] = useState(false);
     const [editTabValue, setEditTabValue] = useState("");
-    const [tabulationOptions, setTabulationOptions] = useState<string[]>([]);
+    const [tabulationOptions, setTabulationOptions] = useState<string[]>([
+        "Aguardando abertura",
+        "Retornar outro horário",
+        "Conta aberta",
+        "Sem interesse",
+        "Inapto na Receita Federal",
+        "Telefone Incorreto",
+        "Recusado pelo banco"
+    ]);
 
     // Standalone mode
     const [clientStandalone, setClientStandalone] = useState<any>(null);
@@ -119,36 +141,51 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
         const u = localStorage.getItem('user');
         if (u) setUserRole(JSON.parse(u).role);
 
-        loadDependencies();
+        // Parallelize fetching
+        const loadAll = async () => {
+            setLoading(true);
+            try {
+                const pDeps = loadDependencies();
+                const pFields = pipelineId ? fetchFields(pipelineId) : Promise.resolve();
 
-        if (dealId) {
-            fetchDeal(dealId);
-        } else if (initialClientId) {
-            fetchDealByClient(initialClientId);
-        } else {
-            setLoading(false);
-            if (pipelineId) fetchFields(pipelineId);
-        }
+                let pDeal = Promise.resolve();
+                if (dealId) {
+                    pDeal = fetchDeal(dealId);
+                } else if (initialClientId) {
+                    pDeal = fetchClientStandalone(initialClientId); // Changed to fetchClientStandalone
+                }
+
+                await Promise.all([pDeps, pFields, pDeal]);
+            } catch (e) {
+                console.error("Error loading modal data", e);
+                toast({ title: "Erro", description: "Falha ao carregar detalhes.", variant: "destructive" });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadAll();
     }, [dealId, pipelineId, initialClientId]);
 
     const loadDependencies = async () => {
         try {
-            const [tagsRes, tabsRes, pipesRes] = await Promise.all([
+            const [tagsRes, pipesRes] = await Promise.all([
                 api.get('/tags'),
-                api.get('/qualifications/tabulations'),
                 api.get('/pipelines')
             ]);
             setAvailableTags(tagsRes.data || []);
-            setTabulationOptions(tabsRes.data || []);
             setPipelines(pipesRes.data || []);
 
             if (pipesRes.data.length > 0 && !pipelineId) {
                 setSelectedPipelineForCreation(pipesRes.data[0].id);
-            } else {
-                setSelectedPipelineForCreation(pipelineId);
+                // If we didn't have a pipelineId but now we have a default, fetch fields for it?
+                // Maybe, but let's stick to explicit changes.
+            } else if (!pipelineId) {
+                setSelectedPipelineForCreation(pipesRes.data?.[0]?.id || "");
             }
         } catch (e) {
             console.error("Failed to load dependencies", e);
+            toast({ title: "Erro", description: "Falha ao carregar dependências.", variant: "destructive" });
         }
     };
 
@@ -159,11 +196,12 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
             setFields(res.data);
         } catch (e) {
             console.error(e);
+            toast({ title: "Erro", description: "Falha ao carregar campos personalizados.", variant: "destructive" });
         }
     };
 
     const fetchDeal = async (id: string) => {
-        setLoading(true);
+        if (!initialData) setLoading(true); // Only show loading if no initial data
         try {
             const res = await api.get(`/deals/${id}`);
             const data = res.data;
@@ -177,11 +215,15 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
             data.custom_values.forEach((cv: any) => cvMap[cv.field.key] = cv.value);
             setCustomValues(cvMap);
 
-            if (data.pipeline_id) fetchFields(data.pipeline_id);
+            // Optimisation: Only fetch fields if different from initial pipelineId (already fetched in parallel)
+            if (data.pipeline_id && data.pipeline_id !== pipelineId) {
+                fetchFields(data.pipeline_id);
+            }
             if (data.client) mapClientToState(data.client);
 
         } catch (e) {
             console.error("Error loading deal", e);
+            toast({ title: "Erro", description: "Falha ao carregar detalhes da oportunidade.", variant: "destructive" });
         } finally {
             setLoading(false);
         }
@@ -196,23 +238,24 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
             if (selectedPipelineForCreation) fetchFields(selectedPipelineForCreation);
         } catch (e) {
             console.error(e);
+            toast({ title: "Erro", description: "Falha ao carregar dados do cliente.", variant: "destructive" });
             onClose();
         }
     }
 
     const fetchDealByClient = async (cliId: string) => {
-        setLoading(true);
+        // setLoading(true); // Handled by wrapper
         try {
             const res = await api.get('/deals', { params: { client_id: cliId } });
             if (res.data && res.data.length > 0) {
-                fetchDeal(res.data[0].id);
+                await fetchDeal(res.data[0].id);
             } else {
                 await fetchClientStandalone(cliId);
-                setLoading(false);
             }
         } catch (e) {
             console.error(e);
-            setLoading(false);
+            toast({ title: "Erro", description: "Falha ao buscar oportunidade por cliente.", variant: "destructive" });
+            // setLoading(false);
         }
     }
 
@@ -229,8 +272,11 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
             has_open_account: cli.has_open_account || false
         });
 
+        // Debug: Ensure we get the latest qualification
         const qual = cli.qualifications && cli.qualifications.length > 0 ? cli.qualifications[0] : {};
-        setQualData({
+
+        setQualData((prev: any) => ({
+            ...prev, // Keep existing if needed, but usually we overwrite
             faturamento_mensal: qual.faturamento_mensal || "",
             faturamento_maquina: qual.faturamento_maquina || "",
             maquininha_atual: qual.maquininha_atual || "",
@@ -238,8 +284,10 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
             emite_boletos: !!qual.emite_boletos,
             deseja_receber_ofertas: !!qual.deseja_receber_ofertas,
             informacoes_adicionais: qual.informacoes_adicionais || "",
-            tabulacao: qual.tabulacao || "",
+            tabulacao: qual.tabulacao || prev.tabulacao || "", // Fallback to prev or empty
             agendamento: qual.agendamento || "",
+
+            // ... (rest)
 
             cc_tipo_conta: qual.cc_tipo_conta || "Conta Corrente",
             cc_status: qual.cc_status || "Ativa com senha",
@@ -281,7 +329,7 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
             limit_parcelado_utilizado: qual.limit_parcelado_utilizado || 0,
             limit_parcelado_aprovado: qual.limit_parcelado_aprovado || 0,
             limit_anticipacao_disponivel: qual.limit_anticipacao_disponivel || "N/A"
-        });
+        }));
     };
 
     const handleSave = async () => {
@@ -324,20 +372,9 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
         }
     };
 
-    const handleSaveTabulation = async () => {
-        if (!editTabValue) return;
-        try {
-            const targetClientId = deal?.client_id || initialClientId || clientData.id;
-            if (targetClientId) {
-                await api.post(`/qualifications/${targetClientId}`, { answers: {}, tabulacao: editTabValue });
-                setQualData((prev: any) => ({ ...prev, tabulacao: editTabValue }));
-                setIsEditingTab(false);
-                onUpdate();
-            }
-        } catch (e) {
-            console.error(e);
-            alert("Erro ao salvar tabulação");
-        }
+    const handleTabulationChange = (newVal: string) => {
+        setEditTabValue(newVal);
+        setQualData((prev: any) => ({ ...prev, tabulacao: newVal }));
     };
 
     const handleDelete = async () => {
@@ -357,402 +394,290 @@ export default function DealModal({ dealId, pipelineId, initialClientId, onClose
     if (loading) return null;
 
     return (
-        <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-            <div className="bg-white dark:bg-[#09090b] w-full max-w-[98vw] h-[95vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200 dark:border-zinc-800 animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-[100] p-4 font-sans">
+            <div className="bg-white dark:bg-[#18181b] w-full max-w-5xl max-h-[95vh] rounded-xl shadow-2xl flex flex-col overflow-hidden border border-gray-200 dark:border-zinc-800 animate-in fade-in zoom-in-95 duration-200">
 
-                {/* --- HEADER SUPERIOR (TITLE w/ ID) --- */}
-                <div className="px-8 py-3 bg-white dark:bg-[#09090b] flex justify-between items-start border-b border-gray-100 dark:border-zinc-800">
-                    <div className="flex-1 flex gap-4 items-center">
-                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600">
-                            <Briefcase size={24} />
+                {/* --- HEADER --- */}
+                <div className="px-8 py-5 border-b border-gray-100 dark:border-zinc-800 flex justify-between items-start bg-white dark:bg-[#18181b]">
+                    <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-1">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white uppercase tracking-tight">
+                                {clientData.name || title || "Nova Oportunidade"}
+                            </h2>
+                            {dealId && <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 rounded">#{dealId.split('-')[0]}</span>}
                         </div>
-                        <div className="flex-1">
-                            <input
-                                type="text"
-                                value={title}
-                                onChange={e => setTitle(e.target.value)}
-                                placeholder="Título do Negócio"
-                                className="text-xl font-bold bg-transparent border-none focus:ring-0 p-0 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 w-full"
-                            />
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className="text-xs text-gray-500 font-medium">ID: {deal?.id ? deal.id.split('-')[0] : (dealId ? dealId.split('-')[0] : 'NOVO')}</span>
-                                {deal?.stage && (
-                                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 font-semibold border border-indigo-100 dark:border-indigo-800">
-                                        {deal.stage.name}
-                                    </span>
-                                )}
-                                <div className="flex items-center gap-1 ml-2">
-                                    {selectedTagIds.map(tid => {
-                                        const t = availableTags.find(tag => tag.id === tid);
-                                        if (!t) return null;
-                                        return (
-                                            <span key={tid} className="px-2 py-0.5 text-[10px] font-bold text-white rounded shadow-sm cursor-pointer hover:opacity-80" style={{ backgroundColor: t.color }} onClick={() => toggleTag(tid)}>
-                                                {t.name}
-                                            </span>
-                                        )
-                                    })}
-                                    <div className="relative">
-                                        <button onClick={() => setIsTagDropdownOpen(!isTagDropdownOpen)} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full text-gray-400"><Tag size={14} /></button>
-                                        {isTagDropdownOpen && (
-                                            <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-zinc-900 shadow-xl border dark:border-zinc-700 rounded-lg p-1 z-50 grid gap-1">
-                                                {availableTags.map(tag => (
-                                                    <button key={tag.id} onClick={() => toggleTag(tag.id)} className="text-xs text-left px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded flex items-center gap-2">
-                                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tag.color }} />
-                                                        <span className="dark:text-gray-300">{tag.name}</span>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
+                        <div className="flex items-center gap-3 text-xs text-gray-500">
+                            <span className="flex items-center gap-1">
+                                {deal?.stage ? deal.stage.name : 'Sem Etapa'}
+                            </span>
+                            <span>•</span>
+                            <div className="flex items-center gap-1">
+                                {selectedTagIds.map(tid => {
+                                    const t = availableTags.find(tag => tag.id === tid);
+                                    if (!t) return null;
+                                    return (
+                                        <span key={tid} className="px-2 py-0.5 text-[10px] font-bold text-white rounded bg-opacity-90" style={{ backgroundColor: t.color }}>
+                                            {t.name}
+                                        </span>
+                                    )
+                                })}
+                                <button onClick={() => setIsTagDropdownOpen(!isTagDropdownOpen)} className="text-indigo-600 hover:underline flex items-center gap-1 ml-1 font-semibold">
+                                    <Plus size={10} /> Tag
+                                </button>
+                                {isTagDropdownOpen && (
+                                    <div className="absolute top-16 left-60 mt-1 w-48 bg-white dark:bg-zinc-900 shadow-xl border dark:border-zinc-700 rounded-lg p-1 z-50 grid gap-1">
+                                        {availableTags.map(tag => (
+                                            <button key={tag.id} onClick={() => toggleTag(tag.id)} className="text-xs text-left px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded flex items-center gap-2">
+                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tag.color }} />
+                                                <span className="dark:text-gray-300">{tag.name}</span>
+                                            </button>
+                                        ))}
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
                         <X size={24} />
                     </button>
                 </div>
 
-                {/* --- HEADER INFERIOR (COMPACT INFO ROW) - Salesforce Style --- */}
-                <div className="px-8 py-4 bg-white dark:bg-[#09090b] border-b border-gray-200 dark:border-zinc-800 grid grid-cols-1 md:grid-cols-5 gap-6 items-start shadow-[0_2px_4px_-2px_rgba(0,0,0,0.05)] z-10">
+                {/* --- BODY --- */}
+                <div className="flex-1 overflow-y-auto p-8 bg-white dark:bg-[#18181b]">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
 
-                    {/* Coluna 1: Razão / CNPJ */}
-                    <div className="space-y-1">
-                        <LabelValue label="Razão Social" value={<input className="w-full bg-transparent border-b border-dashed border-gray-300 focus:border-indigo-500 outline-none font-semibold text-gray-800 text-sm" value={clientData.name} onChange={e => setClientData({ ...clientData, name: e.target.value })} />} />
-                        <LabelValue label="CNPJ" value={<input className="w-full bg-transparent border-b border-dashed border-gray-300 focus:border-indigo-500 outline-none font-medium text-gray-600 text-xs" value={clientData.cnpj} onChange={e => setClientData({ ...clientData, cnpj: e.target.value })} />} />
-                    </div>
+                        {/* === ESQUERDA: DADOS CADASTRAIS === */}
+                        <div className="flex flex-col gap-6">
+                            <SectionTitle icon={<User size={18} />} title="Dados Cadastrais" />
 
-                    {/* Coluna 2: Contato */}
-                    <div className="space-y-1">
-                        <LabelValue label="Nome do Sócio" value={<input className="w-full bg-transparent border-b border-dashed border-gray-300 focus:border-indigo-500 outline-none font-medium text-gray-800 text-sm" value={clientData.surname} onChange={e => setClientData({ ...clientData, surname: e.target.value })} placeholder="Nome do Sócio / Fantasia" />} />
-                        <LabelValue label="Telefone" value={<input className="w-full bg-transparent border-b border-dashed border-gray-300 focus:border-indigo-500 outline-none font-medium text-gray-800 text-sm" value={clientData.phone} onChange={e => setClientData({ ...clientData, phone: e.target.value })} />} />
-                        <LabelValue label="Email" value={<input className="w-full bg-transparent border-b border-dashed border-gray-300 focus:border-indigo-500 outline-none font-medium text-gray-600 text-xs" value={clientData.email} onChange={e => setClientData({ ...clientData, email: e.target.value })} />} />
-                    </div>
-
-                    {/* Coluna 3: Info Financeira (Editável) - Com Prefixo R$ */}
-                    <div className="space-y-1">
-                        <LabelValue label="Faturamento Mensal" value={
-                            <div className="flex items-center border-b border-dashed border-gray-300 focus-within:border-indigo-500">
-                                <span className="text-gray-400 text-xs mr-1">R$</span>
-                                <input className="w-full bg-transparent outline-none font-medium text-gray-800 text-sm" type="number" value={qualData.faturamento_mensal} onChange={e => setQualData({ ...qualData, faturamento_mensal: e.target.value })} placeholder="0,00" />
-                            </div>
-                        } />
-                        <LabelValue label="Faturamento Máquina" value={
-                            <div className="flex items-center border-b border-dashed border-gray-300 focus-within:border-indigo-500">
-                                <span className="text-gray-400 text-xs mr-1">R$</span>
-                                <input className="w-full bg-transparent outline-none font-medium text-gray-600 text-xs" type="number" value={qualData.faturamento_maquina} onChange={e => setQualData({ ...qualData, faturamento_maquina: e.target.value })} placeholder="0,00" />
-                            </div>
-                        } />
-                    </div>
-
-                    {/* Coluna 4: Status Integração */}
-                    <div>
-                        <span className="text-[10px] uppercase font-bold text-gray-400 mb-1 block">Status Integração</span>
-                        <div className="flex items-center gap-2">
-                            {clientData.integration_status === 'Integrado' ? <CheckCircle size={14} className="text-green-500" /> : <RefreshCw size={14} className="text-gray-400" />}
-                            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{clientData.integration_status || 'Pendente'}</span>
-                        </div>
-                    </div>
-
-                    {/* Coluna 5: Tabulação */}
-                    <div>
-                        <span className="text-[10px] uppercase font-bold text-gray-400 mb-1 block">Tabulação / Status</span>
-                        {isEditingTab ? (
-                            <select
-                                className="text-xs p-1 rounded border border-gray-300 bg-white w-full"
-                                value={editTabValue}
-                                onChange={e => { setEditTabValue(e.target.value); handleSaveTabulation(); }}
-                                onBlur={() => setIsEditingTab(false)}
-                            >
-                                <option value="">Selecione...</option>
-                                {tabulationOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                        ) : (
-                            <div className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded -ml-1" onClick={() => {
-                                if (['ADMIN', 'SUPERVISOR', 'OPERATOR'].includes(userRole)) {
-                                    setEditTabValue(qualData.tabulacao);
-                                    setIsEditingTab(true);
-                                }
-                            }}>
-                                <span className={cn("text-sm font-bold", qualData.tabulacao ? "text-indigo-600" : "text-gray-400 italic")}>
-                                    {qualData.tabulacao || 'Selecionar...'}
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* --- MAIN BODY --- */}
-                <div className="flex-1 overflow-y-auto bg-gray-50/50 dark:bg-zinc-900/30 p-6">
-                    <div className="grid grid-cols-12 gap-6 h-full content-start">
-
-                        {/* === COLUNA ESQUERDA (MAIN DASHBOARD) - 8 Cols === */}
-                        <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
-
-                            {/* A) Conta Corrente & B) Cartão */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <DashboardCard title="Conta Corrente" icon={<Landmark size={16} className="text-blue-500" />} color="border-t-4 border-t-blue-500">
-                                    <div className="grid grid-cols-3 gap-2 text-xs mb-3 text-gray-600 dark:text-gray-300">
-                                        <InfoBlock label="Tipo" value={qualData.cc_tipo_conta} />
-                                        <InfoBlock label="Status" value={qualData.cc_status} valueClass="text-green-600" />
-                                        <InfoBlock label="Conta" value={qualData.cc_numero} />
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-2 text-xs border-t border-dashed border-gray-100 pt-2 text-gray-600 dark:text-gray-300">
-                                        <MoneyDisplay label="Saldo" value={qualData.cc_saldo} />
-                                        <MoneyDisplay label="Lim. Utilizado" value={qualData.cc_limite_utilizado} />
-                                        <MoneyDisplay label="Lim. Disponível" value={qualData.cc_limite_disponivel} />
-                                    </div>
-                                </DashboardCard>
-
-                                <DashboardCard title="Cartão de Crédito" icon={<CreditCard size={16} className="text-purple-500" />} color="border-t-4 border-t-purple-500">
-                                    <div className="grid grid-cols-3 gap-2 text-xs mb-3 text-gray-600 dark:text-gray-300">
-                                        <InfoBlock label="Final" value={qualData.card_final} />
-                                        <div className="col-span-2"><InfoBlock label="Tipo Cartão" value={qualData.card_tipo} /></div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300">
-                                        <InfoBlock label="Status" value={qualData.card_status} />
-                                        <div>
-                                            <span className="block text-gray-400 text-[10px] uppercase">Fatura ({qualData.card_fatura_aberta_data || '-'})</span>
-                                            <span className="font-semibold text-red-500">{qualData.card_fatura_aberta_valor ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(qualData.card_fatura_aberta_valor) : 'R$ 0,00'}</span>
-                                        </div>
-                                    </div>
-                                </DashboardCard>
-                            </div>
-
-                            {/* C) Global & D) Outros */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <DashboardCard title="Conta Global" icon={<Globe size={16} className="text-cyan-500" />} color="border-l-4 border-l-cyan-500">
-                                    <div className="flex justify-around py-4">
-                                        <SimpleBoolReadOnly label="Global Dólar" checked={qualData.global_dolar} />
-                                        <SimpleBoolReadOnly label="Global Euro" checked={qualData.global_euro} />
-                                    </div>
-                                </DashboardCard>
-
-                                <DashboardCard title="Outros Produtos" icon={<Tag size={16} className="text-orange-500" />} color="border-l-4 border-l-orange-500">
-                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                                        <SimpleBoolReadOnly label="Múltiplos Acessos" checked={qualData.prod_multiplos_acessos} />
-                                        <SimpleBoolReadOnly label="C6 Pay" checked={qualData.prod_c6_pay} />
-                                        <SimpleBoolReadOnly label="C6 Tag" checked={qualData.prod_c6_tag} />
-                                        <SimpleBoolReadOnly label="Seguros" checked={qualData.prod_seguros} />
-                                        <SimpleBoolReadOnly label="Chaves Pix" checked={qualData.prod_chaves_pix} />
-                                    </div>
-                                </DashboardCard>
-                            </div>
-
-                            {/* E) Limites de Crédito */}
-                            <DashboardCard title="Limites de Crédito & Risco" icon={<AlertCircle size={16} className="text-red-500" />} color="border-t-4 border-t-red-500">
-                                <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-100 dark:border-zinc-800 text-xs text-gray-500">
-                                    <div className="flex items-center gap-2">
-                                        <span className="uppercase text-[10px] font-bold">Blocklist:</span>
-                                        <div className={cn("w-3 h-3 rounded", qualData.credit_blocklist ? "bg-red-500" : "bg-gray-200")}></div>
-                                    </div>
-                                    <div>Score Interno: <strong>{qualData.credit_score_interno}</strong></div>
-                                    <div>Serasa: <strong>{qualData.credit_score_serasa}</strong></div>
-                                    <div>Inadimplência: <strong className="text-green-600">{qualData.credit_inadimplencia}</strong></div>
+                            {/* Status Panel */}
+                            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-4 flex justify-between items-center border border-indigo-100 dark:border-indigo-800/50">
+                                <div>
+                                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1 block flex items-center gap-1">
+                                        <div className="w-2 h-2 rounded-full border-2 border-indigo-400"></div> Status Integração
+                                    </span>
+                                    <span className="text-sm font-bold text-indigo-900 dark:text-indigo-100 block">
+                                        {clientData.integration_status || 'Pendente'}
+                                    </span>
                                 </div>
+                                <div className="flex flex-col gap-1 items-end">
+                                    {clientData.is_qualified && <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded">Qualificado</span>}
+                                    {clientData.has_open_account && <span className="text-[10px] font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">Conta Aberta</span>}
+                                    {!clientData.has_open_account && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">Sem Conta</span>}
+                                </div>
+                            </div>
 
-                                <table className="w-full text-xs text-left">
-                                    <thead className="text-gray-400 font-medium border-b border-gray-100 dark:border-zinc-800">
-                                        <tr>
-                                            <th className="pb-2 pl-1 font-normal uppercase text-[10px]">Produto</th>
-                                            <th className="pb-2 font-normal uppercase text-[10px]">Utilizado</th>
-                                            <th className="pb-2 font-normal uppercase text-[10px]">Pré-Aprovado</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-50 dark:divide-zinc-800">
-                                        <LimitRow label="Cartão" used={qualData.limit_cartao_utilizado} approved={qualData.limit_cartao_aprovado} />
-                                        <LimitRow label="Cheque Especial" used={qualData.limit_cheque_utilizado} approved={qualData.limit_cheque_aprovado} />
-                                        <LimitRow label="Parcelado" used={qualData.limit_parcelado_utilizado} approved={qualData.limit_parcelado_aprovado} />
-                                        <tr>
-                                            <td className="py-2 pl-1 font-medium text-gray-700 dark:text-gray-300">Antecipação</td>
-                                            <td className="text-gray-400">-</td>
-                                            <td className="text-gray-500">{qualData.limit_anticipacao_disponivel}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </DashboardCard>
-                        </div>
-
-                        {/* === COLUNA DIREITA (SIDEBAR) - 4 Cols === */}
-                        <div className="col-span-12 lg:col-span-4 pl-6 border-l border-gray-200 dark:border-zinc-800 flex flex-col gap-6">
-
-                            <SectionTitle icon={<CheckCircle size={16} />} title="Qualificação / Lead" />
+                            {/* Inputs */}
                             <div className="space-y-4">
-                                <div className="bg-white dark:bg-zinc-900 rounded-lg p-3 border border-gray-200 dark:border-zinc-700 shadow-sm relative group hover:border-indigo-300 transition-all">
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase ml-1 block mb-1.5">Maquininha Atual</label>
-                                    <select
-                                        className="w-full text-sm bg-transparent border-b border-gray-200 dark:border-zinc-700 pb-1 focus:border-indigo-500 focus:ring-0 text-gray-800 dark:text-gray-200 font-medium outline-none"
-                                        value={qualData.maquininha_atual}
-                                        onChange={e => setQualData({ ...qualData, maquininha_atual: e.target.value })}
-                                    >
-                                        <option value="">Selecione...</option>
-                                        <option value="Nenhuma">Nenhuma</option>
-                                        <option value="Pagbank">Pagbank</option>
-                                        <option value="Mercado Pago">Mercado Pago</option>
-                                        <option value="Stone">Stone</option>
-                                        <option value="Cielo">Cielo</option>
-                                        <option value="Rede">Rede</option>
-                                        <option value="Getnet">Getnet</option>
-                                        <option value="SafraPay">SafraPay</option>
-                                        <option value="Outras">Outras</option>
-                                    </select>
+                                <InputGroup label="Razão Social / Nome">
+                                    <input className="modal-input" value={clientData.name} onChange={e => setClientData({ ...clientData, name: e.target.value })} />
+                                </InputGroup>
+                                <InputGroup label="Sobrenome / Fantasia">
+                                    <input className="modal-input" value={clientData.surname} onChange={e => setClientData({ ...clientData, surname: e.target.value })} />
+                                </InputGroup>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <InputGroup label="CNPJ / CPF">
+                                        <input className="modal-input" value={clientData.cnpj} onChange={e => setClientData({ ...clientData, cnpj: e.target.value })} />
+                                    </InputGroup>
+                                    <InputGroup label="Telefone">
+                                        <input className="modal-input" value={clientData.phone} onChange={e => setClientData({ ...clientData, phone: e.target.value })} />
+                                    </InputGroup>
                                 </div>
-                                <div className="bg-white dark:bg-zinc-900 rounded-lg p-3 border border-gray-200 dark:border-zinc-700 shadow-sm relative group hover:border-indigo-300 transition-all">
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase ml-1 block mb-1.5">Produto de Interesse</label>
-                                    <select
-                                        className="w-full text-sm bg-transparent border-b border-gray-200 dark:border-zinc-700 pb-1 focus:border-indigo-500 focus:ring-0 text-gray-800 dark:text-gray-200 font-medium outline-none"
-                                        value={qualData.produto_interesse}
-                                        onChange={e => setQualData({ ...qualData, produto_interesse: e.target.value })}
-                                    >
-                                        <option value="">Selecione...</option>
-                                        <option value="Conta PJ">Conta PJ</option>
-                                        <option value="Boletos">Boletos</option>
-                                        <option value="Antecipação">Antecipação</option>
-                                        <option value="Capital de Giro">Capital de Giro</option>
-                                        <option value="Cartão de Crédito">Cartão de Crédito</option>
-                                    </select>
-                                </div>
-
-                                <div className="bg-white dark:bg-zinc-900 rounded-lg p-3 border border-gray-200 dark:border-zinc-700 shadow-sm relative group hover:border-indigo-300 transition-all">
-                                    <div className="flex flex-col gap-3">
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="checkbox"
-                                                id="sb_emite_boletos"
-                                                checked={qualData.emite_boletos}
-                                                onChange={e => setQualData({ ...qualData, emite_boletos: e.target.checked })}
-                                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                            />
-                                            <label htmlFor="sb_emite_boletos" className="text-xs text-gray-700 dark:text-gray-300 font-bold cursor-pointer select-none">Emite Boletos?</label>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="checkbox"
-                                                id="sb_receber_ofertas"
-                                                checked={qualData.deseja_receber_ofertas}
-                                                onChange={e => setQualData({ ...qualData, deseja_receber_ofertas: e.target.checked })}
-                                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                            />
-                                            <label htmlFor="sb_receber_ofertas" className="text-xs text-gray-700 dark:text-gray-300 font-bold cursor-pointer select-none">Receber Ofertas?</label>
-                                        </div>
-                                    </div>
-                                </div>
+                                <InputGroup label="Email">
+                                    <input className="modal-input" value={clientData.email} onChange={e => setClientData({ ...clientData, email: e.target.value })} />
+                                </InputGroup>
                             </div>
 
-                            <SectionTitle icon={<Calendar size={16} />} title="Agendamento / Retorno" />
-                            <div className="bg-white dark:bg-zinc-900 rounded-lg p-3 border border-gray-200 dark:border-zinc-700 shadow-sm relative group hover:border-indigo-300 transition-all">
-                                <label className="text-[10px] font-bold text-gray-500 uppercase ml-1 block mb-1.5">Data e Hora</label>
-                                <input
-                                    type="datetime-local"
-                                    className="w-full text-sm bg-transparent border-b border-gray-200 dark:border-zinc-700 pb-1 focus:border-indigo-500 focus:ring-0 text-gray-800 dark:text-gray-200 font-medium outline-none"
-                                    value={qualData.agendamento ? format(new Date(qualData.agendamento), "yyyy-MM-dd'T'HH:mm") : ""}
-                                    onChange={e => setQualData({ ...qualData, agendamento: e.target.value })}
-                                />
+                            {/* Meta Info */}
+                            <div className="mt-4 pt-4 border-t border-dashed border-gray-200 dark:border-zinc-700 flex justify-between text-xs text-gray-400 uppercase font-semibold tracking-wide">
+                                <div>
+                                    <span className="block text-[10px] mb-0.5">Criado em</span>
+                                    <span className="text-gray-600 dark:text-gray-400">
+                                        {deal?.created_at ? format(new Date(deal.created_at), "dd/MM/yyyy HH:mm") : "-"}
+                                    </span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="block text-[10px] mb-0.5">Responsável</span>
+                                    <span className="text-gray-600 dark:text-gray-400">
+                                        {deal?.responsible?.name || "N/A"}
+                                    </span>
+                                </div>
                             </div>
-
-                            <SectionTitle icon={<FileText size={16} />} title="Anotações" />
-                            <textarea
-                                className="w-full text-sm bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-xl px-4 py-3 min-h-[220px] resize-none focus:ring-2 focus:ring-indigo-500/20 outline-none shadow-sm"
-                                value={qualData.informacoes_adicionais}
-                                onChange={e => setQualData({ ...qualData, informacoes_adicionais: e.target.value })}
-                                placeholder="Escreva observações aqui..."
-                            />
                         </div>
 
+                        {/* === DIREITA: DADOS DA QUALIFICAÇÃO === */}
+                        <div className="flex flex-col gap-6">
+                            <SectionTitle icon={<CheckCircle size={18} />} title="Dados da Qualificação" />
+
+                            {/* Tabulation Panel (Yellow) */}
+                            <div className="bg-amber-50 dark:bg-amber-900/10 rounded-lg p-4 border border-amber-100 dark:border-amber-900/30 relative">
+                                <div className="absolute top-4 right-4 text-amber-400 opacity-50"><FileText size={20} /></div>
+                                <label className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mb-1 block">
+                                    Tabulação / Status do Lead
+                                </label>
+                                <select
+                                    className="w-full bg-transparent text-lg font-bold text-amber-900 dark:text-amber-100 border-none p-0 focus:ring-0 cursor-pointer outline-none"
+                                    value={editTabValue || qualData.tabulacao}
+                                    onChange={e => handleTabulationChange(e.target.value)}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {tabulationOptions.map(t => <option key={t} value={t} className="text-gray-900">{t}</option>)}
+                                </select>
+                            </div>
+
+                            {/* Form Grid */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <InputGroup label="Faturamento Mensal">
+                                    <input type="number" placeholder="R$ 0,00" className="modal-input" value={qualData.faturamento_mensal} onChange={e => setQualData({ ...qualData, faturamento_mensal: e.target.value })} />
+                                </InputGroup>
+                                <InputGroup label="Faturamento Máquina">
+                                    <input type="number" placeholder="R$ 0,00" className="modal-input" value={qualData.faturamento_maquina} onChange={e => setQualData({ ...qualData, faturamento_maquina: e.target.value })} />
+                                </InputGroup>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <InputGroup label="Maquininha Atual">
+                                    <input className="modal-input" value={qualData.maquininha_atual} onChange={e => setQualData({ ...qualData, maquininha_atual: e.target.value })} />
+                                </InputGroup>
+                                <InputGroup label="Produto de Interesse">
+                                    <select className="modal-input" value={qualData.produto_interesse} onChange={e => setQualData({ ...qualData, produto_interesse: e.target.value })}>
+                                        <option value="">—</option>
+                                        <option value="Conta PJ">Conta PJ</option>
+                                        <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                        <option value="Antecipação">Antecipação</option>
+                                    </select>
+                                </InputGroup>
+                            </div>
+
+                            {/* Checks */}
+                            <div className="flex gap-6 mt-2">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <div className={cn("w-4 h-4 rounded-full border flex items-center justify-center transition-colors", qualData.emite_boletos ? "bg-indigo-600 border-indigo-600" : "border-gray-300 dark:border-zinc-600")}>
+                                        {qualData.emite_boletos && <CheckCircle size={10} className="text-white" />}
+                                    </div>
+                                    <input type="checkbox" className="hidden" checked={qualData.emite_boletos} onChange={e => setQualData({ ...qualData, emite_boletos: e.target.checked })} />
+                                    <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">Emite Boletos? <span className="font-bold text-gray-900 dark:text-white">{qualData.emite_boletos ? 'Sim' : 'Não'}</span></span>
+                                </label>
+
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <div className={cn("w-4 h-4 rounded-full border flex items-center justify-center transition-colors", qualData.deseja_receber_ofertas ? "bg-indigo-600 border-indigo-600" : "border-gray-300 dark:border-zinc-600")}>
+                                        {qualData.deseja_receber_ofertas && <CheckCircle size={10} className="text-white" />}
+                                    </div>
+                                    <input type="checkbox" className="hidden" checked={qualData.deseja_receber_ofertas} onChange={e => setQualData({ ...qualData, deseja_receber_ofertas: e.target.checked })} />
+                                    <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">Receber Ofertas? <span className="font-bold text-gray-900 dark:text-white">{qualData.deseja_receber_ofertas ? 'Sim' : 'Não'}</span></span>
+                                </label>
+                            </div>
+
+                            {/* Additional Info */}
+                            <InputGroup label="Informações Adicionais">
+                                <textarea
+                                    className="modal-input min-h-[100px] resize-none leading-relaxed"
+                                    value={qualData.informacoes_adicionais}
+                                    onChange={e => setQualData({ ...qualData, informacoes_adicionais: e.target.value })}
+                                />
+                            </InputGroup>
+                        </div>
                     </div>
+
+                    {/* === CUSTOM FIELDS === */}
+                    {fields && fields.length > 0 && (
+                        <div className="mt-8 pt-8 border-t border-gray-100 dark:border-zinc-800">
+                            <SectionTitle icon={<List size={18} />} title="Campos Personalizados" />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                {fields.map(field => (
+                                    <InputGroup key={field.key} label={field.label}>
+                                        <input
+                                            className="modal-input"
+                                            value={customValues[field.key] || ''}
+                                            onChange={e => setCustomValues({ ...customValues, [field.key]: e.target.value })}
+                                            placeholder={field.placeholder || ''}
+                                        />
+                                    </InputGroup>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                 </div>
 
                 {/* --- FOOTER --- */}
-                <div className="p-4 border-t border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex justify-between items-center z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                <div className="px-8 py-5 border-t border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-[#18181b] flex justify-between items-center z-10">
                     <div>
-                        {dealId && <button onClick={handleDelete} className="text-red-600 text-sm hover:underline flex items-center gap-1"><Trash size={14} /> Excluir Card</button>}
+                        <button onClick={handleDelete} className="text-xs font-bold text-red-500 hover:text-red-700 uppercase tracking-wide px-2 py-1 hover:bg-red-50 rounded transition-colors">
+                            Excluir Card
+                        </button>
                     </div>
-                    <div className="flex gap-3">
-                        <button onClick={onClose} className="px-6 py-2 rounded-lg border border-gray-300 dark:border-zinc-700 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 transition-colors">Fechar</button>
+                    <div className="flex gap-4">
+                        <button onClick={onClose} className="px-6 py-2.5 rounded-lg border border-gray-200 dark:border-zinc-700 font-bold text-gray-600 dark:text-gray-300 text-sm hover:bg-gray-50 dark:hover:bg-zinc-800 transition-all">
+                            Fechar
+                        </button>
                         <button
                             onClick={handleSave}
                             disabled={saving}
-                            className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg shadow-indigo-500/20 flex items-center gap-2 transition-all disabled:opacity-50"
+                            className="px-8 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-lg shadow-indigo-600/20 flex items-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed transform active:scale-95"
                         >
-                            <Save size={18} /> {saving ? 'Salvando...' : 'SALVAR DADOS'}
+                            {saving ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
+                            {saving ? 'Salvando...' : 'SALVAR'}
                         </button>
                     </div>
                 </div>
-
             </div>
+
+            {/* Global Styles for Modal Inputs */}
+            <style jsx global>{`
+                .modal-input {
+                    display: block;
+                    width: 100%;
+                    background-color: #f9fafb;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 0.5rem; /* rounded-lg */
+                    padding: 0.625rem 0.875rem; /* py-2.5 px-3.5 */
+                    font-size: 0.875rem; /* text-sm */
+                    font-weight: 500;
+                    color: #1f2937;
+                    transition: all 0.2s;
+                    outline: none;
+                }
+                .dark .modal-input {
+                    background-color: #27272a;
+                    border-color: #3f3f46;
+                    color: #e4e4e7;
+                }
+                .modal-input:focus {
+                    border-color: #6366f1; /* indigo-500 */
+                    background-color: #fff;
+                    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+                }
+                .dark .modal-input:focus {
+                    background-color: #18181b;
+                    border-color: #818cf8;
+                }
+            `}</style>
         </div>
     );
 }
 
-// --- Micro Components ---
-
-function LabelValue({ label, value }: any) {
-    return (
-        <div>
-            <span className="text-[10px] uppercase font-bold text-gray-400 mb-0.5 block">{label}</span>
-            <div>{value}</div>
-        </div>
-    )
-}
+// --- Helper Components ---
 
 function SectionTitle({ icon, title }: { icon: any, title: string }) {
     return (
-        <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-100 dark:border-zinc-800">
-            <div className="text-gray-400 dark:text-gray-500">{icon}</div>
-            <h3 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wide">{title}</h3>
+        <div className="flex items-center gap-2 mb-2 pb-2 border-b-2 border-gray-100 dark:border-zinc-800">
+            <div className="text-gray-800 dark:text-gray-200">{icon}</div>
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">{title}</h3>
         </div>
     )
 }
 
-function DashboardCard({ title, icon, color, children }: any) {
-    return (
-        <div className={cn("bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-gray-200 dark:border-zinc-800 p-4 relative overflow-hidden h-full flex flex-col", color)}>
-            <div className="flex items-center gap-2 mb-4 border-b border-gray-100 dark:border-zinc-800 pb-2">
-                {icon}
-                <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{title}</span>
-            </div>
-            <div className="flex-1 flex flex-col justify-center">
-                {children}
-            </div>
-        </div>
-    )
-}
-
-function InfoBlock({ label, value, valueClass }: any) {
+function InputGroup({ label, children }: any) {
     return (
         <div>
-            <span className="block text-gray-400 text-[10px] uppercase">{label}</span>
-            <span className={cn("font-semibold text-gray-800 dark:text-gray-200", valueClass)}>{value || '-'}</span>
+            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wide mb-1.5 pl-0.5">
+                {label}
+            </label>
+            {children}
         </div>
     )
 }
 
-function SimpleBoolReadOnly({ label, checked }: any) {
-    return (
-        <div className="flex items-center gap-2 text-xs">
-            <span className={cn("font-bold text-[10px]", checked ? "text-blue-500" : "text-gray-400")}>{checked ? 'Sim' : 'Não'}</span>
-            <span className="text-gray-600 dark:text-gray-400">{label}</span>
-        </div>
-    )
-}
-
-function MoneyDisplay({ label, value }: any) {
-    return (
-        <div>
-            <span className="block text-gray-400 text-[10px] uppercase mb-0.5">{label}</span>
-            <span className="block font-bold text-gray-700 dark:text-gray-200 text-sm">
-                {value ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value) : 'R$ 0,00'}
-            </span>
-        </div>
-    )
-}
-
-function LimitRow({ label, used, approved }: any) {
-    return (
-        <tr>
-            <td className="py-2 pl-1 font-medium text-gray-700 dark:text-gray-300">{label}</td>
-            <td className="text-gray-600 dark:text-gray-400">{used ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(used) : '0'}</td>
-            <td className="text-green-600 font-semibold">{approved ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(approved) : '0'}</td>
-        </tr>
-    )
-}
+// Dummy/Unused components removal (LabelValue, DashboardCard, InfoBlock, etc.)
+/* Removed unused components to clean up file */

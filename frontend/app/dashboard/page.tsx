@@ -238,6 +238,7 @@ export default function DashboardPage() {
                     <DealModal
                         dealId={null}
                         initialClientId={selectedClientId}
+                        initialData={selectedClientId ? { client: clients.find(c => c.id === selectedClientId), title: clients.find(c => c.id === selectedClientId)?.name } : undefined}
                         pipelineId=""
                         onClose={() => setModalOpen(false)}
                         onUpdate={handleModalSuccess}
@@ -334,6 +335,7 @@ export default function DashboardPage() {
                 <DealModal
                     dealId={null}
                     initialClientId={selectedClientId}
+                    initialData={selectedClientId ? { client: clients.find(c => c.id === selectedClientId), title: clients.find(c => c.id === selectedClientId)?.name } : undefined}
                     pipelineId="" // Modal will try to find deal. If creation needed, it might need updating to select pipeline.
                     onClose={() => setModalOpen(false)}
                     onUpdate={handleModalSuccess}

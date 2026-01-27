@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { DropResult } from "@hello-pangea/dnd";
 import api from "@/lib/api";
 import { Plus, LayoutGrid, List, Zap } from "lucide-react";
@@ -252,7 +252,7 @@ export default function KanbanPage() {
     };
 
     // Prepare Filtered Deals
-    const getFilteredDeals = () => {
+    const filteredDeals = useMemo(() => {
         const filteredDealsByStage: Record<string, Deal[]> = {};
 
         stages.forEach(stage => {
@@ -271,9 +271,7 @@ export default function KanbanPage() {
         });
 
         return filteredDealsByStage;
-    };
-
-    const filteredDeals = getFilteredDeals();
+    }, [deals, stages, searchTerm, filterResponsible, filterTag]);
 
     return (
         <div className="h-full flex flex-col">
@@ -368,8 +366,12 @@ export default function KanbanPage() {
                     <DealModal
                         dealId={selectedDealId}
                         pipelineId={selectedPipeline}
+                        initialData={Object.values(deals).flat().find(d => d.id === selectedDealId)}
                         onClose={() => setSelectedDealId(null)}
-                        onUpdate={() => selectedPipeline && fetchStagesAndDeals(selectedPipeline)}
+                        onUpdate={() => {
+                            // Rely on WebSocket for updates to avoid full board refetch
+                            // Optional: Trigger a lightweight refresh if needed
+                        }}
                     />
                 )
             }

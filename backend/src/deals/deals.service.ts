@@ -91,8 +91,24 @@ export class DealsService {
       where,
       include: {
         stage: true,
-        client: true,
-        responsible: true,
+        client: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            cnpj: true
+          }
+        },
+        responsible: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            email: true,
+            // avatar: true // Assuming avatar field exists, if not remove. Previous view didn't show User model.
+            // Safe bet: id, name, surname, email.
+          }
+        },
         tags: { include: { tag: true } },
       },
       orderBy: { created_at: 'desc' },
