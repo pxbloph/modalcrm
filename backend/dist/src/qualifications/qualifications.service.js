@@ -154,7 +154,8 @@ let QualificationsService = class QualificationsService {
             deseja_receber_ofertas: latestQual.deseja_receber_ofertas,
             informacoes_adicionais: latestQual.informacoes_adicionais,
             tabulacao: newTabulation,
-            agendamento: latestQual.agendamento
+            agendamento: latestQual.agendamento,
+            account_opening_date: client.account_opening_date
         };
         const extraMetadata = {
             manual_update: true,
@@ -189,7 +190,8 @@ let QualificationsService = class QualificationsService {
                 deseja_proposta_maquininha: data.deseja_receber_ofertas,
                 informacoes_adicionais: data.informacoes_adicionais,
                 answers: data.answers,
-                agendamento: data.agendamento
+                agendamento: data.agendamento,
+                data_abertura_conta: data.account_opening_date
             },
             metadados: {
                 qualified_at: new Date().toISOString(),

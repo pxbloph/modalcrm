@@ -6,28 +6,25 @@ export declare class QualificationsService {
     constructor(prisma: PrismaService, dealsService: DealsService);
     getActiveTemplate(): Promise<{
         id: string;
+        title: string;
+        fields: import("@prisma/client/runtime/library").JsonValue;
+        type: string;
         is_active: boolean;
         created_at: Date;
-        title: string;
-        type: string;
-        fields: import("@prisma/client/runtime/library").JsonValue;
     }>;
     getTabulationOptions(): Promise<any>;
     saveTemplate(fields: any): Promise<{
         id: string;
+        title: string;
+        fields: import("@prisma/client/runtime/library").JsonValue;
+        type: string;
         is_active: boolean;
         created_at: Date;
-        title: string;
-        type: string;
-        fields: import("@prisma/client/runtime/library").JsonValue;
     }>;
     create(clientId: string, data: any, userId: string): Promise<{
         id: string;
         created_at: Date;
-        client_id: string;
-        integration_status: string | null;
         answers: import("@prisma/client/runtime/library").JsonValue;
-        created_by_id: string;
         emite_boletos: boolean | null;
         maquininha_atual: string | null;
         faturamento_maquina: import("@prisma/client/runtime/library").Decimal | null;
@@ -74,9 +71,12 @@ export declare class QualificationsService {
         limit_parcelado_utilizado: import("@prisma/client/runtime/library").Decimal | null;
         limit_parcelado_aprovado: import("@prisma/client/runtime/library").Decimal | null;
         limit_anticipacao_disponivel: string | null;
+        integration_status: string | null;
         integration_attempts: number | null;
         last_integration_attempt: Date | null;
         webhook_response: string | null;
+        client_id: string;
+        created_by_id: string;
     }>;
     updateTabulation(clientId: string, newTabulation: string, user: any): Promise<{
         message: string;
@@ -97,10 +97,7 @@ export declare class QualificationsService {
     } & {
         id: string;
         created_at: Date;
-        client_id: string;
-        integration_status: string | null;
         answers: import("@prisma/client/runtime/library").JsonValue;
-        created_by_id: string;
         emite_boletos: boolean | null;
         maquininha_atual: string | null;
         faturamento_maquina: import("@prisma/client/runtime/library").Decimal | null;
@@ -147,9 +144,12 @@ export declare class QualificationsService {
         limit_parcelado_utilizado: import("@prisma/client/runtime/library").Decimal | null;
         limit_parcelado_aprovado: import("@prisma/client/runtime/library").Decimal | null;
         limit_anticipacao_disponivel: string | null;
+        integration_status: string | null;
         integration_attempts: number | null;
         last_integration_attempt: Date | null;
         webhook_response: string | null;
+        client_id: string;
+        created_by_id: string;
     })[]>;
     private syncWithKanban;
 }
