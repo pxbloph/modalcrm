@@ -79,6 +79,7 @@ model Client {
   registration_status String? // ATIVA, BAIXADA, etc
   registration_status_date DateTime?
   opening_date      DateTime?
+  account_opening_date DateTime? // Data de abertura da conta (Preenchido na tabulação "Conta aberta")
   share_capital     Decimal? @db.Decimal(15, 2)
   
   // Bitrix Legacy Fields (Preserved for Reference)

@@ -82,6 +82,9 @@ let QualificationsService = class QualificationsService {
             if (hasQualificationData) {
                 updateData.is_qualified = true;
             }
+            if (data.account_opening_date) {
+                updateData.account_opening_date = new Date(data.account_opening_date);
+            }
             if (Object.keys(updateData).length > 0) {
                 await this.prisma.client.update({
                     where: { id: clientId },

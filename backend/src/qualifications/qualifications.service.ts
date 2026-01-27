@@ -89,6 +89,10 @@ export class QualificationsService {
                 updateData.is_qualified = true;
             }
 
+            if (data.account_opening_date) {
+                updateData.account_opening_date = new Date(data.account_opening_date);
+            }
+
             // if (data.client_name) {
             //     updateData.name = data.client_name;
             // }

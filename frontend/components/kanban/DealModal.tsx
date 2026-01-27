@@ -105,6 +105,11 @@ export default function DealModal({ dealId, pipelineId, initialClientId, initial
         limit_anticipacao_disponivel: initialQual.limit_anticipacao_disponivel || "N/A"
     });
 
+    const [accountOpeningDate, setAccountOpeningDate] = useState(
+        initialData?.client?.account_opening_date ?
+            new Date(initialData.client.account_opening_date).toISOString().split('T')[0] : ""
+    );
+
     // --- Form States for DEAL ---
     const [title, setTitle] = useState(initialData?.title || "");
     const [value, setValue] = useState(initialData?.value || "");
@@ -330,6 +335,12 @@ export default function DealModal({ dealId, pipelineId, initialClientId, initial
             limit_parcelado_aprovado: qual.limit_parcelado_aprovado || 0,
             limit_anticipacao_disponivel: qual.limit_anticipacao_disponivel || "N/A"
         }));
+
+        if (cli.account_opening_date) {
+            setAccountOpeningDate(new Date(cli.account_opening_date).toISOString().split('T')[0]);
+        } else {
+            setAccountOpeningDate("");
+        }
     };
 
     const handleSave = async () => {
@@ -357,7 +368,8 @@ export default function DealModal({ dealId, pipelineId, initialClientId, initial
                     phone: clientData.phone,
                     cnpj: clientData.cnpj,
                     ...qualData,
-                    agendamento: qualData.agendamento ? new Date(qualData.agendamento).toISOString() : null
+                    agendamento: qualData.agendamento ? new Date(qualData.agendamento).toISOString() : null,
+                    account_opening_date: accountOpeningDate ? new Date(accountOpeningDate).toISOString() : null // Ensure send null if cleared
                 };
                 await api.put(`/clients/${targetClientId}`, payloadClient);
             }
@@ -523,6 +535,21 @@ export default function DealModal({ dealId, pipelineId, initialClientId, initial
                                     <option value="">Selecione...</option>
                                     {tabulationOptions.map(t => <option key={t} value={t} className="text-gray-900">{t}</option>)}
                                 </select>
+
+                                {/* Account Opening Date Conditional Input */}
+                                {(editTabValue === "Conta aberta" || (!editTabValue && qualData.tabulacao === "Conta aberta")) && (
+                                    <div className="mt-3 pt-3 border-t border-amber-200 dark:border-amber-800 animate-in slide-in-from-top-2">
+                                        <label className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1 block">
+                                            Data de Abertura da Conta
+                                        </label>
+                                        <input
+                                            type="date"
+                                            className="w-full bg-white/50 dark:bg-black/20 border border-amber-200 dark:border-amber-900/50 rounded px-2 py-1.5 text-sm font-semibold text-amber-900 dark:text-amber-100 outline-none focus:ring-1 focus:ring-amber-400"
+                                            value={accountOpeningDate}
+                                            onChange={e => setAccountOpeningDate(e.target.value)}
+                                        />
+                                    </div>
+                                )}
                             </div>
 
                             {/* Form Grid */}

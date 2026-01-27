@@ -158,214 +158,252 @@ export class ClientsService {
     }
 
     async update(id: string, data: Prisma.ClientUpdateInput, user: User) {
-        const client = await this.findOne(id, user);
-        if (!client) {
-            throw new InternalServerErrorException('Cliente não encontrado ou acesso negado');
-        }
+        try {
+            console.log(`[UPDATE START] User: ${user.id} Client: ${id}`);
+            const client = await this.findOne(id, user);
+            if (!client) {
+                console.error(`[UPDATE ERROR] Client ${id} not found or access denied`);
+                throw new InternalServerErrorException('Cliente não encontrado ou acesso negado');
+            }
 
-        // Check for Upsert/Merge Trigger (Lead -> Client promotion)
-        const inputData = data as any;
-        if (inputData.integration_status === 'Cadastro salvo com sucesso!' && inputData.cnpj) {
-            const duplicate = await this.prisma.client.findUnique({
-                where: { cnpj: inputData.cnpj }
-            });
+            console.log(`[UPDATE RAW] ID: ${id}`, JSON.stringify(data)); // UNCONDITIONAL DEBUG LOG
 
-            // If a different client with same CNPJ exists, merge into it
-            if (duplicate && duplicate.id !== id) {
-                console.log(`Merging Lead ${id} into existing Client ${duplicate.id} (CNPJ ${inputData.cnpj}) - Triggered by Success Status`);
-
-                // 1. Move qualifications from Lead to Existing Client
-                await this.prisma.qualification.updateMany({
-                    where: { client_id: id },
-                    data: { client_id: duplicate.id }
+            // Check for Upsert/Merge Trigger (Lead -> Client promotion)
+            const inputData = data as any;
+            if (inputData.integration_status === 'Cadastro salvo com sucesso!' && inputData.cnpj) {
+                console.log(`[UPDATE CLIENT] ID: ${id}`, JSON.stringify(data)); // DEBUG LOG
+                const duplicate = await this.prisma.client.findUnique({
+                    where: { cnpj: inputData.cnpj }
                 });
 
-                // 2. Prepare data for generic update on existing client
-                // Remove CNPJ from update to avoid unique constraint if it's identical (it is)
-                // Remove ID as well obviously
-                const { cnpj, ...mergeData } = inputData;
+                // If a different client with same CNPJ exists, merge into it
+                if (duplicate && duplicate.id !== id) {
+                    console.log(`Merging Lead ${id} into existing Client ${duplicate.id} (CNPJ ${inputData.cnpj}) - Triggered by Success Status`);
 
-                // We should also exclude qualification fields from this update payload if they are mixed in 'data'
-                // But the 'data' here is ClientUpdateInput which theoretically shouldn't have qual fields unless typed loosely.
-                // However, in this controller/service, 'data' seems to include everything mixed.
-                // So let's extract client-specific fields using the same destructuring logic as below, 
-                // but we need to do it inside here or replicate it.
+                    // 1. Move qualifications from Lead to Existing Client
+                    await this.prisma.qualification.updateMany({
+                        where: { client_id: id },
+                        data: { client_id: duplicate.id }
+                    });
 
-                // Let's rely on the extraction below. We can refactor a bit??
-                // No, simpler to just clean 'mergeData' roughly or let Prisma ignore unknown fields? 
-                // Prisma throws on unknown fields in 'data'.
-                // So we MUST separate them.
+                    // 2. Prepare data for generic update on existing client
+                    // Remove CNPJ from update to avoid unique constraint if it's identical (it is)
+                    // Remove ID as well obviously
+                    const { cnpj, ...mergeData } = inputData;
 
-                const {
-                    faturamento_mensal, faturamento_maquina, maquininha_atual, produto_interesse,
-                    emite_boletos, deseja_receber_ofertas, informacoes_adicionais,
-                    ...cleanClientData
-                } = mergeData;
+                    // We should also exclude qualification fields from this update payload if they are mixed in 'data'
+                    // But the 'data' here is ClientUpdateInput which theoretically shouldn't have qual fields unless typed loosely.
+                    // However, in this controller/service, 'data' seems to include everything mixed.
+                    // So let's extract client-specific fields using the same destructuring logic as below, 
+                    // but we need to do it inside here or replicate it.
 
-                const updatedExisting = await this.prisma.client.update({
-                    where: { id: duplicate.id },
+                    // Let's rely on the extraction below. We can refactor a bit??
+                    // No, simpler to just clean 'mergeData' roughly or let Prisma ignore unknown fields? 
+                    // Prisma throws on unknown fields in 'data'.
+                    // So we MUST separate them.
+
+                    const {
+                        faturamento_mensal, faturamento_maquina, maquininha_atual, produto_interesse,
+                        emite_boletos, deseja_receber_ofertas, informacoes_adicionais,
+                        ...cleanClientData
+                    } = mergeData;
+
+                    const updatedExisting = await this.prisma.client.update({
+                        where: { id: duplicate.id },
+                        data: {
+                            ...cleanClientData,
+                            integration_status: 'Cadastro salvo com sucesso!', // Ensure status is set
+                            // Preserve original creation info or update? Usually preserve original creator.
+                        }
+                    });
+
+                    // 3. Delete the temporary Lead
+                    await this.prisma.client.delete({ where: { id } });
+
+                    return updatedExisting;
+                }
+            }
+
+            // Separate Client data from Qualification data
+            const {
+                // Original Qual Fields
+                faturamento_mensal, faturamento_maquina, maquininha_atual, produto_interesse,
+                emite_boletos, deseja_receber_ofertas, informacoes_adicionais, tabulacao, agendamento,
+
+                // NEW: Conta Corrente
+                cc_tipo_conta, cc_status, cc_numero, cc_saldo, cc_limite_utilizado, cc_limite_disponivel,
+
+                // NEW: Cartão
+                card_final, card_status, card_tipo, card_adicionais, card_fatura_aberta_data, card_fatura_aberta_valor,
+
+                // NEW: Global
+                global_dolar, global_euro,
+
+                // NEW: Produtos
+                prod_multiplos_acessos, prod_c6_pay, prod_c6_tag, prod_debito_automatico, prod_seguros,
+                prod_chaves_pix, prod_web_banking, prod_link_pagamento, prod_boleto_dda, prod_boleto_cobranca,
+
+                // NEW: Limites & Risco
+                credit_blocklist, credit_score_interno, credit_score_serasa, credit_inadimplencia,
+                limit_cartao_utilizado, limit_cartao_aprovado, limit_cheque_utilizado, limit_cheque_aprovado,
+                limit_parcelado_utilizado, limit_parcelado_aprovado, limit_anticipacao_disponivel,
+
+                account_opening_date, // NEW
+
+                ...clientData
+            } = data as any;
+
+            // Check if there is ANY qualification data to update/create
+            // We check if any of these variables are NOT undefined
+            const qualFields = [
+                faturamento_mensal, faturamento_maquina, maquininha_atual, produto_interesse, emite_boletos, deseja_receber_ofertas, informacoes_adicionais, tabulacao, agendamento,
+                cc_tipo_conta, cc_status, cc_numero, cc_saldo, cc_limite_utilizado, cc_limite_disponivel,
+                card_final, card_status, card_tipo, card_adicionais, card_fatura_aberta_data, card_fatura_aberta_valor,
+                global_dolar, global_euro,
+                prod_multiplos_acessos, prod_c6_pay, prod_c6_tag, prod_debito_automatico, prod_seguros, prod_chaves_pix, prod_web_banking, prod_link_pagamento, prod_boleto_dda, prod_boleto_cobranca,
+                credit_blocklist, credit_score_interno, credit_score_serasa, credit_inadimplencia,
+                limit_cartao_utilizado, limit_cartao_aprovado, limit_cheque_utilizado, limit_cheque_aprovado, limit_parcelado_utilizado, limit_parcelado_aprovado, limit_anticipacao_disponivel
+            ];
+
+            const hasQualificationInfo = qualFields.some(f => f !== undefined);
+
+            // Sanitize Client Data (allow only schema fields)
+            const allowedClientFields = [
+                'name', 'surname', 'cnpj', 'email', 'phone', 'is_qualified', 'has_open_account', 'answers', 'integration_status',
+                'address', 'cnae_main', 'cnae_secondary', 'legal_nature', 'registration_status', 'registration_status_date',
+                'opening_date', 'share_capital', 'id_card_bitrix', 'id_contact_bitrix', 'account_opening_date'
+            ];
+
+            const cleanClientData: any = {};
+            for (const key of Object.keys(clientData)) {
+                if (allowedClientFields.includes(key)) {
+                    cleanClientData[key] = clientData[key];
+                }
+            }
+
+            console.log('[DEBUG] Clean Client Data:', JSON.stringify(cleanClientData));
+            if (account_opening_date) console.log('[DEBUG] Opening Date:', account_opening_date);
+
+            // Update Client Basic Info
+            let updatedClient;
+            try {
+                updatedClient = await this.prisma.client.update({
+                    where: { id },
                     data: {
                         ...cleanClientData,
-                        integration_status: 'Cadastro salvo com sucesso!', // Ensure status is set
-                        // Preserve original creation info or update? Usually preserve original creator.
-                    }
+                        account_opening_date: account_opening_date ? new Date(account_opening_date) : undefined
+                    },
+                });
+            } catch (error) {
+                console.error('[UPDATE ERROR] Failed to update client (Prisma):', error);
+                throw error;
+            }
+
+            // Update/Create Qualification if data provided
+            if (hasQualificationInfo) {
+                const latestQual: any = await this.prisma.qualification.findFirst({
+                    where: { client_id: id },
+                    orderBy: { created_at: 'desc' }
                 });
 
-                // 3. Delete the temporary Lead
-                await this.prisma.client.delete({ where: { id } });
+                // Helper to parse decimals/ints safely
+                const toDec = (val: any) => val ? new Prisma.Decimal(val) : undefined;
+                const toInt = (val: any) => val ? Number(val) : undefined;
+                const toBool = (val: any) => val === true || val === 'true';
 
-                return updatedExisting;
+                const qualDataPayload = {
+                    faturamento_mensal: toDec(faturamento_mensal) ?? latestQual?.faturamento_mensal,
+                    faturamento_maquina: toDec(faturamento_maquina) ?? latestQual?.faturamento_maquina,
+                    maquininha_atual: maquininha_atual ?? latestQual?.maquininha_atual,
+                    produto_interesse: produto_interesse ?? latestQual?.produto_interesse,
+                    emite_boletos: emite_boletos !== undefined ? toBool(emite_boletos) : latestQual?.emite_boletos,
+                    deseja_receber_ofertas: deseja_receber_ofertas !== undefined ? toBool(deseja_receber_ofertas) : latestQual?.deseja_receber_ofertas,
+                    informacoes_adicionais: informacoes_adicionais ?? latestQual?.informacoes_adicionais,
+                    tabulacao: tabulacao ?? latestQual?.tabulacao,
+                    agendamento: agendamento ? new Date(agendamento) : latestQual?.agendamento,
+
+                    // New Fields
+                    cc_tipo_conta: cc_tipo_conta ?? latestQual?.cc_tipo_conta,
+                    cc_status: cc_status ?? latestQual?.cc_status,
+                    cc_numero: cc_numero ?? latestQual?.cc_numero,
+                    cc_saldo: toDec(cc_saldo) ?? latestQual?.cc_saldo,
+                    cc_limite_utilizado: toDec(cc_limite_utilizado) ?? latestQual?.cc_limite_utilizado,
+                    cc_limite_disponivel: toDec(cc_limite_disponivel) ?? latestQual?.cc_limite_disponivel,
+
+                    card_final: card_final ?? latestQual?.card_final,
+                    card_status: card_status ?? latestQual?.card_status,
+                    card_tipo: card_tipo ?? latestQual?.card_tipo,
+                    card_adicionais: toInt(card_adicionais) ?? latestQual?.card_adicionais,
+                    card_fatura_aberta_data: card_fatura_aberta_data ? new Date(card_fatura_aberta_data) : latestQual?.card_fatura_aberta_data,
+                    card_fatura_aberta_valor: toDec(card_fatura_aberta_valor) ?? latestQual?.card_fatura_aberta_valor,
+
+                    global_dolar: global_dolar !== undefined ? toBool(global_dolar) : latestQual?.global_dolar,
+                    global_euro: global_euro !== undefined ? toBool(global_euro) : latestQual?.global_euro,
+
+                    prod_multiplos_acessos: prod_multiplos_acessos !== undefined ? toBool(prod_multiplos_acessos) : latestQual?.prod_multiplos_acessos,
+                    prod_c6_pay: prod_c6_pay !== undefined ? toBool(prod_c6_pay) : latestQual?.prod_c6_pay,
+                    prod_c6_tag: prod_c6_tag !== undefined ? toBool(prod_c6_tag) : latestQual?.prod_c6_tag,
+                    prod_debito_automatico: prod_debito_automatico !== undefined ? toBool(prod_debito_automatico) : latestQual?.prod_debito_automatico,
+                    prod_seguros: prod_seguros !== undefined ? toBool(prod_seguros) : latestQual?.prod_seguros,
+                    prod_chaves_pix: prod_chaves_pix !== undefined ? toBool(prod_chaves_pix) : latestQual?.prod_chaves_pix,
+                    prod_web_banking: prod_web_banking !== undefined ? toBool(prod_web_banking) : latestQual?.prod_web_banking,
+                    prod_link_pagamento: prod_link_pagamento !== undefined ? toBool(prod_link_pagamento) : latestQual?.prod_link_pagamento,
+                    prod_boleto_dda: prod_boleto_dda !== undefined ? toBool(prod_boleto_dda) : latestQual?.prod_boleto_dda,
+                    prod_boleto_cobranca: prod_boleto_cobranca !== undefined ? toBool(prod_boleto_cobranca) : latestQual?.prod_boleto_cobranca,
+
+                    credit_blocklist: credit_blocklist !== undefined ? toBool(credit_blocklist) : latestQual?.credit_blocklist,
+                    credit_score_interno: credit_score_interno ?? latestQual?.credit_score_interno,
+                    credit_score_serasa: credit_score_serasa ?? latestQual?.credit_score_serasa,
+                    credit_inadimplencia: credit_inadimplencia ?? latestQual?.credit_inadimplencia,
+
+                    limit_cartao_utilizado: toDec(limit_cartao_utilizado) ?? latestQual?.limit_cartao_utilizado,
+                    limit_cartao_aprovado: toDec(limit_cartao_aprovado) ?? latestQual?.limit_cartao_aprovado,
+                    limit_cheque_utilizado: toDec(limit_cheque_utilizado) ?? latestQual?.limit_cheque_utilizado,
+                    limit_cheque_aprovado: toDec(limit_cheque_aprovado) ?? latestQual?.limit_cheque_aprovado,
+                    limit_parcelado_utilizado: toDec(limit_parcelado_utilizado) ?? latestQual?.limit_parcelado_utilizado,
+                    limit_parcelado_aprovado: toDec(limit_parcelado_aprovado) ?? latestQual?.limit_parcelado_aprovado,
+                    limit_anticipacao_disponivel: limit_anticipacao_disponivel ?? latestQual?.limit_anticipacao_disponivel
+                };
+
+                if (latestQual) {
+                    await this.prisma.qualification.update({
+                        where: { id: latestQual.id },
+                        data: qualDataPayload
+                    });
+                } else {
+                    await this.prisma.qualification.create({
+                        data: {
+                            client_id: id,
+                            created_by_id: user.id,
+                            answers: {},
+                            ...qualDataPayload
+                        }
+                    });
+                }
+
+                // Check if we should qualify the client
+                const hasRealData =
+                    (maquininha_atual && maquininha_atual.trim() !== '') ||
+                    (Number(faturamento_maquina) > 0) ||
+                    (Number(faturamento_mensal) > 0) ||
+                    (Number(cc_limite_disponivel) > 0) || // NEW
+                    (produto_interesse && produto_interesse.trim() !== '') ||
+                    (informacoes_adicionais && informacoes_adicionais.trim() !== '') ||
+                    (emite_boletos === true);
+
+                if (hasRealData) {
+                    await this.prisma.client.update({
+                        where: { id },
+                        data: { is_qualified: true }
+                    });
+                }
             }
+
+            return updatedClient;
+        } catch (fatalError) {
+            console.error('[FATAL UPDATE ERROR]', fatalError);
+            throw new InternalServerErrorException('Erro grave ao atualizar cliente. Verifique os logs.');
         }
-
-        // Separate Client data from Qualification data
-        const {
-            // Original Qual Fields
-            faturamento_mensal, faturamento_maquina, maquininha_atual, produto_interesse,
-            emite_boletos, deseja_receber_ofertas, informacoes_adicionais, tabulacao, agendamento,
-
-            // NEW: Conta Corrente
-            cc_tipo_conta, cc_status, cc_numero, cc_saldo, cc_limite_utilizado, cc_limite_disponivel,
-
-            // NEW: Cartão
-            card_final, card_status, card_tipo, card_adicionais, card_fatura_aberta_data, card_fatura_aberta_valor,
-
-            // NEW: Global
-            global_dolar, global_euro,
-
-            // NEW: Produtos
-            prod_multiplos_acessos, prod_c6_pay, prod_c6_tag, prod_debito_automatico, prod_seguros,
-            prod_chaves_pix, prod_web_banking, prod_link_pagamento, prod_boleto_dda, prod_boleto_cobranca,
-
-            // NEW: Limites & Risco
-            credit_blocklist, credit_score_interno, credit_score_serasa, credit_inadimplencia,
-            limit_cartao_utilizado, limit_cartao_aprovado, limit_cheque_utilizado, limit_cheque_aprovado,
-            limit_parcelado_utilizado, limit_parcelado_aprovado, limit_anticipacao_disponivel,
-
-            ...clientData
-        } = data as any;
-
-        // Check if there is ANY qualification data to update/create
-        // We check if any of these variables are NOT undefined
-        const qualFields = [
-            faturamento_mensal, faturamento_maquina, maquininha_atual, produto_interesse, emite_boletos, deseja_receber_ofertas, informacoes_adicionais, tabulacao, agendamento,
-            cc_tipo_conta, cc_status, cc_numero, cc_saldo, cc_limite_utilizado, cc_limite_disponivel,
-            card_final, card_status, card_tipo, card_adicionais, card_fatura_aberta_data, card_fatura_aberta_valor,
-            global_dolar, global_euro,
-            prod_multiplos_acessos, prod_c6_pay, prod_c6_tag, prod_debito_automatico, prod_seguros, prod_chaves_pix, prod_web_banking, prod_link_pagamento, prod_boleto_dda, prod_boleto_cobranca,
-            credit_blocklist, credit_score_interno, credit_score_serasa, credit_inadimplencia,
-            limit_cartao_utilizado, limit_cartao_aprovado, limit_cheque_utilizado, limit_cheque_aprovado, limit_parcelado_utilizado, limit_parcelado_aprovado, limit_anticipacao_disponivel
-        ];
-
-        const hasQualificationInfo = qualFields.some(f => f !== undefined);
-
-        // Update Client Basic Info
-        const updatedClient = await this.prisma.client.update({
-            where: { id },
-            data: clientData,
-        });
-
-        // Update/Create Qualification if data provided
-        if (hasQualificationInfo) {
-            const latestQual: any = await this.prisma.qualification.findFirst({
-                where: { client_id: id },
-                orderBy: { created_at: 'desc' }
-            });
-
-            // Helper to parse decimals/ints safely
-            const toDec = (val: any) => val ? new Prisma.Decimal(val) : undefined;
-            const toInt = (val: any) => val ? Number(val) : undefined;
-            const toBool = (val: any) => val === true || val === 'true';
-
-            const qualDataPayload = {
-                faturamento_mensal: toDec(faturamento_mensal) ?? latestQual?.faturamento_mensal,
-                faturamento_maquina: toDec(faturamento_maquina) ?? latestQual?.faturamento_maquina,
-                maquininha_atual: maquininha_atual ?? latestQual?.maquininha_atual,
-                produto_interesse: produto_interesse ?? latestQual?.produto_interesse,
-                emite_boletos: emite_boletos !== undefined ? toBool(emite_boletos) : latestQual?.emite_boletos,
-                deseja_receber_ofertas: deseja_receber_ofertas !== undefined ? toBool(deseja_receber_ofertas) : latestQual?.deseja_receber_ofertas,
-                informacoes_adicionais: informacoes_adicionais ?? latestQual?.informacoes_adicionais,
-                tabulacao: tabulacao ?? latestQual?.tabulacao,
-                agendamento: agendamento ? new Date(agendamento) : latestQual?.agendamento,
-
-                // New Fields
-                cc_tipo_conta: cc_tipo_conta ?? latestQual?.cc_tipo_conta,
-                cc_status: cc_status ?? latestQual?.cc_status,
-                cc_numero: cc_numero ?? latestQual?.cc_numero,
-                cc_saldo: toDec(cc_saldo) ?? latestQual?.cc_saldo,
-                cc_limite_utilizado: toDec(cc_limite_utilizado) ?? latestQual?.cc_limite_utilizado,
-                cc_limite_disponivel: toDec(cc_limite_disponivel) ?? latestQual?.cc_limite_disponivel,
-
-                card_final: card_final ?? latestQual?.card_final,
-                card_status: card_status ?? latestQual?.card_status,
-                card_tipo: card_tipo ?? latestQual?.card_tipo,
-                card_adicionais: toInt(card_adicionais) ?? latestQual?.card_adicionais,
-                card_fatura_aberta_data: card_fatura_aberta_data ? new Date(card_fatura_aberta_data) : latestQual?.card_fatura_aberta_data,
-                card_fatura_aberta_valor: toDec(card_fatura_aberta_valor) ?? latestQual?.card_fatura_aberta_valor,
-
-                global_dolar: global_dolar !== undefined ? toBool(global_dolar) : latestQual?.global_dolar,
-                global_euro: global_euro !== undefined ? toBool(global_euro) : latestQual?.global_euro,
-
-                prod_multiplos_acessos: prod_multiplos_acessos !== undefined ? toBool(prod_multiplos_acessos) : latestQual?.prod_multiplos_acessos,
-                prod_c6_pay: prod_c6_pay !== undefined ? toBool(prod_c6_pay) : latestQual?.prod_c6_pay,
-                prod_c6_tag: prod_c6_tag !== undefined ? toBool(prod_c6_tag) : latestQual?.prod_c6_tag,
-                prod_debito_automatico: prod_debito_automatico !== undefined ? toBool(prod_debito_automatico) : latestQual?.prod_debito_automatico,
-                prod_seguros: prod_seguros !== undefined ? toBool(prod_seguros) : latestQual?.prod_seguros,
-                prod_chaves_pix: prod_chaves_pix !== undefined ? toBool(prod_chaves_pix) : latestQual?.prod_chaves_pix,
-                prod_web_banking: prod_web_banking !== undefined ? toBool(prod_web_banking) : latestQual?.prod_web_banking,
-                prod_link_pagamento: prod_link_pagamento !== undefined ? toBool(prod_link_pagamento) : latestQual?.prod_link_pagamento,
-                prod_boleto_dda: prod_boleto_dda !== undefined ? toBool(prod_boleto_dda) : latestQual?.prod_boleto_dda,
-                prod_boleto_cobranca: prod_boleto_cobranca !== undefined ? toBool(prod_boleto_cobranca) : latestQual?.prod_boleto_cobranca,
-
-                credit_blocklist: credit_blocklist !== undefined ? toBool(credit_blocklist) : latestQual?.credit_blocklist,
-                credit_score_interno: credit_score_interno ?? latestQual?.credit_score_interno,
-                credit_score_serasa: credit_score_serasa ?? latestQual?.credit_score_serasa,
-                credit_inadimplencia: credit_inadimplencia ?? latestQual?.credit_inadimplencia,
-
-                limit_cartao_utilizado: toDec(limit_cartao_utilizado) ?? latestQual?.limit_cartao_utilizado,
-                limit_cartao_aprovado: toDec(limit_cartao_aprovado) ?? latestQual?.limit_cartao_aprovado,
-                limit_cheque_utilizado: toDec(limit_cheque_utilizado) ?? latestQual?.limit_cheque_utilizado,
-                limit_cheque_aprovado: toDec(limit_cheque_aprovado) ?? latestQual?.limit_cheque_aprovado,
-                limit_parcelado_utilizado: toDec(limit_parcelado_utilizado) ?? latestQual?.limit_parcelado_utilizado,
-                limit_parcelado_aprovado: toDec(limit_parcelado_aprovado) ?? latestQual?.limit_parcelado_aprovado,
-                limit_anticipacao_disponivel: limit_anticipacao_disponivel ?? latestQual?.limit_anticipacao_disponivel
-            };
-
-            if (latestQual) {
-                await this.prisma.qualification.update({
-                    where: { id: latestQual.id },
-                    data: qualDataPayload
-                });
-            } else {
-                await this.prisma.qualification.create({
-                    data: {
-                        client_id: id,
-                        created_by_id: user.id,
-                        answers: {},
-                        ...qualDataPayload
-                    }
-                });
-            }
-
-            // Check if we should qualify the client
-            const hasRealData =
-                (maquininha_atual && maquininha_atual.trim() !== '') ||
-                (Number(faturamento_maquina) > 0) ||
-                (Number(faturamento_mensal) > 0) ||
-                (Number(cc_limite_disponivel) > 0) || // NEW
-                (produto_interesse && produto_interesse.trim() !== '') ||
-                (informacoes_adicionais && informacoes_adicionais.trim() !== '') ||
-                (emite_boletos === true);
-
-            if (hasRealData) {
-                await this.prisma.client.update({
-                    where: { id },
-                    data: { is_qualified: true }
-                });
-            }
-        }
-
-        return updatedClient;
     }
 
     async remove(id: string, user: User) {

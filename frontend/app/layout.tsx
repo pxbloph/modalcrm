@@ -5,7 +5,10 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: "MODAL",
@@ -19,7 +22,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-br" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${inter.variable} antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

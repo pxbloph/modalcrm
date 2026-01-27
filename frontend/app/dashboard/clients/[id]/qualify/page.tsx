@@ -83,7 +83,6 @@ export default function QualifyPage() {
                 // Ensure Agendamento field exists logic
                 const hasAgendamento = finalFields.find(f => f.systemField === 'agendamento');
                 if (!hasAgendamento) {
-                    // Insert after tabulacao
                     const tabIndex = finalFields.findIndex(f => f.systemField === 'tabulacao');
                     const agendamentoField: FormField = {
                         id: 'sys_agendamento',
@@ -97,6 +96,24 @@ export default function QualifyPage() {
                         finalFields.splice(tabIndex + 1, 0, agendamentoField);
                     } else {
                         finalFields.push(agendamentoField);
+                    }
+                }
+
+                // Ensure Account Opening Date field exists logic
+                const hasAccDate = finalFields.find(f => f.systemField === 'account_opening_date');
+                if (!hasAccDate) {
+                    const tabIndex = finalFields.findIndex(f => f.systemField === 'tabulacao');
+                    const accField: FormField = {
+                        id: 'sys_account_opening_date',
+                        type: 'date',
+                        label: 'Data de Abertura da Conta',
+                        required: true,
+                        systemField: 'account_opening_date'
+                    };
+                    if (tabIndex >= 0) {
+                        finalFields.splice(tabIndex + 1, 0, accField);
+                    } else {
+                        finalFields.push(accField);
                     }
                 }
 
@@ -211,6 +228,14 @@ export default function QualifyPage() {
                             const tabField = fields.find(f => f.systemField === 'tabulacao');
                             const currentTabValue = tabField ? formData[tabField.id] : '';
                             if (currentTabValue !== 'Retornar outro horário') {
+                                return null; // Hide field
+                            }
+                        }
+
+                        if (field.systemField === 'account_opening_date') {
+                            const tabField = fields.find(f => f.systemField === 'tabulacao');
+                            const currentTabValue = tabField ? formData[tabField.id] : '';
+                            if (currentTabValue !== 'Conta aberta') {
                                 return null; // Hide field
                             }
                         }

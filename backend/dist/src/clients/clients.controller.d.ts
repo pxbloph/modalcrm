@@ -23,6 +23,7 @@ export declare class ClientsController {
         registration_status: string | null;
         registration_status_date: Date | null;
         opening_date: Date | null;
+        account_opening_date: Date | null;
         share_capital: import("@prisma/client/runtime/library").Decimal | null;
         id_card_bitrix: string | null;
         id_contact_bitrix: string | null;
@@ -77,6 +78,7 @@ export declare class ClientsController {
             registration_status: string | null;
             registration_status_date: Date | null;
             opening_date: Date | null;
+            account_opening_date: Date | null;
             share_capital: import("@prisma/client/runtime/library").Decimal | null;
             id_card_bitrix: string | null;
             id_contact_bitrix: string | null;
@@ -181,37 +183,13 @@ export declare class ClientsController {
         registration_status: string | null;
         registration_status_date: Date | null;
         opening_date: Date | null;
+        account_opening_date: Date | null;
         share_capital: import("@prisma/client/runtime/library").Decimal | null;
         id_card_bitrix: string | null;
         id_contact_bitrix: string | null;
         created_by_id: string;
     }>;
-    update(id: string, updateClientDto: any, req: any): Promise<{
-        id: string;
-        email: string;
-        name: string;
-        surname: string | null;
-        created_at: Date;
-        updated_at: Date;
-        is_qualified: boolean;
-        has_open_account: boolean;
-        integration_status: string;
-        cnpj: string;
-        phone: string;
-        answers: import("@prisma/client/runtime/library").JsonValue | null;
-        id_bitrix: number | null;
-        address: string | null;
-        cnae_main: string | null;
-        cnae_secondary: string | null;
-        legal_nature: string | null;
-        registration_status: string | null;
-        registration_status_date: Date | null;
-        opening_date: Date | null;
-        share_capital: import("@prisma/client/runtime/library").Decimal | null;
-        id_card_bitrix: string | null;
-        id_contact_bitrix: string | null;
-        created_by_id: string;
-    }>;
+    update(id: string, updateClientDto: any, req: any): Promise<any>;
     remove(id: string, req: any): Promise<{
         id: string;
         email: string;
@@ -233,6 +211,7 @@ export declare class ClientsController {
         registration_status: string | null;
         registration_status_date: Date | null;
         opening_date: Date | null;
+        account_opening_date: Date | null;
         share_capital: import("@prisma/client/runtime/library").Decimal | null;
         id_card_bitrix: string | null;
         id_contact_bitrix: string | null;
@@ -259,6 +238,7 @@ export declare class ClientsController {
         registration_status: string | null;
         registration_status_date: Date | null;
         opening_date: Date | null;
+        account_opening_date: Date | null;
         share_capital: import("@prisma/client/runtime/library").Decimal | null;
         id_card_bitrix: string | null;
         id_contact_bitrix: string | null;
@@ -285,6 +265,7 @@ export declare class ClientsController {
         registration_status: string | null;
         registration_status_date: Date | null;
         opening_date: Date | null;
+        account_opening_date: Date | null;
         share_capital: import("@prisma/client/runtime/library").Decimal | null;
         id_card_bitrix: string | null;
         id_contact_bitrix: string | null;
