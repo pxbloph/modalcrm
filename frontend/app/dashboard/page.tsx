@@ -48,6 +48,7 @@ export default function DashboardPage() {
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [totalRecords, setTotalRecords] = useState(0);
     const [limit, setLimit] = useState(50);
 
     // Load limit preference on mount
@@ -115,6 +116,7 @@ export default function DashboardPage() {
             if (results[0].data && results[0].data.data) {
                 setClients(results[0].data.data);
                 setTotalPages(results[0].data.meta.totalPages);
+                setTotalRecords(results[0].data.meta.total || 0);
             } else {
                 // Fallback if backend rollout isn't complete (shouldn't happen if sync)
                 setClients(Array.isArray(results[0].data) ? results[0].data : []);
@@ -227,6 +229,7 @@ export default function DashboardPage() {
                                     onPageChange={setCurrentPage}
                                     limit={limit}
                                     onLimitChange={handleLimitChange}
+                                    totalRecords={totalRecords}
                                 />
                             </div>
                         </div>
@@ -328,6 +331,7 @@ export default function DashboardPage() {
                 onPageChange={setCurrentPage}
                 limit={limit}
                 onLimitChange={handleLimitChange}
+                totalRecords={totalRecords}
             />
 
             {/* Replaced ClientModal with DealModal for unified UI */}

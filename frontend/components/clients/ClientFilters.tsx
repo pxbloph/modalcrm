@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
+
 import api from '@/lib/api';
+import { SmartDateFilter } from '../ui/SmartDateFilter';
 
 interface ClientFiltersProps {
     userRole: string;
@@ -13,26 +15,35 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
     const searchParams = useSearchParams();
 
     // State initialized from URL params
-    // State initialized from URL params
     const [search, setSearch] = useState(searchParams.get('search') || '');
     const [status, setStatus] = useState(searchParams.get('status') || '');
     const [startDate, setStartDate] = useState(searchParams.get('startDate') || '');
     const [endDate, setEndDate] = useState(searchParams.get('endDate') || '');
     const [responsibleId, setResponsibleId] = useState(searchParams.get('responsibleId') || '');
 
-    const [users, setUsers] = useState<{ id: string, name: string }[]>([]);
+    // New Filters
+    const [tabulation, setTabulation] = useState(searchParams.get('tabulation') || '');
+    const [openAccountStartDate, setOpenAccountStartDate] = useState(searchParams.get('openAccountStartDate') || '');
+    const [openAccountEndDate, setOpenAccountEndDate] = useState(searchParams.get('openAccountEndDate') || '');
+
+    const [users, setUsers] = useState<{ id: string, name: string, surname?: string | null }[]>([]);
+    const [tabulationOptions, setTabulationOptions] = useState<string[]>([]); // Options for select
     const [showFilters, setShowFilters] = useState(false);
 
     useEffect(() => {
         // Fetch users for responsible filter if allowed
         if (userRole === 'ADMIN' || userRole === 'SUPERVISOR') {
             api.get('/users').then(res => {
-                // If Supervisor, backend likely returns only team members anyway if calling /users logic is correct OR 
-                // we might need a specific endpoint. Assuming /users is accessible or we filter.
-                // For simplified scope, let's assume /users returns visible users.
                 setUsers(res.data);
             }).catch(err => console.error("Failed to fetch users", err));
         }
+
+        // Fetch Tabulation Options
+        api.get('/qualifications/tabulations').then(res => {
+            if (Array.isArray(res.data)) {
+                setTabulationOptions(res.data);
+            }
+        }).catch(err => console.error("Failed to fetch tabulations", err));
     }, [userRole]);
 
     const applyFilters = () => {
@@ -42,6 +53,11 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
         if (startDate) params.set('startDate', startDate);
         if (endDate) params.set('endDate', endDate);
         if (responsibleId) params.set('responsibleId', responsibleId);
+        if (tabulation) params.set('tabulation', tabulation);
+        if (openAccountStartDate) params.set('openAccountStartDate', openAccountStartDate);
+        if (openAccountEndDate) params.set('openAccountEndDate', openAccountEndDate);
+
+
 
         router.push(`?${params.toString()}`);
         // Notify parent to refetch? 
@@ -59,11 +75,14 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
         setStartDate('');
         setEndDate('');
         setResponsibleId('');
+        setTabulation('');
+        setOpenAccountStartDate('');
+        setOpenAccountEndDate('');
         router.push('?');
         setTimeout(onFilterChange, 100);
     };
 
-    const activeFiltersCount = [status, startDate, endDate, responsibleId].filter(Boolean).length;
+    const activeFiltersCount = [status, startDate, endDate, responsibleId, tabulation, openAccountStartDate, openAccountEndDate].filter(Boolean).length;
 
     return (
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 space-y-4 dark:bg-zinc-900 dark:border-zinc-800">
@@ -115,6 +134,22 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
                         </select>
                     </div>
 
+                    {/* Tabulation Filter */}
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1 dark:text-gray-300">Tabulação</label>
+                        <select
+                            value={tabulation}
+                            onChange={(e) => setTabulation(e.target.value)}
+                            className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-zinc-800 dark:ring-zinc-700 dark:text-gray-100"
+                        >
+                            <option value="">Todas</option>
+                            {tabulationOptions.map((opt, idx) => (
+                                <option key={idx} value={opt}>{opt}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Created At Smart Filter */}
                     {(userRole === 'ADMIN' || userRole === 'SUPERVISOR') && (
                         <div>
                             <label className="block text-xs font-medium text-gray-700 mb-1 dark:text-gray-300">Responsável</label>
@@ -125,29 +160,34 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
                             >
                                 <option value="">Todos</option>
                                 {users.map(u => (
-                                    <option key={u.id} value={u.id}>{u.name}</option>
+                                    <option key={u.id} value={u.id}>{u.name} {u.surname || ''}</option>
                                 ))}
                             </select>
                         </div>
                     )}
 
-                    <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1 dark:text-gray-300">Data Início</label>
-                        <input
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-zinc-800 dark:ring-zinc-700 dark:text-gray-100"
+                    <div className="md:col-span-1">
+                        <SmartDateFilter
+                            label="Criado em"
+                            startDate={startDate}
+                            endDate={endDate}
+                            onFilterChange={(start, end) => {
+                                setStartDate(start);
+                                setEndDate(end);
+                            }}
                         />
                     </div>
 
-                    <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1 dark:text-gray-300">Data Fim</label>
-                        <input
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-zinc-800 dark:ring-zinc-700 dark:text-gray-100"
+                    {/* Open Account Smart Filter */}
+                    <div className="md:col-span-1">
+                        <SmartDateFilter
+                            label="Data Conta Aberta"
+                            startDate={openAccountStartDate}
+                            endDate={openAccountEndDate}
+                            onFilterChange={(start, end) => {
+                                setOpenAccountStartDate(start);
+                                setOpenAccountEndDate(end);
+                            }}
                         />
                     </div>
 

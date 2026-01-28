@@ -60,8 +60,8 @@ let ClientsService = class ClientsService {
             console.error("Error auto-creating deal:", e);
         }
     }
-    buildFilterConditions(user, query = {}) {
-        const { search, startDate, endDate, responsibleId, status } = query;
+    async buildFilterConditions(user, query = {}) {
+        const { search, startDate, endDate, responsibleId, status, tabulation, hasOpenAccount, openAccountStartDate, openAccountEndDate } = query;
         const andConditions = [];
         if (search) {
             andConditions.push({
@@ -100,6 +100,46 @@ let ClientsService = class ClientsService {
             }
             andConditions.push({ created_at: dateFilter });
         }
+        if (tabulation) {
+            try {
+                const clientIds = await this.prisma.$queryRaw `
+                    SELECT DISTINCT q1."client_id"
+                    FROM "qualifications" q1
+                    WHERE q1."tabulacao" = ${tabulation}
+                    AND NOT EXISTS (
+                        SELECT 1 FROM "qualifications" q2
+                        WHERE q2."client_id" = q1."client_id"
+                        AND q2."created_at" > q1."created_at"
+                    )
+                `;
+                if (clientIds.length > 0) {
+                    andConditions.push({ id: { in: clientIds.map(c => c.client_id) } });
+                }
+                else {
+                    andConditions.push({ id: '00000000-0000-0000-0000-000000000000' });
+                }
+            }
+            catch (err) {
+                console.error("Erro ao filtrar por tabulação:", err);
+            }
+        }
+        if (openAccountStartDate || openAccountEndDate) {
+            const dateFilter = {};
+            if (openAccountStartDate) {
+                dateFilter.gte = new Date(openAccountStartDate);
+            }
+            if (openAccountEndDate) {
+                const end = new Date(openAccountEndDate);
+                if (openAccountEndDate.length <= 10) {
+                    end.setHours(23, 59, 59, 999);
+                }
+                dateFilter.lte = end;
+            }
+            andConditions.push({ account_opening_date: dateFilter });
+        }
+        else if (hasOpenAccount === 'true' || hasOpenAccount === true) {
+            andConditions.push({ account_opening_date: { not: null } });
+        }
         if (user.role === client_1.Role.SUPERVISOR) {
             andConditions.push({
                 OR: [
@@ -114,7 +154,7 @@ let ClientsService = class ClientsService {
         return andConditions.length > 0 ? { AND: andConditions } : {};
     }
     async findAll(user, query = {}) {
-        const where = this.buildFilterConditions(user, query);
+        const where = await this.buildFilterConditions(user, query);
         const page = Number(query.page) || 1;
         const limit = Number(query.limit) || 50;
         const skip = (page - 1) * limit;
@@ -349,7 +389,7 @@ let ClientsService = class ClientsService {
         });
     }
     async getDashboardMetrics(user, query = {}) {
-        const where = this.buildFilterConditions(user, query);
+        const where = await this.buildFilterConditions(user, query);
         const [leads, openAccounts, pending] = await Promise.all([
             this.prisma.client.count({
                 where: {

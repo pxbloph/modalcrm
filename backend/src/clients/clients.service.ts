@@ -58,8 +58,8 @@ export class ClientsService {
         }
     }
 
-    private buildFilterConditions(user: User, query: any = {}): Prisma.ClientWhereInput {
-        const { search, startDate, endDate, responsibleId, status } = query;
+    private async buildFilterConditions(user: User, query: any = {}): Promise<Prisma.ClientWhereInput> {
+        const { search, startDate, endDate, responsibleId, status, tabulation, hasOpenAccount, openAccountStartDate, openAccountEndDate } = query;
         const andConditions: Prisma.ClientWhereInput[] = [];
 
         // Search Logic
@@ -90,7 +90,7 @@ export class ClientsService {
             andConditions.push({ created_by_id: responsibleId });
         }
 
-        // Date Range Filter
+        // Date Range Filter (Creation Date)
         if (startDate || endDate) {
             const dateFilter: Prisma.DateTimeFilter = {};
             if (startDate) {
@@ -104,6 +104,51 @@ export class ClientsService {
                 dateFilter.lte = end;
             }
             andConditions.push({ created_at: dateFilter });
+        }
+
+        // Tabulation Filter (Tabulação da ÚLTIMA Qualificação)
+        if (tabulation) {
+            try {
+                // Busca IDs de clientes onde a ÚLTIMA qualificação tem a tabulação especificada
+                const clientIds = await this.prisma.$queryRaw<{ client_id: string }[]>`
+                    SELECT DISTINCT q1."client_id"
+                    FROM "qualifications" q1
+                    WHERE q1."tabulacao" = ${tabulation}
+                    AND NOT EXISTS (
+                        SELECT 1 FROM "qualifications" q2
+                        WHERE q2."client_id" = q1."client_id"
+                        AND q2."created_at" > q1."created_at"
+                    )
+                `;
+
+                if (clientIds.length > 0) {
+                    andConditions.push({ id: { in: clientIds.map(c => c.client_id) } });
+                } else {
+                    // Se nenhum ID encontrado, forçar resultado vazio
+                    andConditions.push({ id: '00000000-0000-0000-0000-000000000000' });
+                }
+            } catch (err) {
+                console.error("Erro ao filtrar por tabulação:", err);
+            }
+        }
+
+        // Conta Aberta Filter (Boolean OR Date Range)
+        if (openAccountStartDate || openAccountEndDate) {
+            const dateFilter: Prisma.DateTimeFilter = {};
+            if (openAccountStartDate) {
+                dateFilter.gte = new Date(openAccountStartDate);
+            }
+            if (openAccountEndDate) {
+                const end = new Date(openAccountEndDate);
+                if (openAccountEndDate.length <= 10) {
+                    end.setHours(23, 59, 59, 999);
+                }
+                dateFilter.lte = end;
+            }
+            andConditions.push({ account_opening_date: dateFilter });
+        } else if (hasOpenAccount === 'true' || hasOpenAccount === true) {
+            // Fallback: If no dates provided, but checkbox checked -> Just check existence
+            andConditions.push({ account_opening_date: { not: null } });
         }
 
         // RBAC Logic
@@ -122,7 +167,7 @@ export class ClientsService {
     }
 
     async findAll(user: User, query: any = {}) {
-        const where = this.buildFilterConditions(user, query);
+        const where = await this.buildFilterConditions(user, query);
         const page = Number(query.page) || 1;
         const limit = Number(query.limit) || 50;
         const skip = (page - 1) * limit;
@@ -156,6 +201,8 @@ export class ClientsService {
             }
         };
     }
+
+
 
     async update(id: string, data: Prisma.ClientUpdateInput, user: User) {
         try {
@@ -459,7 +506,7 @@ export class ClientsService {
     }
 
     async getDashboardMetrics(user: User, query: any = {}) {
-        const where = this.buildFilterConditions(user, query);
+        const where = await this.buildFilterConditions(user, query);
 
 
 

@@ -64,6 +64,7 @@ interface ClientListTableProps {
     onPageChange: (page: number) => void;
     limit: number;
     onLimitChange: (limit: number) => void;
+    totalRecords?: number;
 }
 
 // --- Draggable Header Component (Table) ---
@@ -171,7 +172,8 @@ export default function ClientListTable({
     totalPages,
     onPageChange,
     limit,
-    onLimitChange
+    onLimitChange,
+    totalRecords
 }: ClientListTableProps) {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [actionLoading, setActionLoading] = useState(false);
@@ -725,6 +727,11 @@ export default function ClientListTable({
                                 <p className="text-sm text-gray-700 dark:text-gray-400">
                                     Página <span className="font-medium">{currentPage}</span> de <span className="font-medium">{totalPages}</span>
                                 </p>
+                                {totalRecords !== undefined && totalRecords > 0 && (
+                                    <p className="text-sm text-gray-500 hidden sm:block dark:text-gray-500">
+                                        Total: <span className="font-medium text-gray-700 dark:text-gray-400">{totalRecords}</span>
+                                    </p>
+                                )}
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm text-gray-700 whitespace-nowrap dark:text-gray-400">Por página:</span>
                                     <select
