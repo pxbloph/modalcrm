@@ -1,62 +1,41 @@
-name: Deploy to VPS
+name: Deploy VPS
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [ main, master ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
           script: |
-            # Define o diretório do projeto (ajuste se necessário)
-            TARGET_DIR="/var/www/modalcrm"
+            echo "Iniciando deploy automático..."
+
+            # 1. Atualizar Código
+            cd /var/www/modalcrm
+            git fetch --all
+            git reset --hard origin/main
             
-            if [ ! -d "$TARGET_DIR" ]; then
-              echo "Diretório $TARGET_DIR não encontrado. Clonando..."
-              git clone https://github.com/pxbloph/modalcrm.git "$TARGET_DIR"
-            fi
-            
-            cd "$TARGET_DIR"
-            git pull origin main || git pull origin master
-            
-            # Backend Setup
-            echo "--- Construindo Backend ---"
+            # 2. Backend (Instalar, Gerar Prisma e Buildar)
+            echo "Processando Backend..."
             cd backend
-            npm ci --legacy-peer-deps
+            npm install --legacy-peer-deps
             npx prisma generate
             npm run build
+            pm2 restart modal-backend
             
-            # Reinicia ou Inicia Backend (Porta 3500)
-            # O backend DEVE usar a variável de ambiente PORT ou ser iniciado na 3500
-            pm2 describe modal-backend > /dev/null
-            if [ $? -eq 0 ]; then
-                pm2 reload modal-backend
-            else
-                PORT=3500 pm2 start dist/main.js --name modal-backend
-            fi
-            
-            # Frontend Setup
-            echo "--- Construindo Frontend ---"
+            # 3. Frontend (Instalar e Buildar)
+            echo "Processando Frontend..."
             cd ../frontend
-            npm ci --legacy-peer-deps
+            npm install --legacy-peer-deps
             npm run build
+            pm2 restart modal-frontend
             
-            # Reinicia ou Inicia Frontend (Porta 3600)
-            pm2 describe modal-frontend > /dev/null
-            if [ $? -eq 0 ]; then
-                pm2 reload modal-frontend
-            else
-                pm2 start npm --name "modal-frontend" -- start -- -p 3600
-            fi
-            
-            # Salva lista de processos para restart automático
-            pm2 save
+            echo "Deploy concluído com sucesso!"

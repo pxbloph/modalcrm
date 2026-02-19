@@ -105,9 +105,45 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
         setSelectedTabulation("");
     }, [currentUser]);
 
-    // ... (Polling Logic remains same)
+    // Polling Logic
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
 
-    // ... (Countdown Logic remains same)
+        if (status === 'waiting' && createdClientId) {
+            interval = setInterval(async () => {
+                try {
+                    const res = await api.get(`/clients/${createdClientId}`);
+                    const client = res.data;
+                    const integStatus = client.integration_status;
+
+                    if (integStatus === 'Cadastro salvo com sucesso!') {
+                        clearInterval(interval);
+                        if (onSuccess) onSuccess(createdClientId);
+                    } else if (integStatus && integStatus !== 'Pendente' && integStatus !== 'Cadastrando...') {
+                        // Error or Rejection
+                        clearInterval(interval);
+                        setIntegrationStatusMessage(integStatus);
+                        setStatus('error');
+                    }
+                } catch (err) {
+                    console.error("Polling error", err);
+                }
+            }, 2000);
+        }
+
+        return () => clearInterval(interval);
+    }, [status, createdClientId, onSuccess]);
+
+    // Countdown Logic for Error State
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+        if (status === 'error' && retrySeconds > 0) {
+            timer = setTimeout(() => setRetrySeconds(prev => prev - 1), 1000);
+        } else if (status === 'error' && retrySeconds === 0) {
+            handleReset();
+        }
+        return () => clearTimeout(timer);
+    }, [status, retrySeconds, handleReset]);
 
     const formatPhone = (value: string) => {
         const numbers = value.replace(/\D/g, '');
