@@ -75,4 +75,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         return message;
     }
+    // --- NEW FEATURES ---
+
+    sendAnnouncementNotification(announcement: any) {
+        this.server.emit('announcement:new', announcement);
+    }
+
+    @SubscribeMessage('typing')
+    handleTyping(
+        @MessageBody() data: { conversationId: string; isTyping: boolean },
+        @ConnectedSocket() client: Socket,
+    ) {
+        client.to(`conversation_${data.conversationId}`).emit('typing', {
+            userId: client.data.user.sub,
+            isTyping: data.isTyping
+        });
+    }
 }

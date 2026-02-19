@@ -4,7 +4,7 @@ interface ProductionRow {
     total_leads: number;
     total_qualified: number;
     total_accounts: number;
-    avg_tma: number;            
+    avg_tma: number;
 }
 
 interface ProductionTableProps {
@@ -13,7 +13,7 @@ interface ProductionTableProps {
 
 export default function ProductionTable({ data }: ProductionTableProps) {
     return (
-        <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-100 dark:bg-zinc-900 dark:border-zinc-800">
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-200 dark:bg-zinc-900 dark:border-zinc-800">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-zinc-800">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Produção por Operador</h3>
             </div>

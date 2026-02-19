@@ -13,9 +13,6 @@ export class ReportsService {
         // 1. Basic RBAC
         if (currentUser.role === Role.SUPERVISOR) {
             // Supervisor sees deals where responsible is in their team OR they are responsible
-            // For simplicity, assuming Supervisor sees ALL deals currently or just their own + team.
-            // Let's restrict to deals responsible = self or unassigned for now to be safe, 
-            // OR if you have a Team relation, use it. 
             // Broadest safe assumption for "Premium CRM": Admin/Supervisor sees all, Operator sees own.
             // If filters.operatorId passed, respect it.
         }

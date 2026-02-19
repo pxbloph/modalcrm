@@ -32,12 +32,7 @@ model User {
   supervisor    User?   @relation("SupervisorToOperator", fields: [supervisor_id], references: [id])
   operators     User[]  @relation("SupervisorToOperator")
 
-  // Team Relations
-  team_id       String?
-  team          Team?   @relation("TeamMembers", fields: [team_id], references: [id])
-  
-  supervised_teams Team[] @relation("TeamSupervisor")
-  led_teams        Team[] @relation("TeamLeader")
+
 
   clients        Client[]
   qualifications Qualification[]
@@ -52,6 +47,17 @@ model User {
   conversations_as_supervisor Conversation[] @relation("SupervisorConversations")
   sent_messages               Message[]      @relation("SentMessages")
   audit_logs                  ChatAuditLog[]
+  pipeline_configs            UserPipelineConfig[]
+
+  // Lead Transfer Relations
+  clients_contacted           Client[]       @relation("ClientLastContact")
+  requested_transfers         LeadOwnerTransferAudit[] @relation("TransferRequester")
+  legacy_owner_transfers      LeadOwnerTransferAudit[] @relation("TransferOldOwner")
+  new_owner_transfers         LeadOwnerTransferAudit[] @relation("TransferNewOwner")
+
+  // Announcement Relations
+  authored_announcements Announcement[]
+  read_announcements     AnnouncementRead[]
 
   @@map("users")
 }
@@ -92,6 +98,14 @@ model Client {
 
   qualifications Qualification[]
   deals          Deal[]
+  custom_field_values ClientCustomFieldValue[]
+
+  // Responsibility Transfer
+  last_contact_user_id String?
+  last_contact_user    User?    @relation("ClientLastContact", fields: [last_contact_user_id], references: [id])
+  last_contact_at      DateTime?
+  
+  transfer_audits      LeadOwnerTransferAudit[]
 
   @@map("clients")
 }
@@ -188,22 +202,7 @@ model FormTemplate {
   @@map("form_templates")
 }
 
-model Team {
-  id            String   @id @default(uuid())
-  name          String
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
 
-  supervisor_id String
-  supervisor    User     @relation("TeamSupervisor", fields: [supervisor_id], references: [id])
-
-  leader_id     String?
-  leader        User?    @relation("TeamLeader", fields: [leader_id], references: [id])
-
-  members       User[]   @relation("TeamMembers")
-
-  @@map("teams")
-}
 
 model ImportJob {
   id                String   @id @default(uuid()) @db.Uuid
@@ -284,6 +283,28 @@ model ChatAuditLog {
   @@map("chat_audit_logs")
 }
 
+model LeadOwnerTransferAudit {
+  id                   String   @id @default(uuid())
+  lead_id              String
+  lead                 Client   @relation(fields: [lead_id], references: [id])
+  
+  old_owner_id         String
+  old_owner            User     @relation("TransferOldOwner", fields: [old_owner_id], references: [id])
+  
+  new_owner_id         String
+  new_owner            User     @relation("TransferNewOwner", fields: [new_owner_id], references: [id])
+  
+  requested_by_user_id String
+  requested_by_user    User     @relation("TransferRequester", fields: [requested_by_user_id], references: [id])
+  
+  mode                 String   // 'operator_single' | 'supervisor_single' | 'supervisor_bulk' | 'system_auto'
+  reason               String?
+  
+  created_at           DateTime @default(now())
+
+  @@map("lead_owner_transfer_audit")
+}
+
 // KANBAN SYSTEM MODELS
 
 enum PipelineVisibility {
@@ -307,6 +328,7 @@ model Pipeline {
   custom_fields CustomField[]
   automations  Automation[]
   tabulation_triggers DealTabulationTrigger[]
+  user_configs UserPipelineConfig[]
 
   @@map("pipelines")
 }
@@ -331,6 +353,8 @@ model PipelineStage {
 
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
+
+  tabulations Tabulation[]
 
   @@index([pipeline_id, order_index])
   @@map("pipeline_stages")
@@ -516,12 +540,148 @@ model DealTabulationTrigger {
   @@map("deal_tabulation_triggers")
 }
 
+
+
+
+
+model UserPipelineConfig {
+  id          String   @id @default(uuid())
+  user_id     String
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  pipeline_id String
+  pipeline    Pipeline @relation(fields: [pipeline_id], references: [id], onDelete: Cascade)
+
+  card_config Json     @default("{}") // Stores field visibility and order
+  
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@unique([user_id, pipeline_id])
+  @@map("user_pipeline_configs")
+}
+
+// --- CLIENT CUSTOM FIELDS SYSTEM (EAV) ---
+
+model CustomFieldGroup {
+  id          String   @id @default(uuid())
+  name        String
+  order_index Int      @default(0)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  fields      ClientCustomField[]
+
+  @@map("custom_field_groups")
+}
+
+model ClientCustomField {
+  id          String   @id @default(uuid())
+  group_id    String
+  group       CustomFieldGroup @relation(fields: [group_id], references: [id])
+
+  key         String   @unique // API Key unique
+  label       String
+  type        String   // 'TEXT', 'NUMBER', 'DATE', 'BOOLEAN', 'SELECT', 'MULTI_SELECT', 'CURRENCY', 'TEXTAREA'
+  options_json Json?   // For select/multiselect
+  
+  is_required Boolean  @default(false)
+  order_index Int      @default(0)
+  is_active   Boolean  @default(true)
+
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  values      ClientCustomFieldValue[]
+
+  @@map("custom_fields_client")
+}
+
+model ClientCustomFieldValue {
+  id          String   @id @default(uuid())
+  
+  client_id   String
+  client      Client   @relation(fields: [client_id], references: [id])
+
+  field_id    String
+  field       ClientCustomField @relation(fields: [field_id], references: [id])
+
+  value_text   String?
+  value_number Decimal? @db.Decimal(65, 30)
+  value_date   DateTime?
+  value_bool   Boolean?
+  value_json   Json?
+
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@unique([client_id, field_id])
+  @@index([client_id])
+  @@index([field_id])
+  @@map("client_custom_field_values")
+}
+
+// --- ANNOUNCEMENTS SYSTEM ---
+
+model Announcement {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  priority  String   @default("NORMAL") // NORMAL, HIGH, URGENT
+  
+  author_id String
+  author    User     @relation(fields: [author_id], references: [id])
+  
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  reads     AnnouncementRead[]
+
+  @@index([author_id])
+  @@map("announcements")
+}
+
+model AnnouncementRead {
+  id              String       @id @default(uuid())
+  
+  announcement_id String
+  announcement    Announcement @relation(fields: [announcement_id], references: [id], onDelete: Cascade)
+  
+  user_id         String
+  user            User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  read_at         DateTime     @default(now())
+
+  @@unique([announcement_id, user_id])
+  @@map("announcement_reads")
+}
+
+// --- TABULATION SYSTEM ---
+
+model Tabulation {
+  id              String   @id @default(uuid())
+  label           String
+  is_active       Boolean  @default(true)
+  
+  target_stage_id String?
+  target_stage    PipelineStage? @relation(fields: [target_stage_id], references: [id])
+
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@map("tabulations")
+}
+
+// --- TAG SYSTEM ---
+
 model Tag {
   id          String   @id @default(uuid())
-  name        String   @unique
-  color       String   @default("#64748b") // Slate-500 default
+  name        String
+  color       String   @default("#64748b")
   created_at  DateTime @default(now())
-  
+  updated_at  DateTime @updatedAt
+
   deals       DealTag[]
 
   @@map("tags")
@@ -530,14 +690,12 @@ model Tag {
 model DealTag {
   deal_id     String
   deal        Deal     @relation(fields: [deal_id], references: [id], onDelete: Cascade)
-  
+
   tag_id      String
   tag         Tag      @relation(fields: [tag_id], references: [id], onDelete: Cascade)
-  
+
   assigned_at DateTime @default(now())
 
   @@id([deal_id, tag_id])
   @@map("deal_tags")
 }
-
-

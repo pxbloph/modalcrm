@@ -4,6 +4,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import api from '@/lib/api';
 import { SmartDateFilter } from '../ui/SmartDateFilter';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ClientFiltersProps {
     userRole: string;
@@ -57,16 +61,8 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
         if (openAccountStartDate) params.set('openAccountStartDate', openAccountStartDate);
         if (openAccountEndDate) params.set('openAccountEndDate', openAccountEndDate);
 
-
-
         router.push(`?${params.toString()}`);
-        // Notify parent to refetch? 
-        // Actually, if we update URL, parent can watch searchParams OR we call onFilterChange. 
-        // Usually Next.js router.push triggers re-render if parent uses searchParams.
-        // Let's assume parent listens to searchParams OR we trigger callback. 
-        // Requirement says "Alterar filtros não muda a tela, apenas atualiza a lista."
-        // We will facilitate parent update via URL change which parent monitors, or explicit callback.
-        setTimeout(onFilterChange, 100); // Small delay for URL to propagate if using that method, or just direct fetch
+        setTimeout(onFilterChange, 100);
     };
 
     const clearFilters = () => {
@@ -85,46 +81,48 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
     const activeFiltersCount = [status, startDate, endDate, responsibleId, tabulation, openAccountStartDate, openAccountEndDate].filter(Boolean).length;
 
     return (
-        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 space-y-4 dark:bg-zinc-900 dark:border-zinc-800">
+        <div className="bg-card p-4 rounded-lg shadow-sm border border-border space-y-4">
             {/* Main Search Bar */}
-            <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                    <Search className="h-5 w-5 text-gray-400" aria-hidden="true" />
+            <div className="relative flex gap-2">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                    <Input
+                        type="text"
+                        className="pl-9 bg-background text-foreground border-input focus-visible:ring-primary"
+                        placeholder="Buscar cliente por CNPJ, Razão Social ou Email..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                    />
                 </div>
-                <input
-                    type="text"
-                    className="block w-full rounded-md border-0 py-2 pl-10 pr-20 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-zinc-800 dark:ring-zinc-700 dark:text-gray-100 dark:placeholder:text-gray-500"
-                    placeholder="Buscar cliente por CNPJ, Razão Social ou Email..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
-                />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-2">
-                    <button
-                        onClick={() => setShowFilters(!showFilters)}
-                        className={`flex items-center gap-1 px-2 py-1 text-sm font-medium rounded-md transition-colors ${showFilters || activeFiltersCount > 0 ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
-                    >
-                        <Filter className="h-4 w-4" />
-                        Filtros
-                        {activeFiltersCount > 0 && (
-                            <span className="ml-1 inline-flex items-center justify-center h-4 w-4 rounded-full bg-indigo-600 text-white text-[10px]">
-                                {activeFiltersCount}
-                            </span>
-                        )}
-                    </button>
-                </div>
+                <Button
+                    variant="outline"
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={cn(
+                        "flex items-center gap-2 border-border text-foreground hover:bg-accent",
+                        (showFilters || activeFiltersCount > 0) && "border-primary/50 bg-primary/5 text-primary hover:bg-primary/10"
+                    )}
+                >
+                    <Filter className="h-4 w-4" />
+                    <span className="hidden sm:inline">Filtros</span>
+                    {activeFiltersCount > 0 && (
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+                            {activeFiltersCount}
+                        </span>
+                    )}
+                </Button>
             </div>
 
             {/* Advanced Filters Grid */}
             {showFilters && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-gray-100">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-border animate-in slide-in-from-top-2 duration-200">
                     {/* Status Filter */}
-                    <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1 dark:text-gray-300">Status</label>
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Status</label>
                         <select
                             value={status}
                             onChange={(e) => setStatus(e.target.value)}
-                            className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-zinc-800 dark:ring-zinc-700 dark:text-gray-100"
+                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors data-[placeholder]:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <option value="">Todos</option>
                             <option value="Pendente">Pendente</option>
@@ -135,12 +133,12 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
                     </div>
 
                     {/* Tabulation Filter */}
-                    <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1 dark:text-gray-300">Tabulação</label>
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Tabulação</label>
                         <select
                             value={tabulation}
                             onChange={(e) => setTabulation(e.target.value)}
-                            className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-zinc-800 dark:ring-zinc-700 dark:text-gray-100"
+                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors data-[placeholder]:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <option value="">Todas</option>
                             {tabulationOptions.map((opt, idx) => (
@@ -150,25 +148,9 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
                     </div>
 
                     {/* Created At Smart Filter */}
-                    {(userRole === 'ADMIN' || userRole === 'SUPERVISOR') && (
-                        <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1 dark:text-gray-300">Responsável</label>
-                            <select
-                                value={responsibleId}
-                                onChange={(e) => setResponsibleId(e.target.value)}
-                                className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-zinc-800 dark:ring-zinc-700 dark:text-gray-100"
-                            >
-                                <option value="">Todos</option>
-                                {users.map(u => (
-                                    <option key={u.id} value={u.id}>{u.name} {u.surname || ''}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-
-                    <div className="md:col-span-1">
+                    <div className="space-y-1">
                         <SmartDateFilter
-                            label="Criado em"
+                            label="Cadastrado em"
                             startDate={startDate}
                             endDate={endDate}
                             onFilterChange={(start, end) => {
@@ -179,7 +161,7 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
                     </div>
 
                     {/* Open Account Smart Filter */}
-                    <div className="md:col-span-1">
+                    <div className="space-y-1">
                         <SmartDateFilter
                             label="Data Conta Aberta"
                             startDate={openAccountStartDate}
@@ -191,19 +173,37 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
                         />
                     </div>
 
-                    <div className="sm:col-span-full flex justify-end gap-2 mt-2">
-                        <button
+                    {/* Responsible Filter (Admin/Supervisor) */}
+                    {(userRole === 'ADMIN' || userRole === 'SUPERVISOR') && (
+                        <div className="space-y-1">
+                            <label className="text-xs font-medium text-muted-foreground">Responsável</label>
+                            <select
+                                value={responsibleId}
+                                onChange={(e) => setResponsibleId(e.target.value)}
+                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors data-[placeholder]:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <option value="">Todos</option>
+                                {users.map(u => (
+                                    <option key={u.id} value={u.id}>{u.name} {u.surname || ''}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    <div className="sm:col-span-full flex justify-end gap-2 mt-2 border-t border-border pt-4">
+                        <Button
+                            variant="ghost"
                             onClick={clearFilters}
-                            className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+                            className="text-muted-foreground hover:text-foreground"
                         >
                             Limpar Filtros
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                             onClick={applyFilters}
-                            className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-500 text-sm font-semibold shadow-sm"
+                            className="bg-primary text-primary-foreground hover:bg-primary/90"
                         >
                             Aplicar Filtros
-                        </button>
+                        </Button>
                     </div>
                 </div>
             )}

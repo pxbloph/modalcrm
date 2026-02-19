@@ -1,10 +1,16 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import ChatHeader from './ChatHeader';
 import { useChat } from './ChatContext';
 import api from '@/lib/api';
-import { X, Send, Paperclip } from 'lucide-react'; // Assuming lucide-react is installed
+import { X, Send, Paperclip, Smile, File, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface Message {
     id: string;
@@ -13,42 +19,53 @@ interface Message {
     sender_id: string;
     created_at: string;
     is_read: boolean;
+    client_message_id?: string;
 }
 
 interface ChatWindowProps {
     conversationId: string;
     currentUser: { id: string; role: string };
     otherUserName: string;
-    onClose?: () => void; // Optional if handled externally
+    onClose?: () => void;
     isFullPage?: boolean;
-    embedded?: boolean; // New prop for Widget mode
+    embedded?: boolean;
+    otherUserId?: string;
 }
 
-
-export default function ChatWindow({ conversationId, currentUser, otherUserName, onClose, isFullPage = false, embedded = false }: ChatWindowProps) {
-
-
+export default function ChatWindow({ conversationId, currentUser, otherUserName, onClose, isFullPage = false, embedded = false, otherUserId }: ChatWindowProps) {
     const { socket, joinConversation, leaveConversation } = useChat();
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
+    const [isTyping, setIsTyping] = useState(false);
+    const [otherUserTyping, setOtherUserTyping] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+
+    // Reset messages when conversation changes
+    useEffect(() => {
+        setMessages([]);
+    }, [conversationId]);
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const typingTimeoutRef = useRef<NodeJS.Timeout>(null);
 
     // Initial Fetch & Room Join
     useEffect(() => {
         if (conversationId) {
             setLoading(true);
+            setMessages([]); // Clear prev content immediately
             joinConversation(conversationId);
 
             // Mark as read
             api.post(`/chat/conversations/${conversationId}/read`);
 
-            // Load initial messages
+            // Load messages
             api.get(`/chat/conversations/${conversationId}/messages`)
                 .then(res => {
                     setMessages(res.data);
                     setLoading(false);
-                    scrollToBottom();
+                    // Scroll happens via effect on messages
                 })
                 .catch(err => {
                     console.error("Failed to load messages", err);
@@ -61,26 +78,45 @@ export default function ChatWindow({ conversationId, currentUser, otherUserName,
         }
     }, [conversationId]);
 
-    // Listen for new messages
+    // Scroll to bottom on new messages
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages, loading, otherUserTyping]);
+
+    // Listen for socket events
     useEffect(() => {
         if (!socket) return;
 
         const handleNewMessage = (msg: Message) => {
-            if (msg.conversation_id === conversationId) { // Check just in case
-                setMessages(prev => [...prev, msg]);
-                scrollToBottom();
+            if (msg.conversation_id === conversationId) {
+                // If message from me (via another tab) or other
+                setMessages(prev => {
+                    // Dedup based on client_message_id if present
+                    if (msg.client_message_id && prev.some(m => m.client_message_id === msg.client_message_id)) {
+                        return prev;
+                    }
+                    return [...prev, msg];
+                });
 
-                // If I am receiving, assume read if window is open (simple logic)
                 if (msg.sender_id !== currentUser.id) {
                     api.post(`/chat/conversations/${conversationId}/read`);
+                    setOtherUserTyping(false); // Stop typing indicator if they sent it
                 }
             }
         };
 
+        const handleTyping = (data: { userId: string, isTyping: boolean }) => {
+            if (data.userId !== currentUser.id) {
+                setOtherUserTyping(data.isTyping);
+            }
+        };
+
         socket.on('message:new', handleNewMessage);
+        socket.on('typing', handleTyping);
 
         return () => {
             socket.off('message:new', handleNewMessage);
+            socket.off('typing', handleTyping);
         };
     }, [socket, conversationId, currentUser.id]);
 
@@ -88,87 +124,247 @@ export default function ChatWindow({ conversationId, currentUser, otherUserName,
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setNewMessage(e.target.value);
+
+        // Emit typing
+        if (!isTyping) {
+            setIsTyping(true);
+            socket?.emit('typing', { conversationId, isTyping: true });
+        }
+
+        // Debounce stop typing
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+            setIsTyping(false);
+            socket?.emit('typing', { conversationId, isTyping: false });
+        }, 2000);
+    };
+
     const handleSend = async (e?: React.FormEvent) => {
         e?.preventDefault();
         if (!newMessage.trim()) return;
 
-        const tempId = Date.now().toString(); // Optimistic update ID
-        const msgToSend = {
-            conversationId,
-            body: newMessage,
-            clientMessageId: tempId
+        const tempId = Date.now().toString();
+        const msgBody = newMessage;
+
+        // Optimistic append
+        const optimisticMsg: Message = {
+            id: tempId, // Temporary
+            conversation_id: conversationId,
+            body: msgBody,
+            sender_id: currentUser.id,
+            created_at: new Date().toISOString(),
+            is_read: false,
+            client_message_id: tempId
         };
 
-        // UI Optimistic update (optional, but requested send fast)
-        // For simplicity, wait for ack or server echo via socket if latency is low.
-        // Actually best to emit and append.
-
-        socket?.emit('sendMessage', msgToSend, (response: any) => {
-            // Ack callback if needed
-        });
-
-        // Clear input
+        setMessages(prev => [...prev, optimisticMsg]);
         setNewMessage('');
+        setIsTyping(false);
+        socket?.emit('typing', { conversationId, isTyping: false });
+
+        try {
+            // Send via socket usually faster, but here we used endpoint in previous version?
+            // Actually gateway sendMessage saves to DB.
+            socket?.emit('sendMessage', {
+                conversationId,
+                body: msgBody,
+                clientMessageId: tempId
+            });
+        } catch (error) {
+            console.error(error);
+            toast.error('Erro ao enviar mensagem');
+            // Remove optimistic msg?
+        }
+    };
+
+    const onEmojiClick = (emojiData: EmojiClickData) => {
+        setNewMessage(prev => prev + emojiData.emoji);
+    };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const res = await api.post('/chat/upload', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            // Send message with link
+            // Using markdown for link/image
+            const isImage = file.type.startsWith('image/');
+            const fileUrl = `${process.env.NEXT_PUBLIC_API_URL}${res.data.path}`;
+            const msgBody = isImage
+                ? `![${file.name}](${fileUrl})`
+                : `[📎 ${file.name}](${fileUrl})`;
+
+            // Send as message
+            socket?.emit('sendMessage', {
+                conversationId,
+                body: msgBody,
+                clientMessageId: Date.now().toString()
+            });
+
+        } catch (error) {
+            console.error(error);
+            toast.error('Erro ao enviar arquivo');
+        } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
     };
 
     const containerClasses = isFullPage
-        ? "w-full h-full bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 flex flex-col text-zinc-800 dark:text-zinc-100"
+        ? "w-full h-full bg-background flex flex-col"
         : embedded
-            ? "flex-1 flex flex-col bg-white overflow-hidden text-zinc-800 dark:text-zinc-100 h-full" // Embedded: fill parent, no borders
-            : "fixed bottom-4 right-4 w-96 h-[500px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl flex flex-col z-50 transition-all duration-300 ease-in-out";
+            ? "flex-1 flex flex-col bg-card overflow-hidden h-full"
+            : "fixed bottom-0 right-10 w-96 h-[500px] bg-card border border-border rounded-t-xl shadow-2xl flex flex-col z-50";
 
     return (
         <div className={containerClasses}>
-
-
-            {/* Header - Conditional render */}
+            {/* Operator Stats Header (Supervisor/Admin Only) */}
+            {otherUserId && (currentUser.role === 'ADMIN' || currentUser.role === 'SUPERVISOR') && (
+                <ChatHeader operatorId={otherUserId} currentRole={currentUser.role} />
+            )}
+            {/* Header */}
             {!embedded && !isFullPage && (
-                <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-800 rounded-t-lg">
-                    <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                        <span className="font-semibold text-zinc-800 dark:text-zinc-100">{otherUserName}</span>
+                <div className="p-3 border-b border-border flex justify-between items-center bg-card rounded-t-xl shadow-sm z-10">
+                    <div className="flex items-center gap-3">
+                        <div className="relative">
+                            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground font-bold text-sm">
+                                {otherUserName.charAt(0)}
+                            </div>
+                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-card rounded-full"></span>
+                        </div>
+                        <span className="font-semibold text-foreground text-sm">{otherUserName}</span>
                     </div>
-                    <button onClick={onClose} className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition">
-                        <X size={18} className="text-zinc-500" />
+                    <button onClick={onClose} className="p-1 hover:bg-accent rounded-full transition-colors text-muted-foreground hover:text-foreground">
+                        <X size={18} />
                     </button>
                 </div>
             )}
 
-            {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-white dark:bg-zinc-900">
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-background/50">
                 {loading ? (
-                    <div className="flex justify-center mt-10"><span className="loader">Loading...</span></div>
+                    <div className="flex justify-center items-center h-full text-muted-foreground gap-2">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span className="text-sm">Carregando...</span>
+                    </div>
                 ) : (
-                    messages.map((msg) => (
-                        <div key={msg.id} className={`flex ${msg.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${msg.sender_id === currentUser.id
-                                ? 'bg-blue-600 text-white rounded-br-none'
-                                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-bl-none'
-                                }`}>
-                                <p>{msg.body}</p>
-                                <span className="text-[10px] opacity-70 block text-right mt-1">
-                                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                            </div>
+                    <>
+                        <div className="text-center py-4">
+                            <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">
+                                Início da conversa
+                            </span>
                         </div>
-                    ))
+
+                        {messages.map((msg, idx) => {
+                            const isMe = msg.sender_id === currentUser.id;
+                            return (
+                                <div key={msg.id || idx} className={cn("flex w-full", isMe ? "justify-end" : "justify-start")}>
+                                    <div className={cn(
+                                        "max-w-[75%] px-4 py-2.5 text-sm shadow-sm",
+                                        isMe
+                                            ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-sm"
+                                            : "bg-muted text-foreground border border-border rounded-2xl rounded-tl-sm"
+                                    )}>
+                                        <div className="prose prose-sm dark:prose-invert max-w-none break-words leading-relaxed">
+                                            <ReactMarkdown components={{
+                                                img: ({ node, ...props }) => <img {...props} className="rounded-lg max-h-60 object-cover my-1" />,
+                                                a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline flex items-center gap-1"><File className="w-3 h-3" /> {props.children}</a>,
+                                                p: ({ node, ...props }) => <p {...props} className="my-0" />
+                                            }}>
+                                                {msg.body}
+                                            </ReactMarkdown>
+                                        </div>
+                                        <div className={cn("text-[10px] mt-1 text-right font-medium opacity-70", isMe ? "text-primary-foreground" : "text-muted-foreground")}>
+                                            {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        {otherUserTyping && (
+                            <div className="flex justify-start animate-fade-in">
+                                <div className="bg-muted border border-border rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1 shadow-sm">
+                                    <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                    <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                    <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce"></span>
+                                </div>
+                            </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                    </>
                 )}
-                <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Area */}
-            <form onSubmit={handleSend} className="p-3 border-t border-zinc-200 dark:border-zinc-800 flex gap-2 items-center bg-white dark:bg-zinc-900 rounded-b-lg">
-                <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Digite sua mensagem..."
-                    className="flex-1 bg-zinc-100 dark:bg-zinc-800 border-none rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-                <button type="submit" disabled={!newMessage.trim()} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
-                    <Send size={18} />
-                </button>
-            </form>
+            {/* Input */}
+            <div className="p-3 bg-card border-t border-border flex items-end gap-2 shrink-0">
+                {/* Actions */}
+                <div className="flex items-center gap-1 pb-2 text-muted-foreground">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        onChange={handleFileUpload}
+                        accept="image/*,.pdf,.doc,.docx"
+                    />
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 rounded-full hover:bg-accent text-muted-foreground"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                    >
+                        {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
+                    </Button>
+
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-accent text-muted-foreground">
+                                <Smile className="w-5 h-5" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0 border-none shadow-xl" side="top" align="start">
+                            <EmojiPicker
+                                onEmojiClick={onEmojiClick}
+                                width={300}
+                                height={400}
+                                lazyLoadEmojis={true}
+                                theme={undefined} // Let it fallback or auto detec based on library defaults. Actually better to remove if 'auto' doesn't exist.
+                            // If I can't check the type, looking at the error 'auto' is invalid.
+                            // I will try just removing it.
+                            />
+                        </PopoverContent>
+                    </Popover>
+                </div>
+
+                <form onSubmit={handleSend} className="flex-1 flex gap-2 items-end bg-input/20 rounded-2xl border border-input focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all p-2">
+                    <input
+                        className="flex-1 bg-transparent border-none outline-none text-sm px-2 py-1 max-h-32 min-h-[24px] text-foreground placeholder:text-muted-foreground"
+                        placeholder="Digite uma mensagem..."
+                        value={newMessage}
+                        onChange={handleInputChange}
+                        autoComplete="off"
+                    />
+                    <Button
+                        type="submit"
+                        size="icon"
+                        className={cn("h-8 w-8 rounded-full shrink-0 transition-all", newMessage.trim() ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "bg-muted text-muted-foreground cursor-not-allowed")}
+                        disabled={!newMessage.trim()}
+                    >
+                        <Send className="w-4 h-4 ml-0.5" />
+                    </Button>
+                </form>
+            </div>
         </div>
     );
 }

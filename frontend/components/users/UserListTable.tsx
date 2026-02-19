@@ -75,11 +75,11 @@ const DraggableTableHeader = ({ header }: { header: Header<User, unknown> }) => 
             {...attributes}
             {...listeners}
             className={cn(
-                "relative text-left text-sm font-semibold text-gray-900 border-b border-gray-200 bg-gray-50 group select-none cursor-grab active:cursor-grabbing hover:bg-gray-100/50 transition-colors dark:bg-zinc-900 dark:border-zinc-800 dark:text-gray-100 dark:hover:bg-zinc-800",
+                "relative text-left text-xs font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-200 bg-gray-50/50 group select-none cursor-grab active:cursor-grabbing hover:bg-gray-100/50 transition-colors dark:bg-zinc-900 dark:border-zinc-800 dark:text-gray-400 dark:hover:bg-zinc-800",
                 isDragging && "bg-gray-100 shadow-lg dark:bg-zinc-800"
             )}
         >
-            <div className="flex items-center gap-2 px-3 py-3 h-full">
+            <div className="flex items-center gap-2 px-6 py-3 h-full">
                 <span className="flex-1 truncate">
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                 </span>
@@ -87,8 +87,8 @@ const DraggableTableHeader = ({ header }: { header: Header<User, unknown> }) => 
                     onMouseDown={header.getResizeHandler()}
                     onTouchStart={header.getResizeHandler()}
                     className={cn(
-                        "absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-indigo-500 touch-none select-none",
-                        header.column.getIsResizing() ? "bg-indigo-600 w-1.5 isResizing" : "bg-transparent"
+                        "absolute right-0 top-0 h-full w-px cursor-col-resize hover:bg-indigo-500 touch-none select-none",
+                        header.column.getIsResizing() ? "bg-indigo-600 w-0.5 isResizing" : "bg-transparent"
                     )}
                     style={{ transform: header.column.getIsResizing() ? `translateX(${0}px)` : undefined }}
                 />
@@ -644,7 +644,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                 </div>
             )}
 
-            <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl dark:bg-zinc-900 dark:ring-white/10 overflow-hidden">
+            <div className="bg-white shadow-sm border border-gray-200 sm:rounded-lg dark:bg-zinc-900 dark:border-zinc-800 overflow-hidden">
                 <DndContext
                     collisionDetection={closestCenter}
                     modifiers={[]}
@@ -696,7 +696,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                                             {row.getVisibleCells().map((cell) => (
                                                 <td
                                                     key={cell.id}
-                                                    className="break-words whitespace-normal px-3 py-3 text-sm text-gray-500 first:pl-4 first:text-gray-900 first:font-medium sm:first:pl-6 dark:text-gray-400 dark:first:text-gray-100"
+                                                    className="break-words whitespace-normal px-6 py-2.5 text-[13px] text-gray-600 first:pl-6 first:text-gray-900 first:font-medium dark:text-gray-400 dark:first:text-gray-100"
                                                     style={{
                                                         width: cell.column.getSize(),
                                                     }}

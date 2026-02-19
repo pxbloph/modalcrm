@@ -13,11 +13,11 @@ interface ImportRow {
 export class ImportsService {
     constructor(private prisma: PrismaService) { }
 
-    async createImportJob(file: Express.Multer.File, user: User) {
+    async createImportJob(file: Express.Multer.File, user: User, type: 'OPEN_ACCOUNTS' | 'LEADS' = 'OPEN_ACCOUNTS') {
         // 1. Create Job Record
         const job = await this.prisma.importJob.create({
             data: {
-                type: 'OPEN_ACCOUNTS',
+                type: type,
                 status: 'PROCESSING', // Start immediately
                 file_name: file.originalname,
                 created_by_id: user.id
@@ -25,9 +25,12 @@ export class ImportsService {
         });
 
         // 2. Start Async Processing
-        // We use setImmediate to ensure it runs after the response is sent (in a real queue system this would be a job)
         setImmediate(() => {
-            this.processOpenAccounts(job.id, file.buffer).catch(err => {
+            const processFn = type === 'LEADS'
+                ? this.processLeadsImport(job.id, file.buffer)
+                : this.processOpenAccounts(job.id, file.buffer);
+
+            processFn.catch(err => {
                 console.error(`CRITICAL ERROR processing job ${job.id}:`, err);
                 this.prisma.importJob.update({
                     where: { id: job.id },
@@ -46,10 +49,6 @@ export class ImportsService {
         });
 
         if (!job) throw new NotFoundException('Job not found');
-
-        // RBAC: Generic check? Only admins or owner? 
-        // For now, allow viewing.
-
         return job;
     }
 
@@ -89,7 +88,7 @@ export class ImportsService {
                 const rowResult = {
                     job_id: jobId,
                     row_data: row as any,
-                    status: '', // UPDATED, NOT_FOUND, INVALID, DUPLICATE_FILE, ALREADY_OPEN
+                    status: '',
                     message: ''
                 };
 
@@ -117,10 +116,7 @@ export class ImportsService {
                     } else if (client.has_open_account) {
                         rowResult.status = 'SKIPPED';
                         rowResult.message = 'Já possui conta aberta';
-                        success++; // Count as success? or neutral? User asked only for "Atualizados" and "Ignorados". Let's count as success (processed correctly) or maybe distinct count.
-                        // User said: "Atualizados (tag aplicada)", "Não encontrados", "Inválidos", "Duplicados".
-                        // So "SKIPPED" is technically not updated.
-                        // Let's increment processed only.
+                        success++;
                     } else {
                         // UPDATE
                         await this.prisma.client.update({
@@ -133,7 +129,7 @@ export class ImportsService {
                     }
                 }
 
-                // Save Result (Batching would be better but keeping simple for now)
+                // Save Result
                 await this.prisma.importResult.create({ data: rowResult });
 
                 // Update Job Progress every 50 rows
@@ -162,9 +158,144 @@ export class ImportsService {
                 where: { id: jobId },
                 data: {
                     status: 'FAILED',
-                    error_count: 0 // unknown 
+                    error_count: 0
                 }
             });
         }
     }
+
+    private async processLeadsImport(jobId: string, fileBuffer: Buffer) {
+        try {
+            const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+
+            await this.prisma.importJob.update({
+                where: { id: jobId },
+                data: { total_records: rows.length }
+            });
+
+            let processed = 0;
+            let success = 0;
+            let errors = 0;
+
+            for (const row of rows) {
+                processed++;
+                const result = {
+                    job_id: jobId,
+                    row_data: row,
+                    status: 'PENDING',
+                    message: ''
+                };
+
+                try {
+                    // Normalize Keys
+                    const getVal = (keys: string[]) => keys.reduce((acc, k) => acc || row[k], undefined);
+
+                    const cnpjRaw = String(getVal(['CNPJ', 'cnpj', 'Cnpj']) || '').replace(/[^0-9]/g, '');
+                    const email = getVal(['Email', 'email', 'E-mail']) || '';
+                    const phone = getVal(['Telefone', 'phone', 'Celular']) || '';
+                    const name = getVal(['Razão Social', 'Nome', 'name', 'Nome da Empresa']) || '';
+                    const surname = getVal(['Nome Sócio', 'Sócio', 'contact', 'surname']) || '';
+                    const tabulacao = getVal(['Tabulação', 'Tabulacao', 'tabulation']) || '';
+
+                    if (!cnpjRaw || cnpjRaw.length !== 14) {
+                        throw new Error('CNPJ inválido ou ausente');
+                    }
+
+                    // Check Existence
+                    const existingClient = await this.prisma.client.findUnique({ where: { cnpj: cnpjRaw } });
+
+                    if (existingClient) {
+                        // UPDATE
+                        await this.prisma.client.update({
+                            where: { id: existingClient.id },
+                            data: {
+                                name: name || undefined,
+                                surname: surname || undefined,
+                                email: email || undefined,
+                                phone: phone || undefined,
+                            }
+                        });
+
+                        // Create Qualification if Tabulation provided
+                        if (tabulacao) {
+                            await this.prisma.qualification.create({
+                                data: {
+                                    client_id: existingClient.id,
+                                    created_by_id: existingClient.created_by_id, // Keep owner
+                                    tabulacao: tabulacao,
+                                    answers: {}
+                                }
+                            });
+                        }
+
+                        result.status = 'UPDATED';
+                        result.message = 'Lead atualizado com sucesso';
+                        success++;
+                    } else {
+                        // CREATE
+                        const job = await this.prisma.importJob.findUnique({ where: { id: jobId } });
+                        if (!job) throw new Error('Job lost context');
+
+                        const newClient = await this.prisma.client.create({
+                            data: {
+                                cnpj: cnpjRaw,
+                                name: name || `Lead ${cnpjRaw}`,
+                                surname: surname,
+                                email: email,
+                                phone: phone,
+                                created_by_id: job.created_by_id,
+                                integration_status: 'CADASTRADO'
+                            }
+                        });
+
+                        if (tabulacao) {
+                            await this.prisma.qualification.create({
+                                data: {
+                                    client_id: newClient.id,
+                                    created_by_id: job.created_by_id,
+                                    tabulacao: tabulacao,
+                                    answers: {}
+                                }
+                            });
+                        }
+
+                        result.status = 'CREATED';
+                        result.message = 'Lead criado com sucesso';
+                        success++;
+                    }
+
+                } catch (err: any) {
+                    result.status = 'ERROR';
+                    result.message = err.message || 'Erro desconhecido';
+                    errors++;
+                }
+
+                await this.prisma.importResult.create({ data: result });
+
+                if (processed % 50 === 0) {
+                    await this.prisma.importJob.update({ where: { id: jobId }, data: { processed_records: processed } });
+                }
+            }
+
+            await this.prisma.importJob.update({
+                where: { id: jobId },
+                data: {
+                    status: 'COMPLETED',
+                    processed_records: processed,
+                    success_count: success,
+                    error_count: errors
+                }
+            });
+
+        } catch (e: any) {
+            console.error("Critical error in processLeadsImport", e);
+            await this.prisma.importJob.update({
+                where: { id: jobId }, data: { status: 'FAILED' }
+            });
+        }
+    }
+
 }

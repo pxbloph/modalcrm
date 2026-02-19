@@ -33,21 +33,30 @@ export class ChatService {
             operatorId = initiator.id;
             supervisorId = targetUserId;
         } else if (initiator.role === Role.SUPERVISOR || initiator.role === Role.ADMIN) {
-            // Case 2: Supervisor (or Admin) initiates to Operator
+            // Case 2: Supervisor/Admin initiates
             const targetUser = await this.prisma.user.findUnique({ where: { id: targetUserId } });
 
-            if (!targetUser || targetUser.role !== Role.OPERATOR) {
-                throw new BadRequestException('Target user must be an Operator');
+            if (!targetUser) {
+                throw new BadRequestException('Target user not found');
             }
 
-            // Optional: Strict hierarchy check for Supervisor
-            if (initiator.role === Role.SUPERVISOR && targetUser.supervisor_id !== initiatorId) {
-                // Allowing flexibility for now, or uncomment to restrict:
-                // throw new ForbiddenException('You can only chat with operators in your team');
+            if (targetUser.role === Role.OPERATOR) {
+                // Normal flow: Manager -> Operator
+                operatorId = targetUserId;
+                supervisorId = initiator.id;
+            } else if (initiator.role === Role.ADMIN && targetUser.role === Role.SUPERVISOR) {
+                // Admin -> Supervisor
+                // Treat Supervisor as "operator" (subordinate) in this relationship
+                operatorId = targetUserId;
+                supervisorId = initiator.id;
+            } else if (initiator.role === Role.SUPERVISOR && targetUser.role === Role.ADMIN) {
+                // Supervisor -> Admin
+                // Treat Supervisor as "operator" (subordinate)
+                operatorId = initiator.id;
+                supervisorId = targetUserId;
+            } else {
+                throw new BadRequestException('Invalid chat target for your role');
             }
-
-            operatorId = targetUserId;
-            supervisorId = initiator.id;
         } else {
             throw new ForbiddenException('Role not allowed to initiate chats');
         }
@@ -74,22 +83,17 @@ export class ChatService {
 
     async getConversations(userId: string, role: string) {
         try {
-            if (role === Role.ADMIN) {
+            if (role === Role.ADMIN || role === Role.SUPERVISOR) {
                 return this.prisma.conversation.findMany({
+                    where: {
+                        OR: [
+                            { supervisor_id: userId },
+                            { operator_id: userId } // Include where they might be the "subordinate" (e.g. Sup talking to Admin)
+                        ]
+                    },
                     include: {
                         operator: { select: { id: true, name: true, surname: true } },
                         supervisor: { select: { id: true, name: true, surname: true } },
-                    },
-                    orderBy: { last_message_at: 'desc' }
-                });
-            }
-
-            if (role === Role.SUPERVISOR) {
-                return this.prisma.conversation.findMany({
-                    where: { supervisor_id: userId },
-                    include: {
-                        operator: { select: { id: true, name: true, surname: true } },
-                        // Count unread messages
                         messages: {
                             where: { is_read: false, sender_id: { not: userId } },
                             select: { id: true }
@@ -103,6 +107,7 @@ export class ChatService {
                 return this.prisma.conversation.findMany({
                     where: { operator_id: userId },
                     include: {
+                        operator: { select: { id: true, name: true, surname: true } }, // Should accept themselves? Usually unused but good for consistency
                         supervisor: { select: { id: true, name: true, surname: true } },
                         messages: {
                             where: { is_read: false, sender_id: { not: userId } },
@@ -132,14 +137,22 @@ export class ChatService {
                     role: { in: [Role.SUPERVISOR, Role.ADMIN] },
                     is_active: true
                 },
-                select: { id: true, name: true, surname: true, role: true, email: true } // Minimal fields
+                select: { id: true, name: true, surname: true, role: true, email: true }
             });
-        } else {
-            // Supervisors/Admins see Operators (or everyone, but usually Operators)
-            // For now, let's stick to Operators to keep list clean
+        } else if (role === Role.SUPERVISOR) {
+            // Supervisors see Operators AND Admins
             potentialPartners = await this.prisma.user.findMany({
                 where: {
-                    role: Role.OPERATOR,
+                    role: { in: [Role.OPERATOR, Role.ADMIN] },
+                    is_active: true
+                },
+                select: { id: true, name: true, surname: true, role: true, email: true }
+            });
+        } else if (role === Role.ADMIN) {
+            // Admins see Operators AND Supervisors
+            potentialPartners = await this.prisma.user.findMany({
+                where: {
+                    role: { in: [Role.OPERATOR, Role.SUPERVISOR] },
                     is_active: true
                 },
                 select: { id: true, name: true, surname: true, role: true, email: true }
@@ -152,8 +165,8 @@ export class ChatService {
         const convMap = new Map();
 
         conversations.forEach((c: any) => {
-            // Identify the "other" user ID
-            const otherId = role === Role.OPERATOR ? c.supervisor_id : c.operator_id;
+            // Identify the "other" user ID dynamically
+            const otherId = (c.operator_id === userId) ? c.supervisor_id : c.operator_id;
             convMap.set(otherId, c);
         });
 
@@ -198,7 +211,10 @@ export class ChatService {
 
         if (!conversation) throw new BadRequestException('Conversation not found');
 
-        if (role !== Role.ADMIN && conversation.operator_id !== userId && conversation.supervisor_id !== userId) {
+        // Validar se usuário participa da conversa (mesmo ADMIN agora só vê as suas)
+        if (conversation.operator_id !== userId && conversation.supervisor_id !== userId) {
+            // Se quiser manter permissão total para ver (audit), descomente abaixo, mas user pediu para "não ver de todo mundo"
+            // if (role !== Role.ADMIN) 
             throw new ForbiddenException('Access denied');
         }
 
@@ -270,5 +286,140 @@ export class ChatService {
     // Helper for Gateway validation
     async validateUser(userId: string) {
         return this.prisma.user.findUnique({ where: { id: userId } });
+    }
+    // --- ANNOUNCEMENTS LOGIC ---
+
+    async createAnnouncement(authorId: string, title: string, content: string, priority: string) {
+        return this.prisma.announcement.create({
+            data: {
+                author_id: authorId,
+                title,
+                content,
+                priority
+            },
+            include: {
+                author: { select: { id: true, name: true, surname: true } }
+            }
+        });
+    }
+
+    async getAnnouncements(userId: string) {
+        // 1. Get all announcements ordered by creation
+        const announcements = await this.prisma.announcement.findMany({
+            orderBy: { created_at: 'desc' },
+            include: {
+                author: { select: { id: true, name: true, surname: true } },
+                reads: {
+                    where: { user_id: userId },
+                    select: { id: true }
+                } // Check if THIS user read it
+            }
+        });
+
+        // 2. Map to add 'isRead' flag
+        return announcements.map(a => ({
+            ...a,
+            isRead: a.reads.length > 0
+        }));
+    }
+
+    async markAnnouncementAsRead(announcementId: string, userId: string) {
+        // Idempotent operation
+        try {
+            await this.prisma.announcementRead.create({
+                data: {
+                    announcement_id: announcementId,
+                    user_id: userId
+                }
+            });
+        } catch (e) {
+            // Ignore unique constraint violation (already read)
+        }
+    }
+
+    async deleteAnnouncement(announcementId: string, userId: string, role: string) {
+        const announcement = await this.prisma.announcement.findUnique({
+            where: { id: announcementId }
+        });
+
+        if (!announcement) throw new BadRequestException('Announcement not found');
+
+        // Permission Check: Admin OR Author
+        if (role !== Role.ADMIN && announcement.author_id !== userId) {
+            throw new ForbiddenException('You can only delete your own announcements');
+        }
+
+        await this.prisma.announcement.delete({
+            where: { id: announcementId }
+        });
+
+        return { success: true };
+    }
+
+    async getOperatorStats(operatorId: string) {
+        // 1. Validate Operator
+        const operator = await this.prisma.user.findUnique({
+            where: { id: operatorId },
+            select: { id: true, name: true, surname: true, role: true }
+        });
+
+        if (!operator) throw new BadRequestException('Operator not found');
+
+        // 2. Aggregate Stats (Filtered by Current Month)
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+        // A. Total Leads Created (This Month)
+        const totalLeads = await this.prisma.client.count({
+            where: {
+                created_by_id: operatorId,
+                created_at: {
+                    gte: startOfMonth,
+                    lte: endOfMonth
+                }
+            }
+        });
+
+        // B. Total with Tabulation "Conta aberta" (This Month Cohort)
+        const totalTabulationOpen = await this.prisma.client.count({
+            where: {
+                created_by_id: operatorId,
+                created_at: {
+                    gte: startOfMonth,
+                    lte: endOfMonth
+                },
+                qualifications: {
+                    some: {
+                        tabulacao: 'Conta aberta'
+                    }
+                }
+            }
+        });
+
+        // C. Total Real Open Accounts (This Month Cohort)
+        const totalRealOpen = await this.prisma.client.count({
+            where: {
+                created_by_id: operatorId,
+                created_at: {
+                    gte: startOfMonth,
+                    lte: endOfMonth
+                },
+                has_open_account: true
+            }
+        });
+
+        return {
+            operator: {
+                id: operator.id,
+                name: operator.name,
+                surname: operator.surname
+            },
+            stats: {
+                totalLeads,
+                totalTabulationOpen,
+                totalRealOpen
+            }
+        };
     }
 }

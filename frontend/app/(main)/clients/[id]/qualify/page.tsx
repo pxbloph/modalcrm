@@ -1,0 +1,372 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import api from '@/lib/api';
+import { Loader2, CheckCircle, ArrowLeft } from 'lucide-react';
+import { FormField } from '@/components/settings/FormBuilderInternal';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+
+interface Client {
+    id: string;
+    name: string;
+    surname: string;
+    email: string;
+    phone: string;
+    cpf?: string;
+}
+
+export default function QualifyPage() {
+    const params = useParams();
+    const router = useRouter();
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [client, setClient] = useState<Client | null>(null);
+    const [error, setError] = useState('');
+
+    // Dynamic Form State
+    const [fields, setFields] = useState<FormField[]>([]);
+    const [formData, setFormData] = useState<Record<string, any>>({});
+
+    useEffect(() => {
+        const loadData = async () => {
+            if (!params?.id) return;
+            try {
+                // Parallel fetch: Client + Active Template
+                const [clientRes, templateRes] = await Promise.all([
+                    api.get(`/clients/${params.id}`),
+                    api.get('/form-templates/active')
+                ]);
+
+                setClient(clientRes.data);
+
+                // Initialize form data with client name if needed (system field)
+                const initialData: any = {};
+
+                const correctTabulacaoOptions = [
+                    { label: 'Aguardando abertura', value: 'Aguardando abertura' },
+                    { label: 'Retornar outro horário', value: 'Retornar outro horário' },
+                    { label: 'Conta aberta', value: 'Conta aberta' },
+                    { label: 'Sem interesse', value: 'Sem interesse' },
+                    { label: 'Inapto na Receita Federal', value: 'Inapto na Receita Federal' },
+                    { label: 'Telefone Incorreto', value: 'Telefone Incorreto' },
+                    { label: 'Recusado pelo banco', value: 'Recusado pelo banco' }
+                ];
+
+                let finalFields: FormField[] = [];
+
+                if (templateRes.data && templateRes.data.fields) {
+                    finalFields = templateRes.data.fields;
+                } else {
+                    // Fallback to default fields
+                    finalFields = [
+                        { id: 'sys_client_name', type: 'text', label: 'Nome do Cliente', required: false, systemField: 'client_name' },
+                        { id: 'sys_maquininha_atual', type: 'select', label: 'Possui Maquininha Hoje?', required: false, systemField: 'maquininha_atual', options: [{ label: 'Nenhuma', value: 'Nenhuma' }, { label: 'Pagbank', value: 'Pagbank' }, { label: 'Mercado Pago', value: 'Mercado Pago' }] },
+                        { id: 'sys_faturamento_maquina', type: 'number', label: 'Faturamento em Máquina (Mensal)', required: false, systemField: 'faturamento_maquina', placeholder: 'R$ 0,00' },
+                        { id: 'sys_faturamento_mensal', type: 'number', label: 'Faturamento Total (Mensal)', required: false, systemField: 'faturamento_mensal', placeholder: 'R$ 0,00' },
+                        { id: 'sys_produto_interesse', type: 'select', label: 'Produto de Interesse', required: false, systemField: 'produto_interesse', options: [{ label: 'Conta PJ', value: 'Conta PJ' }, { label: 'Boletos', value: 'Boletos' }] },
+                        { id: 'sys_emite_boletos', type: 'radio', label: 'Emite Boletos?', required: false, systemField: 'emite_boletos', options: [{ label: 'Sim', value: 'true' }, { label: 'Não', value: 'false' }] },
+                        { id: 'sys_checkbox_ofertas', type: 'checkbox', label: 'Cliente deseja receber prosposta de maquininha?', required: false, systemField: 'deseja_receber_ofertas' },
+                        { id: 'sys_tabulacao', type: 'select', label: 'Tabulação', required: true, systemField: 'tabulacao', options: [] }, // Options will be overridden
+                        // Agendamento will be injected
+                        { id: 'sys_obs', type: 'textarea', label: 'Informações Adicionais', required: false, systemField: 'informacoes_adicionais' },
+                    ];
+                }
+
+                // FORCE UPDATE Tabulação Options and Inject Agendamento
+                finalFields = finalFields.map(f => {
+                    if (f.systemField === 'tabulacao') {
+                        return { ...f, options: correctTabulacaoOptions, required: true };
+                    }
+                    return f;
+                });
+
+                // Ensure Agendamento field exists logic
+                const hasAgendamento = finalFields.find(f => f.systemField === 'agendamento');
+                if (!hasAgendamento) {
+                    const tabIndex = finalFields.findIndex(f => f.systemField === 'tabulacao');
+                    const agendamentoField: FormField = {
+                        id: 'sys_agendamento',
+                        type: 'datetime-local',
+                        label: 'Data e Hora do Retorno',
+                        required: true,
+                        systemField: 'agendamento'
+                    };
+
+                    if (tabIndex >= 0) {
+                        finalFields.splice(tabIndex + 1, 0, agendamentoField);
+                    } else {
+                        finalFields.push(agendamentoField);
+                    }
+                }
+
+                // Ensure Account Opening Date field exists logic
+                const hasAccDate = finalFields.find(f => f.systemField === 'account_opening_date');
+                if (!hasAccDate) {
+                    const tabIndex = finalFields.findIndex(f => f.systemField === 'tabulacao');
+                    const accField: FormField = {
+                        id: 'sys_account_opening_date',
+                        type: 'date',
+                        label: 'Data de Abertura da Conta',
+                        required: true,
+                        systemField: 'account_opening_date'
+                    };
+                    if (tabIndex >= 0) {
+                        finalFields.splice(tabIndex + 1, 0, accField);
+                    } else {
+                        finalFields.push(accField);
+                    }
+                }
+
+                setFields(finalFields);
+
+            } catch (err) {
+                console.error(err);
+                setError('Erro ao carregar dados.');
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, [params?.id]);
+
+    const formatCurrency = (value: string) => {
+        if (!value) return '';
+        const digits = value.replace(/\D/g, '');
+        const number = parseInt(digits) / 100;
+        if (isNaN(number)) return '';
+        return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    };
+
+    const handleChange = (fieldId: string, value: any, type: string) => {
+        if (type === 'number') {
+            // Apply currency mask to all number fields in this form
+            const formatted = formatCurrency(String(value));
+            setFormData(prev => ({ ...prev, [fieldId]: formatted }));
+        } else {
+            setFormData(prev => ({ ...prev, [fieldId]: value }));
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSubmitting(true);
+        setError('');
+
+        try {
+            // Validate Tabulação (Extra safety besides HTML required)
+            const tabulacaoField = fields.find(f => f.systemField === 'tabulacao');
+            if (tabulacaoField && !formData[tabulacaoField.id]) {
+                setError('Selecione uma tabulação para concluir.');
+                setSubmitting(false);
+                return;
+            }
+
+            // Prepare Payload
+            const payload: any = { answers: {} };
+
+            // Map form data to either top-level system fields OR validation answers
+            fields.forEach(field => {
+                const value = formData[field.id];
+
+                // System Field Mapping (Flatten specific fields for creating relations/columns)
+                if (field.systemField) {
+                    if (field.type === 'number') {
+                        // Parse currency back to float
+                        if (value && typeof value === 'string') {
+                            payload[field.systemField] = parseFloat(value.replace(/[^\d,]/g, '').replace(',', '.'));
+                        } else {
+                            payload[field.systemField] = value;
+                        }
+                    } else if (field.type === 'radio') {
+                        payload[field.systemField] = value === 'true'; // Convert string "true" to boolean
+                    } else {
+                        payload[field.systemField] = value;
+                    }
+                } else {
+                    // Dynamic Answer
+                    payload.answers[field.label] = value; // Saving by Label for readability, or use ID. Label is better for display if ID is obscure.
+                }
+            });
+
+            const response = await api.post(`/qualifications/${params?.id}`, payload);
+
+            if (response.data.integration_status === 'FAILED') {
+                // Show warning but redirect as it was saved
+                alert('Qualificação salva com sucesso!\n\nPorém, houve uma falha ao enviar para a integração. O sistema registrou a tentativa e tentará novamente em breve.');
+            }
+
+            // Redirect to Kanban instead of root
+            router.push('/kanban');
+        } catch (err) {
+            console.error(err);
+            setError('Erro ao salvar qualificação.');
+            setSubmitting(false);
+        }
+    };
+
+    if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+    if (!client) return <div className="p-8 text-center text-muted-foreground">Cliente não encontrado.</div>;
+
+    return (
+        <div className="max-w-3xl mx-auto py-8 px-4">
+            <Button
+                variant="ghost"
+                onClick={() => router.back()}
+                className="mb-4 pl-0 hover:pl-0 hover:bg-transparent text-muted-foreground hover:text-foreground"
+            >
+                <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
+            </Button>
+
+            <Card className="overflow-hidden border-border shadow-md">
+                <div className="bg-primary px-6 py-4">
+                    <h1 className="text-xl font-bold text-primary-foreground">Qualificação de Cliente</h1>
+                    <p className="text-primary-foreground/90 text-sm mt-0.5">Complemente os dados para avançar</p>
+                </div>
+
+                <CardContent className="p-6">
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        {fields.map((field) => {
+                            // Conditional Logic for Agendamento
+                            if (field.systemField === 'agendamento') {
+                                const tabField = fields.find(f => f.systemField === 'tabulacao');
+                                const currentTabValue = tabField ? formData[tabField.id] : '';
+                                if (currentTabValue !== 'Retornar outro horário') {
+                                    return null; // Hide field
+                                }
+                            }
+
+                            if (field.systemField === 'account_opening_date') {
+                                const tabField = fields.find(f => f.systemField === 'tabulacao');
+                                const currentTabValue = tabField ? formData[tabField.id] : '';
+                                if (currentTabValue !== 'Conta aberta') {
+                                    return null; // Hide field
+                                }
+                            }
+
+                            return (
+                                <div key={field.id} className={field.type === 'checkbox' ? '' : 'space-y-2'}>
+                                    {field.type !== 'checkbox' && (
+                                        <Label className="text-foreground">
+                                            {field.label} {field.required && <span className="text-destructive">*</span>}
+                                        </Label>
+                                    )}
+
+                                    {/* Render Input based on Type */}
+                                    {field.type === 'text' && (
+                                        <Input
+                                            type="text"
+                                            required={field.required}
+                                            placeholder={field.placeholder}
+                                            value={formData[field.id] || ''}
+                                            onChange={e => handleChange(field.id, e.target.value, 'text')}
+                                        />
+                                    )}
+
+                                    {field.type === 'textarea' && (
+                                        <textarea
+                                            required={field.required}
+                                            rows={4}
+                                            className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                                            value={formData[field.id] || ''}
+                                            onChange={e => handleChange(field.id, e.target.value, 'textarea')}
+                                        />
+                                    )}
+
+                                    {field.type === 'number' && (
+                                        <Input
+                                            type="text" // Using text to handle currency masking easily
+                                            required={field.required}
+                                            placeholder={field.placeholder}
+                                            value={formData[field.id] || ''}
+                                            onChange={e => handleChange(field.id, e.target.value, 'number')}
+                                        />
+                                    )}
+
+                                    {field.type === 'select' && (
+                                        <select
+                                            required={field.required}
+                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                                            value={formData[field.id] || ''}
+                                            onChange={e => handleChange(field.id, e.target.value, 'select')}
+                                        >
+                                            <option value="">Selecione...</option>
+                                            {field.options?.map((opt, idx) => (
+                                                <option key={idx} value={opt.value}>{opt.label}</option>
+                                            ))}
+                                        </select>
+                                    )}
+
+                                    {field.type === 'radio' && (
+                                        <div className="flex items-center gap-4">
+                                            {field.options?.map((opt, idx) => (
+                                                <label key={idx} className="inline-flex items-center">
+                                                    <input
+                                                        type="radio"
+                                                        name={field.id}
+                                                        required={field.required}
+                                                        className="form-radio text-primary border-input bg-background focus:ring-primary accent-primary"
+                                                        checked={formData[field.id] === opt.value}
+                                                        onChange={() => handleChange(field.id, opt.value, 'radio')}
+                                                    />
+                                                    <span className="ml-2 text-foreground">{opt.label}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {field.type === 'checkbox' && (
+                                        <label className="flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                className="rounded border-input bg-background text-primary shadow-sm focus:ring-primary focus:ring-opacity-50 accent-primary"
+                                                checked={formData[field.id] === true}
+                                                onChange={e => handleChange(field.id, e.target.checked, 'checkbox')}
+                                            />
+                                            <span className="text-sm font-medium text-foreground">{field.label}</span>
+                                        </label>
+                                    )}
+
+                                    {(field.type === 'date' || field.type === 'datetime-local') && (
+                                        <Input
+                                            type="datetime-local"
+                                            required={field.required}
+                                            value={formData[field.id] || ''}
+                                            onChange={e => handleChange(field.id, e.target.value, 'date')}
+                                        />
+                                    )}
+                                </div>
+                            );
+                        })}
+
+                        {error && (
+                            <div className="text-destructive text-sm bg-destructive/10 p-3 rounded-md border border-destructive/20">
+                                {error}
+                            </div>
+                        )}
+
+                        <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => router.back()}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={submitting}
+                            >
+                                {submitting ? <Loader2 className="animate-spin h-4 w-4" /> : <><CheckCircle className="h-4 w-4 mr-2" /> Concluir</>}
+                            </Button>
+                        </div>
+                    </form>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}

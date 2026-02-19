@@ -13,7 +13,7 @@ export class DealsService {
     private readonly kanbanGateway: KanbanGateway
   ) { }
 
-  async create(createDealDto: CreateDealDto) {
+  async create(createDealDto: CreateDealDto, actorId?: string) {
     const { custom_fields, ...dealData } = createDealDto;
 
     // Determine Stage
@@ -50,6 +50,7 @@ export class DealsService {
           history: {
             create: {
               action: 'CREATED',
+              actor_id: actorId,
               details: { initial_stage: stageId },
             },
           },
@@ -73,30 +74,44 @@ export class DealsService {
     return deal;
   }
 
-  async findAll(pipelineId?: string, responsibleId?: string, clientId?: string, tagIds?: string[]) {
-    const where: any = {};
-    if (pipelineId) where.pipeline_id = pipelineId;
-    if (responsibleId) where.responsible_id = responsibleId;
-    if (clientId) where.client_id = clientId;
-
-    if (tagIds && tagIds.length > 0) {
-      where.tags = {
-        some: {
-          tag_id: { in: tagIds }
-        }
-      };
-    }
+  async findAll(pipelineId?: string, responsibleId?: string, clientId?: string, search?: string, startDate?: string, endDate?: string) {
+    const where = this.buildWhere(pipelineId, responsibleId, clientId, search, startDate, endDate);
 
     return this.prisma.deal.findMany({
       where,
-      include: {
-        stage: true,
+      select: {
+        id: true,
+        title: true,
+        value: true,
+        stage_id: true,
+        created_at: true,
+        updated_at: true,
+        pipeline_id: true,
+        priority: true,
+        status: true,
+        // Relations - Optimized for Kanban Card
+        stage: {
+          select: { id: true, name: true, color: true }
+        },
         client: {
           select: {
             id: true,
             name: true,
             surname: true,
-            cnpj: true
+            cnpj: true, // Shown in card now
+            // email: true, // Not shown in card usually
+            // phone: true, // Not shown in card usually
+            account_opening_date: true, // Used for 'Contas Abertas' badge
+            created_at: true,
+            qualifications: {
+              orderBy: { created_at: 'desc' },
+              take: 1,
+              select: {
+                id: true,
+                tabulacao: true,
+                // faturamento_mensal: true // Not critical for card
+              }
+            }
           }
         },
         responsible: {
@@ -104,15 +119,60 @@ export class DealsService {
             id: true,
             name: true,
             surname: true,
-            email: true,
-            // avatar: true // Assuming avatar field exists, if not remove. Previous view didn't show User model.
-            // Safe bet: id, name, surname, email.
+            // email: true, // Not critical for card avatar
           }
         },
-        tags: { include: { tag: true } },
+        tags: { // Needed for tags on card
+          select: {
+            tag: {
+              select: { id: true, name: true, color: true }
+            }
+          }
+        }
       },
       orderBy: { created_at: 'desc' },
     });
+  }
+
+  async countByStage(pipelineId?: string, responsibleId?: string, clientId?: string, search?: string, startDate?: string, endDate?: string) {
+    const where = this.buildWhere(pipelineId, responsibleId, clientId, search, startDate, endDate);
+
+    const counts = await this.prisma.deal.groupBy({
+      by: ['stage_id'],
+      _count: { id: true },
+      where
+    });
+
+    // Convert to easier format: { stage_id: count }
+    return counts.reduce((acc, curr) => {
+      acc[curr.stage_id] = curr._count.id;
+      return acc;
+    }, {});
+  }
+
+  private buildWhere(pipelineId?: string, responsibleId?: string, clientId?: string, search?: string, startDate?: string, endDate?: string) {
+    const where: any = {};
+    if (pipelineId) where.pipeline_id = pipelineId;
+    if (responsibleId) where.responsible_id = responsibleId;
+    if (clientId) where.client_id = clientId;
+
+    if (startDate || endDate) {
+      where.created_at = {};
+      if (startDate) where.created_at.gte = new Date(startDate);
+      if (endDate) where.created_at.lte = new Date(endDate);
+    }
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { client: { name: { contains: search, mode: 'insensitive' } } },
+        { client: { surname: { contains: search, mode: 'insensitive' } } },
+        { client: { cnpj: { contains: search, mode: 'insensitive' } } },
+        { client: { email: { contains: search, mode: 'insensitive' } } },
+        { client: { phone: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+    return where;
   }
 
   async findOne(id: string) {
@@ -129,9 +189,12 @@ export class DealsService {
           }
         },
         responsible: true,
-        tags: { include: { tag: true } },
+
         custom_values: { include: { field: true } },
-        history: { orderBy: { created_at: 'desc' } },
+        history: {
+          orderBy: { created_at: 'desc' },
+          include: { actor: true }
+        },
       },
     });
 
@@ -144,38 +207,117 @@ export class DealsService {
     return deal;
   }
 
-  async update(id: string, updateDealDto: UpdateDealDto) {
+  async update(id: string, updateDealDto: UpdateDealDto, actorId?: string) {
     const { custom_fields, ...dealData } = updateDealDto;
 
     // 1. Fetch current state
     const currentDeal = await this.prisma.deal.findUnique({
       where: { id },
-      select: { stage_id: true, pipeline_id: true }
+      include: {
+        custom_values: { include: { field: true } },
+        stage: true,
+        responsible: true
+      }
     });
 
     if (!currentDeal) throw new NotFoundException('Deal not found');
 
     const oldStageId = currentDeal.stage_id;
-    const pipelineId = currentDeal.pipeline_id; // Always consistent
+    const pipelineId = currentDeal.pipeline_id;
 
     // 2. Perform Update in Transaction
     const deal = await this.prisma.$transaction(async (tx) => {
       // Update Fields
       if (custom_fields) {
         for (const [key, value] of Object.entries(custom_fields)) {
-          // Find Field ID
           const field = await tx.customField.findUnique({
             where: { pipeline_id_key: { pipeline_id: pipelineId, key } }
           });
 
           if (field) {
+            // Check previous value for logging
+            const previousVal = currentDeal.custom_values.find(cv => cv.field_id === field.id)?.value;
+            const newVal = String(value);
+
+            if (previousVal !== newVal) {
+              await tx.dealHistory.create({
+                data: {
+                  deal_id: id,
+                  actor_id: actorId,
+                  action: 'FIELD_UPDATE',
+                  details: { field: field.label, from: previousVal, to: newVal }
+                }
+              });
+            }
+
             await tx.dealCustomFieldValue.upsert({
               where: { deal_id_field_id: { deal_id: id, field_id: field.id } },
-              create: { deal_id: id, field_id: field.id, value: String(value) },
-              update: { value: String(value) }
+              create: { deal_id: id, field_id: field.id, value: newVal },
+              update: { value: newVal }
             });
           }
         }
+      }
+
+      // Track main field changes
+      if (dealData.title && dealData.title !== currentDeal.title) {
+        await tx.dealHistory.create({
+          data: {
+            deal_id: id,
+            actor_id: actorId,
+            action: 'FIELD_UPDATE',
+            details: { field: 'Título', from: currentDeal.title, to: dealData.title }
+          }
+        });
+      }
+      if (dealData.value !== undefined && Number(dealData.value) !== Number(currentDeal.value)) {
+        await tx.dealHistory.create({
+          data: {
+            deal_id: id,
+            actor_id: actorId,
+            action: 'FIELD_UPDATE',
+            details: { field: 'Valor', from: Number(currentDeal.value), to: Number(dealData.value) }
+          }
+        });
+      }
+      if (dealData.status && dealData.status !== currentDeal.status) {
+        await tx.dealHistory.create({
+          data: {
+            deal_id: id,
+            actor_id: actorId,
+            action: 'STATUS_UPDATE',
+            details: { from: currentDeal.status, to: dealData.status }
+          }
+        });
+      }
+      if (dealData.responsible_id && dealData.responsible_id !== currentDeal.responsible_id) {
+        const newResp = await tx.user.findUnique({ where: { id: dealData.responsible_id } });
+        await tx.dealHistory.create({
+          data: {
+            deal_id: id,
+            actor_id: actorId,
+            action: 'RESPONSIBLE_UPDATE',
+            details: {
+              from: currentDeal.responsible?.name || 'Sem responsável',
+              to: newResp?.name || 'Sem responsável'
+            }
+          }
+        });
+      }
+
+      if (dealData.stage_id && dealData.stage_id !== currentDeal.stage_id) {
+        const newStage = await tx.pipelineStage.findUnique({ where: { id: dealData.stage_id } });
+        await tx.dealHistory.create({
+          data: {
+            deal_id: id,
+            actor_id: actorId,
+            action: 'STAGE_CHANGE',
+            details: {
+              from: currentDeal.stage.name,
+              to: newStage?.name || 'Desconhecido'
+            }
+          }
+        });
       }
 
       return tx.deal.update({
@@ -192,15 +334,13 @@ export class DealsService {
       this.kanbanGateway.notifyDealUpdated(pipelineId, fullDeal);
     }
 
-    // 3. Trigger Automations (Outside transaction to not block DB, or inside? Outside is safer for now)
+    // 3. Trigger Automations
     if (dealData.stage_id && oldStageId && oldStageId !== dealData.stage_id) {
-      // Trigger LEAVE_STAGE for old stage
       await this.automationsService.processTriggers(deal.id, 'LEAVE_STAGE', {
         pipeline_id: pipelineId,
         stage_id: oldStageId
       });
 
-      // Trigger ENTER_STAGE for new stage
       await this.automationsService.processTriggers(deal.id, 'ENTER_STAGE', {
         pipeline_id: pipelineId,
         stage_id: deal.stage_id
@@ -225,7 +365,7 @@ export class DealsService {
     if (stage_id) updateDto.stage_id = stage_id;
 
     // Update Deal (Triggering Automations if stage changes)
-    const deal = await this.update(id, updateDto);
+    const deal = await this.update(id, updateDto, user_id);
 
     // Log History
     await this.prisma.dealHistory.create({
@@ -353,7 +493,7 @@ export class DealsService {
       responsible_id: userId,
       status: DealStatus.OPEN,
       priority: DealPriority.NORMAL
-    } as any);
+    } as any, userId);
   }
 
   async addHistory(id: string, action: string, details: any, actorId: string) {

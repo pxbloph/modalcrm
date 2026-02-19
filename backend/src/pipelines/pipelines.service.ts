@@ -174,4 +174,36 @@ export class PipelinesService {
       return newPipeline;
     });
   }
+
+  async getUserConfig(userId: string, pipelineId: string) {
+    const config = await this.prisma.userPipelineConfig.findUnique({
+      where: {
+        user_id_pipeline_id: {
+          user_id: userId,
+          pipeline_id: pipelineId,
+        },
+      },
+    });
+
+    return config?.card_config || {};
+  }
+
+  async updateUserConfig(userId: string, pipelineId: string, cardConfig: any) {
+    return this.prisma.userPipelineConfig.upsert({
+      where: {
+        user_id_pipeline_id: {
+          user_id: userId,
+          pipeline_id: pipelineId,
+        },
+      },
+      update: {
+        card_config: cardConfig,
+      },
+      create: {
+        user_id: userId,
+        pipeline_id: pipelineId,
+        card_config: cardConfig,
+      },
+    });
+  }
 }

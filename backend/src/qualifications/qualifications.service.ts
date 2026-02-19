@@ -4,11 +4,14 @@ import axios from 'axios';
 
 import { DealsService } from '../deals/deals.service';
 
+import { TabulationsService } from '../tabulations/tabulations.service';
+
 @Injectable()
 export class QualificationsService {
     constructor(
         private prisma: PrismaService,
-        private dealsService: DealsService
+        private dealsService: DealsService,
+        private tabulationsService: TabulationsService
     ) { }
 
     async getActiveTemplate() {
@@ -19,21 +22,12 @@ export class QualificationsService {
     }
 
     async getTabulationOptions() {
-        const template = await this.getActiveTemplate();
-        // Extract from template fields if possible
-        if (template && template.fields) {
-            const fields: any[] = Array.isArray(template.fields) ? template.fields : [];
-            // Try to find field with common names for tabulation
-            const tabField = fields.find(f =>
-                (f.key && f.key.toLowerCase().includes('tabula')) ||
-                (f.label && f.label.toLowerCase().includes('tabula')) ||
-                (f.name && f.name.toLowerCase().includes('tabula'))
-            );
-            if (tabField && tabField.options) {
-                return tabField.options;
-            }
+        const activeTabulations = await this.tabulationsService.findActive();
+        if (activeTabulations.length > 0) {
+            return activeTabulations.map(t => t.label);
         }
-        // Fallback default list
+
+        // Fallback default list (only if DB is empty, which shouldn't happen after migration)
         return [
             'Aguardando abertura',
             'Retornar outro horário',
@@ -255,9 +249,12 @@ export class QualificationsService {
                 }
             });
 
-            // Async sync with Kanban (only on create usually, but safe to call)
-            if (source === 'modalcrm') { // Only sync kanban creation on original flow
+            // Async sync with Kanban
+            if (source === 'modalcrm') {
                 await this.syncWithKanban(client, data, userId);
+            } else if (source === 'manual_supervisor') {
+                // If updated manually, also check for Kanban Move
+                await this.handleKanbanMoveOnTabulation(client.id, data.tabulacao);
             }
 
         } catch (webhookError: any) {
@@ -306,27 +303,65 @@ export class QualificationsService {
 
             if (existingDeal) {
                 console.log(`Open deal already exists for client ${client.id}. Skipping creation.`);
-                return;
+            } else {
+                // 3. Create Deal
+                await this.dealsService.create({
+                    title: `${client.name || 'Novo Lead'} - Oportunidade`,
+                    client_id: client.id,
+                    pipeline_id: pipeline.id,
+                    value: data.faturamento_mensal ? Number(data.faturamento_mensal) : undefined,
+                    responsible_id: userId, // The user performing qualification becomes responsible
+                    priority: 'NORMAL',
+                    custom_fields: {
+                        // Map known fields if needed, e.g. key: 'valor'
+                    }
+                } as any);
+
+                console.log(`Deal created for client ${client.id} in pipeline ${pipeline.name}`);
             }
 
-            // 3. Create Deal
-            await this.dealsService.create({
-                title: `${client.name || 'Novo Lead'} - Oportunidade`,
-                client_id: client.id,
-                pipeline_id: pipeline.id,
-                value: data.faturamento_mensal ? Number(data.faturamento_mensal) : undefined,
-                responsible_id: userId, // The user performing qualification becomes responsible
-                priority: 'NORMAL',
-                custom_fields: {
-                    // Map known fields if needed, e.g. key: 'valor'
-                }
-            } as any); // Type assertion until DTO matches perfectly or we fix strictness
-
-            console.log(`Deal created for client ${client.id} in pipeline ${pipeline.name}`);
+            // 4. Check for Tabulation Mapping (Move to specific stage if mapped)
+            // This runs regardless of whether the deal existed or was just created
+            if (data.tabulacao) {
+                await this.handleKanbanMoveOnTabulation(client.id, data.tabulacao);
+            }
 
         } catch (error) {
             console.error("Error syncing with Kanban:", error);
             // Non-blocking error
+        }
+    }
+
+    private async handleKanbanMoveOnTabulation(clientId: string, tabulationLabel: string) {
+        try {
+            if (!tabulationLabel) return;
+
+            // 1. Find mapping
+            const tabulation = await this.tabulationsService.findByLabel(tabulationLabel);
+            if (!tabulation || !tabulation.target_stage_id) return;
+
+            // 2. Find OPEN Deal
+            const defaultPipeline = await this.prisma.pipeline.findFirst({ where: { is_default: true } });
+            if (!defaultPipeline) return;
+
+            const deal = await this.prisma.deal.findFirst({
+                where: {
+                    client_id: clientId,
+                    pipeline_id: defaultPipeline.id,
+                    status: 'OPEN'
+                }
+            });
+
+            if (deal) {
+                // 3. Move Deal
+                if (deal.stage_id !== tabulation.target_stage_id) {
+                    await this.dealsService.update(deal.id, { stage_id: tabulation.target_stage_id } as any);
+                    console.log(`Deal ${deal.id} moved to stage ${tabulation.target_stage_id} due to tabulation ${tabulation.label}`);
+                }
+            }
+
+        } catch (error) {
+            console.error("Error handling Kanban move on tabulation:", error);
         }
     }
 }

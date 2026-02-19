@@ -1,5 +1,8 @@
+import React from "react";
 import { Draggable } from "@hello-pangea/dnd";
-import { User } from "lucide-react";
+import { User, DollarSign, Calendar, Tag as TagIcon, Phone, Mail, FileText, AlertCircle } from "lucide-react";
+import { format, isValid, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface Tag {
     id: string;
@@ -12,8 +15,20 @@ interface Deal {
     title: string;
     value?: number;
     stage_id: string;
-    client?: { name: string };
-    responsible?: { id: string, name: string };
+    created_at: string | Date;
+    is_overdue?: boolean; // Provided by backend logic or deal
+    client?: {
+        name: string;
+        surname?: string;
+        cnpj?: string;
+        email?: string;
+        phone?: string;
+        qualifications?: {
+            tabulacao?: string;
+            faturamento_mensal?: number;
+        }[];
+    };
+    responsible?: { id: string, name: string, surname?: string };
     tags?: { tag: Tag }[];
 }
 
@@ -21,9 +36,171 @@ interface DealCardProps {
     deal: Deal;
     index: number;
     onClick: (id: string) => void;
+    cardConfig?: { key: string; visible: boolean; label: string }[];
+    stageColor?: string;
+    users?: any[];
+    onResponsibleChange?: (dealId: string, userId: string) => void;
 }
 
-export function DealCard({ deal, index, onClick }: DealCardProps) {
+export function DealCardComponent({ deal, index, onClick, cardConfig, stageColor, users, onResponsibleChange }: DealCardProps) {
+    // Default config if none provided (Basic layout)
+    // USER REQUEST: Only Title, Responsible, CNPJ, Tabulation.
+    const activeConfig = cardConfig && cardConfig.length > 0 ? cardConfig.filter(c => c.visible) : [
+        { key: "deal_responsible", visible: true, label: "Responsável" },
+        { key: "client_cnpj", visible: true, label: "CNPJ" },
+        { key: "qual_tabulation", visible: true, label: "Tabulação" }
+    ];
+
+    const renderField = (key: string) => {
+        switch (key) {
+            case "deal_tags":
+                if (!deal.tags || deal.tags.length === 0) return null;
+                return (
+                    <div className="flex flex-wrap gap-1 mb-2">
+                        {deal.tags.map(dt => (
+                            <span
+                                key={dt.tag.id}
+                                className="text-[9px] px-1.5 py-0.5 rounded-sm font-medium text-white truncate max-w-[80px]"
+                                style={{ backgroundColor: dt.tag.color, opacity: 0.9 }}
+                            >
+                                {dt.tag.name}
+                            </span>
+                        ))}
+                    </div>
+                );
+
+            case "deal_value":
+                if (deal.value == null) return null;
+                return (
+                    <div className="text-sm text-foreground font-bold mb-1 flex items-center gap-1">
+                        <DollarSign size={12} className="text-muted-foreground" />
+                        {Number(deal.value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </div>
+                );
+
+            case "deal_responsible":
+                // Se temos users e callback, renderizamos o seletor interativo
+                if (users && onResponsibleChange) {
+                    return (
+                        <div
+                            className="flex items-center gap-1.5 mt-2 pt-2 border-t border-border"
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()} // Importante para não iniciar o drag ao clicar
+                        >
+                            <div className="w-5 h-5 rounded-full bg-muted text-foreground flex items-center justify-center text-[9px] font-medium border border-border shrink-0">
+                                {deal.responsible?.name ? deal.responsible.name.substring(0, 2).toUpperCase() : '?'}
+                            </div>
+
+                            <select
+                                className="bg-transparent text-[10px] text-muted-foreground hover:text-foreground font-medium border-none outline-none cursor-pointer w-full p-0 h-auto truncate focus:ring-0 focus:bg-accent/50 rounded appearance-none"
+                                value={deal.responsible?.id || ""}
+                                onChange={(e) => {
+                                    e.stopPropagation();
+                                    onResponsibleChange(deal.id, e.target.value);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                title="Alterar Responsável"
+                            >
+                                <option value="" disabled>Selecionar...</option>
+                                {users.map((u: any) => (
+                                    <option key={u.id} value={u.id}>
+                                        {u.name} {u.surname && u.surname}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    );
+                }
+
+                // Fallback para visualização estática
+                if (!deal.responsible) return null;
+                return (
+                    <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-border text-xs text-muted-foreground">
+                        <div className="w-5 h-5 rounded-full bg-muted text-foreground flex items-center justify-center text-[9px] font-medium border border-border">
+                            {deal.responsible.name.substring(0, 2).toUpperCase()}
+                        </div>
+                        <span className="truncate max-w-[150px] text-[10px]">{deal.responsible.name} {deal.responsible.surname}</span>
+                    </div>
+                );
+
+            case "client_name":
+                if (!deal.client) return null;
+                return (
+                    <div className="flex items-center gap-1 text-xs text-foreground font-medium mb-1">
+                        <User size={12} className="text-muted-foreground shrink-0" />
+                        <span className="truncate">{`${deal.client.name} ${deal.client.surname || ''}`.trim()}</span>
+                    </div>
+                );
+
+            case "client_cnpj":
+                if (!deal.client?.cnpj) return null;
+                return (
+                    <div className="flex items-center gap-1 text-[12px] text-muted-foreground mb-1">
+                        <FileText size={11} className="shrink-0" />
+                        <span className="truncate">{deal.client.cnpj}</span>
+                    </div>
+                );
+
+            case "client_email":
+                if (!deal.client?.email) return null;
+                return (
+                    <div className="flex items-center gap-1 text-[12px] text-muted-foreground mb-1">
+                        <Mail size={11} className="shrink-0" />
+                        <span className="truncate max-w-full">{deal.client.email}</span>
+                    </div>
+                );
+
+            case "client_phone":
+                if (!deal.client?.phone) return null;
+                return (
+                    <div className="flex items-center gap-1 text-[12px] text-muted-foreground mb-1">
+                        <Phone size={11} className="shrink-0" />
+                        <span className="truncate">{deal.client.phone}</span>
+                    </div>
+                );
+
+            case "qual_tabulation":
+                const tab = deal.client?.qualifications?.[0]?.tabulacao;
+                if (!tab) return null;
+                return (
+                    <div className="inline-block px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-medium border border-border mb-1">
+                        {tab}
+                    </div>
+                );
+
+            case "qual_faturamento":
+                const fat = deal.client?.qualifications?.[0]?.faturamento_mensal;
+                if (!fat) return null;
+                return (
+                    <div className="flex items-center gap-1 text-[12px] text-muted-foreground mb-1">
+                        <span className="font-medium">Fat:</span>
+                        {Number(fat).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </div>
+                );
+
+            case "created_at":
+                const date = deal.created_at ? (typeof deal.created_at === 'string' ? parseISO(deal.created_at) : deal.created_at) : null;
+                if (!date || !isValid(date)) return null;
+                return (
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground/70 mb-1">
+                        <Calendar size={10} />
+                        {format(date, "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                    </div>
+                );
+            case "sla_status":
+                if (!deal.is_overdue) return null;
+                return (
+                    <div className="flex items-center gap-1 text-[10px] text-destructive font-bold mb-1">
+                        <AlertCircle size={10} />
+                        Atrasado
+                    </div>
+                );
+
+            default:
+                return null;
+        }
+    };
+
     return (
         <Draggable draggableId={deal.id} index={index}>
             {(provided, snapshot) => (
@@ -33,59 +210,37 @@ export function DealCard({ deal, index, onClick }: DealCardProps) {
                     {...provided.dragHandleProps}
                     onClick={() => onClick(deal.id)}
                     className={`
-                        bg-white dark:bg-[#18181b] p-3 mb-2 rounded-lg shadow-sm border border-gray-200 dark:border-zinc-800 
-                        hover:shadow-md cursor-grab active:cursor-grabbing text-left transition-all group relative
-                        ${snapshot.isDragging ? 'shadow-xl ring-2 ring-indigo-500/20 rotate-2 z-50' : ''}
+                        bg-card p-3 mb-2 rounded-md shadow-sm border border-border text-left transition-all group relative
+                        hover:bg-accent/50
+                        ${snapshot.isDragging ? 'shadow-lg ring-1 ring-primary/20 z-50 scale-[1.02]' : ''}
                     `}
-                    style={{ ...provided.draggableProps.style }}
+                    style={{
+                        ...provided.draggableProps.style,
+                        borderLeftWidth: stageColor ? '4px' : '1px',
+                        borderLeftColor: stageColor || undefined
+                    }}
                 >
-                    {/* Tags Strip */}
-                    {deal.tags && deal.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-2">
-                            {deal.tags.map(dt => (
-                                <span
-                                    key={dt.tag.id}
-                                    className="text-[10px] px-1.5 py-0.5 rounded font-semibold text-white truncate max-w-[80px]"
-                                    style={{ backgroundColor: dt.tag.color }}
-                                >
-                                    {dt.tag.name}
-                                </span>
-                            ))}
-                        </div>
-                    )}
-
-                    <div className="font-semibold text-gray-800 dark:text-gray-100 mb-2 line-clamp-2 leading-tight">
+                    <div className="font-semibold text-card-foreground mb-2 leading-tight text-xs">
                         {deal.title}
                     </div>
 
-                    {deal.value != null && (
-                        <div className="text-sm text-gray-900 dark:text-gray-100 font-bold mb-3 flex items-center gap-1">
-                            <span className="text-xs text-gray-400 font-normal">R$</span>
-                            {Number(deal.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </div>
-                    )}
-
-                    <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-50 dark:border-zinc-800/50">
-                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[120px]" title={deal.client?.name}>
-                            {deal.client?.name || "Sem cliente"}
-                        </div>
-
-                        {/* Responsible Avatar */}
-                        {deal.responsible ? (
-                            <div
-                                title={deal.responsible.name}
-                                className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-[10px] font-bold border border-indigo-200 dark:border-indigo-500/20"
-                            >
-                                {deal.responsible.name.substring(0, 2).toUpperCase()}
+                    <div className="flex flex-col gap-0.5">
+                        {activeConfig.map(field => (
+                            <div key={field.key}>
+                                {renderField(field.key)}
                             </div>
-                        ) : (
-                            <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-400 flex items-center justify-center">
-                                <User size={12} />
-                            </div>
-                        )}
+                        ))}
                     </div>
                 </div>
             )}
         </Draggable>
     );
 }
+
+export const DealCard = React.memo(DealCardComponent, (prev, next) => {
+    return (
+        prev.deal === next.deal &&
+        prev.index === next.index &&
+        prev.cardConfig === next.cardConfig
+    );
+});

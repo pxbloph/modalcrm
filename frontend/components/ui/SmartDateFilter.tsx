@@ -241,14 +241,14 @@ export function SmartDateFilter({ label, startDate, endDate, onFilterChange }: S
 
     return (
         <div className="w-full">
-            <label className="block text-xs font-medium text-gray-700 mb-1 dark:text-gray-300">
+            <label className="block text-xs font-medium text-muted-foreground mb-1">
                 {label}
             </label>
             <div className="space-y-2">
                 <select
                     value={selectedPreset}
                     onChange={(e) => handlePresetChange(e.target.value as PresetType)}
-                    className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-zinc-800 dark:ring-zinc-700 dark:text-gray-100"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors data-[placeholder]:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {Object.entries(PRESETS).map(([key, value]) => (
                         <option key={key} value={key}>{value}</option>
@@ -263,7 +263,7 @@ export function SmartDateFilter({ label, startDate, endDate, onFilterChange }: S
                             value={nValue}
                             onChange={(e) => handleNChange(e.target.value)}
                             placeholder="Número de dias"
-                            className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-zinc-800 dark:ring-zinc-700 dark:text-gray-100"
+                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                         />
                     </div>
                 )}
@@ -274,7 +274,7 @@ export function SmartDateFilter({ label, startDate, endDate, onFilterChange }: S
                             type="date"
                             value={customStart}
                             onChange={(e) => handleDateInput(e.target.value, 'exact')}
-                            className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-zinc-800 dark:ring-zinc-700 dark:text-gray-100"
+                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                         />
                     </div>
                 )}
@@ -286,7 +286,7 @@ export function SmartDateFilter({ label, startDate, endDate, onFilterChange }: S
                                 type="date"
                                 value={customStart}
                                 onChange={(e) => handleDateInput(e.target.value, 'start')}
-                                className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-zinc-800 dark:ring-zinc-700 dark:text-gray-100"
+                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                             />
                         </div>
                         <div className="flex-1">
@@ -294,13 +294,12 @@ export function SmartDateFilter({ label, startDate, endDate, onFilterChange }: S
                                 type="date"
                                 value={customEnd}
                                 onChange={(e) => handleDateInput(e.target.value, 'end')}
-                                className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-zinc-800 dark:ring-zinc-700 dark:text-gray-100"
+                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                             />
                         </div>
                     </div>
                 )}
             </div>
-            {/* Display active filter text optionally? No, user sees the inputs/selection */}
         </div>
     );
 }

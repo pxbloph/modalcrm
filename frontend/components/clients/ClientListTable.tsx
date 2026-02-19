@@ -28,8 +28,10 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
-import { Loader2, GripVertical, Trash2, CheckCircle, Settings, RotateCcw, Search, X } from 'lucide-react';
+import { Loader2, GripVertical, Trash2, CheckCircle, Settings, RotateCcw, Search, X, Download, Upload } from 'lucide-react';
 import api from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { ImportModal } from './ImportModal';
 
 interface Client {
     id: string;
@@ -65,6 +67,10 @@ interface ClientListTableProps {
     limit: number;
     onLimitChange: (limit: number) => void;
     totalRecords?: number;
+    // Export/Import Extensions
+    onDelete?: (ids: string[]) => void;
+    onOpenAccount?: (ids: string[]) => void;
+    currentFilters?: any;
 }
 
 // --- Draggable Header Component (Table) ---
@@ -89,11 +95,11 @@ const DraggableTableHeader = ({ header }: { header: Header<Client, unknown> }) =
             {...attributes}
             {...listeners}
             className={cn(
-                "relative text-left text-sm font-semibold text-gray-900 border-b border-gray-200 bg-gray-50 group select-none cursor-grab active:cursor-grabbing hover:bg-gray-100/50 transition-colors dark:bg-zinc-900 dark:text-gray-100 dark:border-zinc-800 dark:hover:bg-zinc-800",
-                isDragging && "bg-gray-100 shadow-lg dark:bg-zinc-800"
+                "relative text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/50 group select-none cursor-grab active:cursor-grabbing hover:bg-muted transition-colors",
+                isDragging && "bg-muted shadow-lg"
             )}
         >
-            <div className="flex items-center gap-2 px-3 py-3.5 h-full">
+            <div className="flex items-center gap-2 px-6 py-3 h-full">
                 <span className="flex-1 truncate">
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                 </span>
@@ -101,8 +107,8 @@ const DraggableTableHeader = ({ header }: { header: Header<Client, unknown> }) =
                     onMouseDown={header.getResizeHandler()}
                     onTouchStart={header.getResizeHandler()}
                     className={cn(
-                        "absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-indigo-500 touch-none select-none",
-                        header.column.getIsResizing() ? "bg-indigo-600 w-1.5 isResizing" : "bg-transparent"
+                        "absolute right-0 top-0 h-full w-px cursor-col-resize hover:bg-primary touch-none select-none",
+                        header.column.getIsResizing() ? "bg-primary w-0.5 isResizing" : "bg-transparent"
                     )}
                     style={{ transform: header.column.getIsResizing() ? `translateX(${0}px)` : undefined }}
                 />
@@ -127,12 +133,12 @@ const SortableColumnItem = ({ id, label, isVisible, isFixed, onToggle }: any) =>
         <div
             ref={setNodeRef}
             style={style}
-            className="flex items-center gap-3 p-2 bg-white rounded-md border border-gray-100 mb-1 hover:border-gray-200 dark:bg-zinc-800 dark:border-zinc-700 dark:hover:border-zinc-600"
+            className="flex items-center gap-3 p-2 bg-card rounded-md border border-border mb-1 hover:border-input transition-colors"
         >
             <button
                 {...attributes}
                 {...listeners}
-                className="text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing"
+                className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
             >
                 <GripVertical className="h-4 w-4" />
             </button>
@@ -141,9 +147,9 @@ const SortableColumnItem = ({ id, label, isVisible, isFixed, onToggle }: any) =>
                 checked={isVisible}
                 disabled={isFixed}
                 onChange={() => onToggle(id)}
-                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 disabled:opacity-50"
+                className="h-4 w-4 rounded border-input text-primary focus:ring-primary disabled:opacity-50"
             />
-            <span className="text-sm text-gray-700 flex-1 dark:text-gray-200">{label}</span>
+            <span className="text-sm text-foreground flex-1">{label}</span>
         </div>
     );
 };
@@ -173,10 +179,49 @@ export default function ClientListTable({
     onPageChange,
     limit,
     onLimitChange,
-    totalRecords
-}: ClientListTableProps) {
+    totalRecords,
+    // Actions
+    onDelete,
+    onOpenAccount,
+    currentFilters,
+    userRole = 'OPERATOR' // defaulting to safest permission
+}: ClientListTableProps & { userRole?: string }) { // extending locally to avoid breaking other usages immediately if any
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [actionLoading, setActionLoading] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [exporting, setExporting] = useState(false);
+
+    // Export Logic
+    const handleExport = async () => {
+        setExporting(true);
+        try {
+            const params = new URLSearchParams();
+            if (currentFilters) {
+                // Assuming currentFilters is already an object of query params
+                Object.entries(currentFilters).forEach(([key, val]) => {
+                    if (val) params.append(key, String(val));
+                });
+            }
+
+            const response = await api.get('/clients/export', {
+                params: params,
+                responseType: 'blob'
+            });
+
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `clientes_export_${new Date().getTime()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (err) {
+            console.error(err);
+            alert("Erro ao exportar dados.");
+        } finally {
+            setExporting(false);
+        }
+    };
 
     // Column Config State
     const [columnSelectorOpen, setColumnSelectorOpen] = useState(false);
@@ -243,16 +288,16 @@ export default function ClientListTable({
             {
                 id: 'select',
                 header: ({ table }) => (
-                    <div className="flex items-center gap-2 pl-1">
+                    <div className="flex items-center gap-2 pl-4">
                         <input
                             type="checkbox"
                             checked={clients.length > 0 && selectedIds.size === clients.length}
                             onChange={toggleAll}
-                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 h-4 w-4 cursor-pointer dark:bg-zinc-800 dark:border-zinc-600"
+                            className="rounded border-input text-primary focus:ring-primary h-4 w-4 cursor-pointer"
                         />
                         <button
                             onClick={(e) => { e.stopPropagation(); openColumnSelector(); }}
-                            className="p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-200/50 transition-colors dark:text-gray-500 dark:hover:text-gray-300 dark:hover:bg-zinc-700"
+                            className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-accent transition-colors"
                             title="Colunas"
                         >
                             <Settings className="h-3.5 w-3.5" />
@@ -266,7 +311,7 @@ export default function ClientListTable({
                             checked={selectedIds.has(row.original.id)}
                             onChange={() => toggleRow(row.original.id)}
                             onClick={(e) => e.stopPropagation()}
-                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 h-4 w-4 cursor-pointer dark:bg-zinc-800 dark:border-zinc-600"
+                            className="rounded border-input text-primary focus:ring-primary h-4 w-4 cursor-pointer"
                         />
                     </div>
                 ),
@@ -276,7 +321,7 @@ export default function ClientListTable({
             {
                 accessorKey: 'name',
                 header: 'Razão Social',
-                cell: (info) => <span className="font-medium text-gray-900 dark:text-gray-100">{info.getValue() as string}</span>,
+                cell: (info) => <span className="font-medium text-foreground">{info.getValue() as string}</span>,
                 minSize: 150,
             },
             {
@@ -308,14 +353,14 @@ export default function ClientListTable({
                         <div className="flex flex-col gap-1 items-start">
                             <span className={cn(
                                 "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset",
-                                (status === 'Pendente' || status === 'Cadastrando...') ? "bg-yellow-50 text-yellow-800 ring-yellow-600/20" :
-                                    status === 'Cadastro salvo com sucesso!' ? "bg-green-50 text-green-700 ring-green-600/20 dark:bg-green-900/30 dark:text-green-400 dark:ring-green-500/30" :
-                                        "bg-gray-50 text-gray-600 ring-gray-500/10 dark:bg-zinc-800 dark:text-gray-400 dark:ring-gray-700"
+                                (status === 'Pendente' || status === 'Cadastrando...') ? "bg-status-waiting/10 text-status-waiting ring-status-waiting/20" :
+                                    status === 'Cadastro salvo com sucesso!' ? "bg-status-new/10 text-status-new ring-status-new/20" :
+                                        "bg-muted text-muted-foreground ring-border"
                             )}>
                                 {status}
                             </span>
                             {hasOpenAccount && (
-                                <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10 dark:bg-blue-900/30 dark:text-blue-400 dark:ring-blue-500/30">
+                                <span className="inline-flex items-center rounded-md bg-status-open/10 px-2 py-0.5 text-[10px] font-medium text-status-open ring-1 ring-inset ring-status-open/20">
                                     Conta Aberta
                                 </span>
                             )}
@@ -334,7 +379,7 @@ export default function ClientListTable({
                 id: 'tabulacao',
                 header: 'Tabulação',
                 accessorFn: (row) => row.qualifications?.[0]?.tabulacao || '-',
-                cell: (info) => <span className="text-gray-700 dark:text-gray-300">{info.getValue() as string}</span>,
+                cell: (info) => <span className="text-muted-foreground">{info.getValue() as string}</span>,
                 minSize: 150,
             },
             {
@@ -362,7 +407,7 @@ export default function ClientListTable({
                             e.stopPropagation();
                             onClientClick(row.original.id);
                         }}
-                        className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 px-2 py-1 rounded text-sm font-medium dark:text-indigo-400 dark:hover:text-indigo-200 dark:hover:bg-indigo-900/30"
+                        className="text-black-900 dark:text-black-100 hover:text-blue-800 dark:hover:text-white hover:underline px-2 py-1 rounded text-sm font-medium transition-colors"
                     >
                         Ver
                     </button>
@@ -496,33 +541,55 @@ export default function ClientListTable({
     // --- Render ---
     if (loading && clients.length === 0) {
         return (
-            <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl p-12 flex justify-center dark:bg-zinc-900 dark:ring-zinc-800">
-                <Loader2 className="animate-spin h-8 w-8 text-indigo-600" />
+            <div className="bg-card shadow-sm ring-1 ring-border sm:rounded-xl p-12 flex justify-center">
+                <Loader2 className="animate-spin h-8 w-8 text-primary" />
             </div>
         );
     }
 
     return (
         <div className="relative">
+            {userRole !== 'OPERATOR' && (
+                <div className="flex justify-end gap-2 mb-4">
+                    <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting} className="border-border text-foreground hover:bg-accent">
+                        {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                        Exportar
+                    </Button>
+                    <Button variant="default" size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setIsImportModalOpen(true)}>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Importar
+                    </Button>
+                </div>
+            )}
+
+            <ImportModal
+                open={isImportModalOpen}
+                onOpenChange={setIsImportModalOpen}
+                onSuccess={() => {
+                    setIsImportModalOpen(false);
+                    if (onRefresh) onRefresh();
+                }}
+            />
+
             {/* Column Selector Popover (Relocated) */}
             {columnSelectorOpen && (
                 <>
                     <div className="fixed inset-0 z-30" onClick={() => setColumnSelectorOpen(false)} />
-                    <div className="absolute left-0 top-8 z-40 w-80 bg-white rounded-lg shadow-2xl ring-1 ring-black ring-opacity-5 p-4 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-100 origin-top-left dark:bg-zinc-900 dark:ring-zinc-700">
-                        <div className="flex items-center justify-between border-b pb-2">
-                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Personalizar Colunas</h3>
-                            <button onClick={() => setColumnSelectorOpen(false)} className="text-gray-400 hover:text-gray-600">
+                    <div className="absolute left-0 top-8 z-40 w-80 bg-card rounded-lg shadow-2xl ring-1 ring-border p-4 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-100 origin-top-left border border-border">
+                        <div className="flex items-center justify-between border-b border-border pb-2">
+                            <h3 className="font-semibold text-foreground">Personalizar Colunas</h3>
+                            <button onClick={() => setColumnSelectorOpen(false)} className="text-muted-foreground hover:text-foreground">
                                 <X className="h-4 w-4" />
                             </button>
                         </div>
 
                         {/* Search */}
                         <div className="relative">
-                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                             <input
                                 type="text"
                                 placeholder="Procurar coluna..."
-                                className="w-full pl-8 pr-3 py-2 border rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-100"
+                                className="w-full pl-8 pr-3 py-2 border border-input rounded-md text-sm bg-background text-foreground focus:ring-primary focus:border-primary"
                                 value={columnSearch}
                                 onChange={(e) => setColumnSearch(e.target.value)}
                             />
@@ -564,10 +631,10 @@ export default function ClientListTable({
                         </div>
 
                         {/* Footer */}
-                        <div className="flex justify-between items-center pt-2 border-t mt-1">
+                        <div className="flex justify-between items-center pt-2 border-t border-border mt-1">
                             <button
                                 onClick={resetColumnPreferences}
-                                className="text-xs text-gray-500 hover:text-indigo-600 flex items-center gap-1"
+                                className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
                             >
                                 <RotateCcw className="h-3 w-3" />
                                 Restaurar
@@ -575,13 +642,13 @@ export default function ClientListTable({
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => setColumnSelectorOpen(false)}
-                                    className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded dark:text-gray-400 dark:hover:bg-zinc-800"
+                                    className="px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent rounded transition-colors"
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     onClick={applyColumnPreferences}
-                                    className="px-3 py-1.5 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm"
+                                    className="px-3 py-1.5 text-sm text-primary-foreground bg-primary hover:bg-primary/90 rounded shadow-sm transition-colors"
                                 >
                                     Aplicar
                                 </button>
@@ -593,28 +660,28 @@ export default function ClientListTable({
 
             {/* Floating Action Bar */}
             {selectedIds.size > 0 && (
-                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-white shadow-2xl rounded-full border border-gray-200 px-6 py-3 flex items-center gap-6 animate-in slide-in-from-bottom-5 duration-200 dark:bg-zinc-900 dark:border-zinc-700">
-                    <div className="flex items-center gap-2 border-r border-gray-200 pr-4">
-                        <span className="bg-indigo-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-card shadow-2xl rounded-full border border-border px-6 py-3 flex items-center gap-6 animate-in slide-in-from-bottom-5 duration-200">
+                    <div className="flex items-center gap-2 border-r border-border pr-4">
+                        <span className="bg-primary text-primary-foreground text-xs font-bold px-2 py-0.5 rounded-full">
                             {selectedIds.size}
                         </span>
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">selecionado(s)</span>
+                        <span className="text-sm font-medium text-foreground">selecionado(s)</span>
                     </div>
 
                     <div className="flex items-center gap-2">
                         <button
                             onClick={handleBulkOpenAccount}
                             disabled={actionLoading}
-                            className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 dark:text-gray-300 dark:hover:text-indigo-400 dark:hover:bg-zinc-800"
+                            className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary hover:bg-accent px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                         >
                             <CheckCircle className="h-4 w-4" />
                             Marcar Conta Aberta
                         </button>
-                        <div className="h-4 w-px bg-gray-300 mx-2" />
+                        <div className="h-4 w-px bg-border mx-2" />
                         <button
                             onClick={handleBulkDelete}
                             disabled={actionLoading}
-                            className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                            className="flex items-center gap-2 text-sm font-medium text-destructive hover:text-destructive/80 hover:bg-destructive/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                         >
                             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                             Excluir
@@ -623,7 +690,7 @@ export default function ClientListTable({
 
                     <button
                         onClick={() => setSelectedIds(new Set())}
-                        className="ml-2 text-gray-400 hover:text-gray-600"
+                        className="ml-2 text-muted-foreground hover:text-foreground"
                         title="Cancelar seleção"
                     >
                         <X className="h-5 w-5" />
@@ -631,7 +698,7 @@ export default function ClientListTable({
                 </div>
             )}
 
-            <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl dark:bg-zinc-900 dark:ring-zinc-800">
+            <div className="bg-card shadow-sm border border-border sm:rounded-lg overflow-hidden">
                 <DndContext
                     collisionDetection={closestCenter}
                     modifiers={[]}
@@ -647,7 +714,7 @@ export default function ClientListTable({
                                 tableLayout: 'fixed',
                             }}
                         >
-                            <thead className="bg-gray-50 dark:bg-zinc-900">
+                            <thead className="bg-muted/50">
                                 {table.getHeaderGroups().map((headerGroup) => (
                                     <tr key={headerGroup.id}>
                                         <SortableContext
@@ -661,12 +728,12 @@ export default function ClientListTable({
                                     </tr>
                                 ))}
                             </thead>
-                            <tbody className="divide-y divide-gray-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+                            <tbody className="divide-y divide-border bg-card">
                                 {clients.length === 0 ? (
                                     <tr>
                                         <td
                                             colSpan={columns.length}
-                                            className="text-center py-10 text-gray-500"
+                                            className="text-center py-10 text-muted-foreground"
                                         >
                                             Nenhum cliente encontrado.
                                         </td>
@@ -676,15 +743,15 @@ export default function ClientListTable({
                                         <tr
                                             key={row.id}
                                             className={cn(
-                                                "hover:bg-gray-50 cursor-pointer transition-colors dark:hover:bg-zinc-900",
-                                                selectedIds.has(row.original.id) && "bg-indigo-50/40 dark:bg-indigo-900/20"
+                                                "hover:bg-accent/50 cursor-pointer transition-colors",
+                                                selectedIds.has(row.original.id) && "bg-primary/5"
                                             )}
                                             onClick={() => onClientClick(row.original.id)}
                                         >
                                             {row.getVisibleCells().map((cell) => (
                                                 <td
                                                     key={cell.id}
-                                                    className="break-words whitespace-normal px-3 py-3 text-sm text-gray-500 first:pl-4 first:text-gray-900 first:font-medium sm:first:pl-6 dark:text-gray-400 dark:first:text-gray-100"
+                                                    className="break-words whitespace-normal px-6 py-2.5 text-[13px] text-muted-foreground first:pl-6 first:text-foreground first:font-medium"
                                                     style={{
                                                         width: cell.column.getSize(),
                                                     }}
@@ -705,63 +772,68 @@ export default function ClientListTable({
 
                 {/* Pagination Controls */}
                 {clients.length > 0 && (
-                    <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 sm:rounded-b-xl dark:bg-zinc-900 dark:border-zinc-800">
+                    <div className="flex items-center justify-between border-t border-border bg-card px-6 py-3 sm:rounded-b-lg">
                         <div className="flex flex-1 justify-between sm:hidden">
                             <button
                                 onClick={() => onPageChange(currentPage - 1)}
                                 disabled={currentPage === 1}
-                                className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700"
+                                className="relative inline-flex items-center rounded-md border border-input bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-accent disabled:opacity-50"
                             >
                                 Anterior
                             </button>
                             <button
                                 onClick={() => onPageChange(currentPage + 1)}
                                 disabled={currentPage === totalPages}
-                                className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700"
+                                className="relative ml-3 inline-flex items-center rounded-md border border-input bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-accent disabled:opacity-50"
                             >
                                 Próxima
                             </button>
                         </div>
                         <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
                             <div className="flex items-center gap-4">
-                                <p className="text-sm text-gray-700 dark:text-gray-400">
+                                <p className="text-sm text-muted-foreground">
                                     Página <span className="font-medium">{currentPage}</span> de <span className="font-medium">{totalPages}</span>
                                 </p>
                                 {totalRecords !== undefined && totalRecords > 0 && (
-                                    <p className="text-sm text-gray-500 hidden sm:block dark:text-gray-500">
-                                        Total: <span className="font-medium text-gray-700 dark:text-gray-400">{totalRecords}</span>
+                                    <p className="text-sm text-muted-foreground hidden sm:block">
+                                        Total: <span className="font-medium text-foreground">{totalRecords}</span>
                                     </p>
                                 )}
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm text-gray-700 whitespace-nowrap dark:text-gray-400">Por página:</span>
+                                    <span className="text-sm text-muted-foreground">Linhas por página:</span>
                                     <select
                                         value={limit}
                                         onChange={(e) => onLimitChange(Number(e.target.value))}
-                                        className="block w-auto rounded-md border-0 py-1 pl-2 pr-8 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-zinc-800 dark:text-gray-100 dark:ring-zinc-700"
+                                        className="h-8 w-16 rounded-md border-input bg-background text-sm text-foreground focus:ring-primary focus:border-primary"
                                     >
-                                        <option value={5}>5</option>
                                         <option value={10}>10</option>
                                         <option value={20}>20</option>
                                         <option value={50}>50</option>
+                                        <option value={100}>100</option>
                                     </select>
                                 </div>
-                            </div>
-                            <div>
                                 <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
                                     <button
                                         onClick={() => onPageChange(currentPage - 1)}
                                         disabled={currentPage === 1}
-                                        className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 dark:bg-zinc-800 dark:ring-zinc-700 dark:hover:bg-zinc-700"
+                                        className="relative inline-flex items-center rounded-l-md px-2 py-2 text-muted-foreground ring-1 ring-inset ring-border hover:bg-accent focus:z-20 focus:outline-offset-0 disabled:opacity-50"
                                     >
                                         <span className="sr-only">Anterior</span>
                                         <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                             <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
                                         </svg>
                                     </button>
+                                    {/* Simplified Pagination Numbers */}
+                                    <button
+                                        disabled
+                                        className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-foreground ring-1 ring-inset ring-border focus:outline-offset-0 bg-transparent"
+                                    >
+                                        {currentPage}
+                                    </button>
                                     <button
                                         onClick={() => onPageChange(currentPage + 1)}
                                         disabled={currentPage === totalPages}
-                                        className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 dark:bg-zinc-800 dark:ring-zinc-700 dark:hover:bg-zinc-700"
+                                        className="relative inline-flex items-center rounded-r-md px-2 py-2 text-muted-foreground ring-1 ring-inset ring-border hover:bg-accent focus:z-20 focus:outline-offset-0 disabled:opacity-50"
                                     >
                                         <span className="sr-only">Próxima</span>
                                         <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -777,3 +849,4 @@ export default function ClientListTable({
         </div>
     );
 }
+

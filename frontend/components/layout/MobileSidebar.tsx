@@ -40,7 +40,7 @@ export default function MobileSidebar({ open, setOpen, navigation, onLogout }: M
             {/* Backdrop */}
             <div
                 className={cn(
-                    "fixed inset-0 bg-gray-900/80 transition-opacity duration-300 ease-linear",
+                    "fixed inset-0 bg-background/80 backdrop-blur-sm transition-opacity duration-300 ease-linear",
                     open ? "opacity-100" : "opacity-0"
                 )}
                 onClick={() => setOpen(false)}
@@ -48,23 +48,31 @@ export default function MobileSidebar({ open, setOpen, navigation, onLogout }: M
 
             {/* Sidebar Panel */}
             <div className={cn(
-                "fixed inset-y-0 left-0 flex w-full max-w-xs flex-col bg-white p-6 pb-4 shadow-xl transition-transform duration-300 ease-in-out",
+                "fixed inset-y-0 left-0 flex w-full max-w-xs flex-col bg-sidebar p-6 pb-4 shadow-xl transition-transform duration-300 ease-in-out border-r border-border",
                 open ? "translate-x-0" : "-translate-x-full"
             )}>
                 <div className="flex items-center justify-between mb-8">
                     {/* AJUSTE DE TAMANHO DO LOGO MOBILE: Altere w-40 e h-12 */}
-                    <div className="relative w-40 h-12">
+                    {/* AJUSTE DE TAMANHO DO LOGO MOBILE: Altere w-40 e h-12 */}
+                    <div className="relative w-48 h -14">
                         <Image
                             src="/logo_Logo_black.svg"
                             alt="Modal CRM"
                             fill
-                            className="object-contain object-left"
+                            className="object-contain object-left dark:hidden"
+                            priority
+                        />
+                        <Image
+                            src="/logo_logo_white.svg"
+                            alt="Modal CRM"
+                            fill
+                            className="object-contain object-left hidden dark:block"
                             priority
                         />
                     </div>
                     <button
                         type="button"
-                        className="-m-2.5 p-2.5 text-gray-700 hover:text-gray-500"
+                        className="-m-2.5 p-2.5 text-muted-foreground hover:text-foreground"
                         onClick={() => setOpen(false)}
                     >
                         <span className="sr-only">Fechar menu</span>
@@ -73,22 +81,18 @@ export default function MobileSidebar({ open, setOpen, navigation, onLogout }: M
                 </div>
 
                 <nav className="flex flex-1 flex-col">
-                    <ul role="list" className="flex flex-1 flex-col gap-y-7">
+                    <ul role="list" className="flex flex-1 flex-col gap-y-1">
                         <li>
-                            <div className="text-xs font-semibold leading-6 text-gray-400">Menu</div>
-                            <ul role="list" className="-mx-2 mt-2 space-y-1">
+                            <ul role="list" className="-mx-2 mt-2 space-y-0.5">
                                 {navigation.filter(item => item.show).map((item) => {
                                     if (item.children) {
-                                        // Render Group (simplified, always open or simple toggle if needed, but for mobile usually open or toggle)
-                                        // For simplicity in mobile, let's always show children indented if parent is "Settings" or similar, or just list.
-                                        // But user wants accordion.
                                         return (
                                             <li key={item.name}>
-                                                <div className="text-sm font-semibold text-gray-700 p-2 flex items-center gap-x-3">
-                                                    <item.icon className="h-6 w-6 shrink-0" aria-hidden="true" />
+                                                <div className="text-[13px] font-medium text-foreground p-2 flex items-center gap-x-3">
+                                                    <item.icon className="h-5 w-5 shrink-0 text-muted-foreground" strokeWidth={1.5} aria-hidden="true" />
                                                     {item.name}
                                                 </div>
-                                                <ul className="pl-6 mt-1 space-y-1">
+                                                <ul className="pl-6 mt-0.5 space-y-0.5">
                                                     {item.children.filter(child => child.show).map(child => (
                                                         <li key={child.name}>
                                                             <Link
@@ -96,12 +100,12 @@ export default function MobileSidebar({ open, setOpen, navigation, onLogout }: M
                                                                 onClick={() => setOpen(false)}
                                                                 className={cn(
                                                                     pathname === child.href
-                                                                        ? 'bg-indigo-50 text-indigo-600'
-                                                                        : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-50',
-                                                                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-medium'
+                                                                        ? 'text-primary font-medium bg-primary/10'
+                                                                        : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+                                                                    'group flex gap-x-3 rounded-md p-1.5 pl-5 text-[12px] leading-5 transition-colors'
                                                                 )}
                                                             >
-                                                                <child.icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                                                                <div className={cn("w-1 h-1 rounded-full mt-2 mr-1", pathname === child.href ? "bg-primary" : "bg-muted-foreground/30")} />
                                                                 {child.name}
                                                             </Link>
 
@@ -112,19 +116,21 @@ export default function MobileSidebar({ open, setOpen, navigation, onLogout }: M
                                         );
                                     }
 
+                                    const isActive = pathname === item.href;
+
                                     return (
                                         <li key={item.name}>
                                             <Link
                                                 href={item.href!}
                                                 onClick={() => setOpen(false)}
                                                 className={cn(
-                                                    pathname === item.href
-                                                        ? 'bg-indigo-50 text-indigo-600'
-                                                        : 'text-gray-700 hover:text-indigo-600 hover:bg-gray-50',
-                                                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                                                    isActive
+                                                        ? 'bg-accent text-accent-foreground'
+                                                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                                                    'group flex gap-x-3 rounded-md p-2 text-[13px] font-medium transition-colors'
                                                 )}
                                             >
-                                                <item.icon className="h-6 w-6 shrink-0" aria-hidden="true" />
+                                                <item.icon className={cn("h-5 w-5 shrink-0 transition-colors", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} strokeWidth={1.5} aria-hidden="true" />
                                                 {item.name}
                                             </Link>
                                         </li>
@@ -136,9 +142,9 @@ export default function MobileSidebar({ open, setOpen, navigation, onLogout }: M
                         <li className="mt-auto">
                             <button
                                 onClick={onLogout}
-                                className="group -mx-2 flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-gray-700 hover:bg-red-50 hover:text-red-600 w-full"
+                                className="group -mx-2 flex gap-x-3 rounded-md p-2 text-[13px] font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive w-full transition-colors"
                             >
-                                <LogOut className="h-6 w-6 shrink-0" aria-hidden="true" />
+                                <LogOut className="h-5 w-5 shrink-0" strokeWidth={1.5} aria-hidden="true" />
                                 Sair
                             </button>
                         </li>

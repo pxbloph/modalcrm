@@ -4,27 +4,106 @@ import { PrismaService } from '../prisma/prisma.service';
 import { User, Role, Prisma } from '@prisma/client';
 
 import { DealsService } from '../deals/deals.service';
+import { AutomationsService } from '../automations/automations.service';
+import { TabulationsService } from '../tabulations/tabulations.service';
+import axios from 'axios';
+
 
 @Injectable()
 export class ClientsService {
     constructor(
         private prisma: PrismaService,
-        private dealsService: DealsService
+        private dealsService: DealsService,
+        private automationsService: AutomationsService,
+        private tabulationsService: TabulationsService
     ) { }
 
     async create(data: Prisma.ClientCreateInput, user: User) {
         try {
+            // Separate Client data from Qualification data
+            const {
+                // Qualification Fields
+                faturamento_mensal, faturamento_maquina, maquininha_atual, produto_interesse,
+                emite_boletos, deseja_receber_ofertas, informacoes_adicionais, tabulacao, agendamento,
+                account_opening_date, // This is on Client model too but handled specifically
+
+                // Other non-client fields that might be present
+                answers,
+                skip_auto_deal,
+                created_by_id, // Allow override
+
+                ...clientData
+            } = data as any;
+
+            // 1. Sanitize Client Data (Allow-list)
+            const allowedClientFields = [
+                'name', 'surname', 'cnpj', 'email', 'phone', 'is_qualified', 'has_open_account', 'answers', 'integration_status',
+                'address', 'cnae_main', 'cnae_secondary', 'legal_nature', 'registration_status', 'registration_status_date',
+                'opening_date', 'share_capital', 'id_card_bitrix', 'id_contact_bitrix', 'account_opening_date'
+            ];
+
+            const cleanClientData: any = {};
+            for (const key of Object.keys(clientData)) {
+                if (allowedClientFields.includes(key)) {
+                    cleanClientData[key] = clientData[key];
+                }
+            }
+
+            // Default Integration Status
+            if (!cleanClientData.integration_status || cleanClientData.integration_status.trim() === '') {
+                cleanClientData.integration_status = 'Cadastrando...';
+            }
+
+            // Determine Creator (Admin/Supervisor Override)
+            let finalCreatorId = user.id;
+            if ((user.role === 'ADMIN' || user.role === 'SUPERVISOR') && created_by_id) {
+                finalCreatorId = created_by_id;
+            }
+
             const client = await this.prisma.client.create({
                 data: {
-                    ...data,
-                    answers: data['answers'] || {},
-                    // integration_status default is 'Pendente' in schema
-                    created_by: { connect: { id: user.id } },
+                    ...cleanClientData,
+                    // Parse date if present
+                    account_opening_date: account_opening_date ? new Date(account_opening_date) : null,
+                    answers: answers || {},
+                    created_by: { connect: { id: finalCreatorId } },
                 },
             });
 
-            // Auto-create Deal (Kanban)
-            this.createDefaultDeal(client, user.id);
+            // 2. Create Initial Qualification (if any data provided)
+            const qualFields = [
+                faturamento_mensal, faturamento_maquina, maquininha_atual, produto_interesse,
+                emite_boletos, deseja_receber_ofertas, informacoes_adicionais, tabulacao, agendamento
+            ];
+            const hasQualificationInfo = qualFields.some(f => f !== undefined && f !== null && f !== "");
+
+            if (hasQualificationInfo || tabulacao) {
+                // Helper to parse decimals/ints safely (reused logic)
+                const toDec = (val: any) => val ? new Prisma.Decimal(val) : undefined;
+                const toBool = (val: any) => val === true || val === 'true';
+
+                await this.prisma.qualification.create({
+                    data: {
+                        client_id: client.id,
+                        created_by_id: finalCreatorId,
+                        answers: {},
+                        tabulacao: tabulacao || "Aguardando contato", // Default if not provided? Or keep undefined?
+                        faturamento_mensal: toDec(faturamento_mensal),
+                        faturamento_maquina: toDec(faturamento_maquina),
+                        maquininha_atual: maquininha_atual,
+                        produto_interesse: produto_interesse,
+                        emite_boletos: emite_boletos !== undefined ? toBool(emite_boletos) : false,
+                        deseja_receber_ofertas: deseja_receber_ofertas !== undefined ? toBool(deseja_receber_ofertas) : false,
+                        informacoes_adicionais: informacoes_adicionais,
+                        agendamento: agendamento ? new Date(agendamento) : null
+                    }
+                });
+            }
+
+            // 3. Auto-create Deal (Kanban) - Controlled by Flag
+            if (!skip_auto_deal) {
+                this.createDefaultDeal(client, finalCreatorId);
+            }
 
             return client;
         } catch (error) {
@@ -39,11 +118,21 @@ export class ClientsService {
 
     private async createDefaultDeal(client: any, userId: string) {
         try {
-            const pipeline = await this.prisma.pipeline.findFirst({
+            let pipeline = await this.prisma.pipeline.findFirst({
                 where: { is_default: true }
             });
 
-            if (!pipeline) return;
+            // Fallback: Use first available pipeline if no default is set
+            if (!pipeline) {
+                pipeline = await this.prisma.pipeline.findFirst({
+                    orderBy: { created_at: 'asc' } // Oldest pipeline usually "Main"
+                });
+            }
+
+            if (!pipeline) {
+                console.warn("No pipeline found. Skipping auto-deal creation.");
+                return;
+            }
 
             await this.dealsService.create({
                 title: `${client.name}`,
@@ -59,7 +148,7 @@ export class ClientsService {
     }
 
     private async buildFilterConditions(user: User, query: any = {}): Promise<Prisma.ClientWhereInput> {
-        const { search, startDate, endDate, responsibleId, status, tabulation, hasOpenAccount, openAccountStartDate, openAccountEndDate } = query;
+        const { search, startDate, endDate, responsibleId, status, tabulation, hasOpenAccount, openAccountStartDate, openAccountEndDate, pipelineId } = query;
         const andConditions: Prisma.ClientWhereInput[] = [];
 
         // Search Logic
@@ -71,6 +160,17 @@ export class ClientsService {
                     { cnpj: { contains: search } },
                     { email: { contains: search, mode: 'insensitive' } },
                 ]
+            });
+        }
+
+        // Pipeline Filter (NEW) - Filter Clients that have at least one deal in this pipeline
+        if (pipelineId) {
+            andConditions.push({
+                deals: {
+                    some: {
+                        pipeline_id: pipelineId
+                    }
+                }
             });
         }
 
@@ -166,41 +266,7 @@ export class ClientsService {
         return andConditions.length > 0 ? { AND: andConditions } : {};
     }
 
-    async findAll(user: User, query: any = {}) {
-        const where = await this.buildFilterConditions(user, query);
-        const page = Number(query.page) || 1;
-        const limit = Number(query.limit) || 50;
-        const skip = (page - 1) * limit;
 
-        const [data, total] = await Promise.all([
-            this.prisma.client.findMany({
-                where,
-                include: {
-                    created_by: { select: { name: true, surname: true, email: true } },
-                    qualifications: {
-                        orderBy: { created_at: 'desc' },
-                        take: 1,
-                        // @ts-ignore
-                        select: { agendamento: true, tabulacao: true }
-                    }
-                },
-                orderBy: { created_at: 'desc' },
-                take: limit,
-                skip: skip
-            }),
-            this.prisma.client.count({ where })
-        ]);
-
-        return {
-            data,
-            meta: {
-                total,
-                page,
-                limit,
-                totalPages: Math.ceil(total / limit)
-            }
-        };
-    }
 
 
 
@@ -428,6 +494,28 @@ export class ClientsService {
                     });
                 }
 
+                // --- NEW: DIRECT TABULATION LOGIC (Centralized) ---
+                if (tabulacao && tabulacao !== latestQual?.tabulacao) {
+                    // Find active Deal for this client
+                    const activeDeal = await this.prisma.deal.findFirst({
+                        where: { client_id: id, status: 'OPEN' },
+                        orderBy: { created_at: 'desc' }
+                    });
+
+                    if (activeDeal) {
+                        // Check if this tabulation has a target stage configured in Settings > Tabulations
+                        const tabConfig = await this.tabulationsService.findByLabel(tabulacao);
+
+                        if (tabConfig && tabConfig.target_stage_id) {
+                            if (activeDeal.stage_id !== tabConfig.target_stage_id) {
+                                console.log(`[CLIENTS] Tabulation "${tabulacao}" dictates move to stage ${tabConfig.target_stage_id}. Moving Deal ${activeDeal.id}...`);
+                                await this.dealsService.update(activeDeal.id, { stage_id: tabConfig.target_stage_id } as any);
+                            }
+                        }
+                    }
+                }
+                // -----------------------------------------------------
+
                 // Check if we should qualify the client
                 const hasRealData =
                     (maquininha_atual && maquininha_atual.trim() !== '') ||
@@ -552,6 +640,42 @@ export class ClientsService {
         };
     }
 
+    async findAll(user: User, query: any = {}) {
+        const where = await this.buildFilterConditions(user, query);
+        // Optimized query with specific select
+        const clients = await this.prisma.client.findMany({
+            where,
+            select: {
+                id: true,
+                name: true,
+                surname: true,
+                cnpj: true,
+                email: true,
+                phone: true,
+                integration_status: true,
+                is_qualified: true,
+                has_open_account: true,
+                created_at: true,
+                created_by: { // Renamed from 'responsible' to 'created_by' to match schema
+                    select: { id: true, name: true, surname: true }
+                },
+                qualifications: {
+                    orderBy: { created_at: 'desc' },
+                    take: 1,
+                    select: {
+                        id: true,
+                        tabulacao: true,
+                        faturamento_mensal: true
+                    }
+                }
+            },
+            orderBy: { created_at: 'desc' },
+            // TODO: Implement pagination args (skip/take) efficiently in next step if requested
+        });
+
+        return clients;
+    }
+
     async findOne(id: string, user: User) {
         const client = await this.prisma.client.findUnique({
             where: { id },
@@ -641,5 +765,404 @@ export class ClientsService {
             where: { id: { in: ids } },
             data: { has_open_account: true }
         });
+    }
+
+    async exportClients(user: User, query: any = {}) {
+        const where = await this.buildFilterConditions(user, query);
+
+        // Fetch all matching data (heavy query)
+        const clients = await this.prisma.client.findMany({
+            where,
+            include: {
+                created_by: { select: { name: true, surname: true } },
+                qualifications: {
+                    orderBy: { created_at: 'desc' },
+                    take: 1
+                }
+            },
+            orderBy: { created_at: 'desc' }
+        });
+
+        // Flatten Data
+        const csvRows = clients.map(client => {
+            const qual: any = client.qualifications[0] || {};
+
+            return {
+                'ID': client.id,
+                'Razão Social': client.name,
+                'Nome Sócio': client.surname || '',
+                'CNPJ': client.cnpj,
+                'Email': client.email,
+                'Telefone': client.phone,
+                'Status Integração': client.integration_status,
+                'Conta Aberta': client.has_open_account ? 'SIM' : 'NÃO',
+                'Data Conta Aberta': client.account_opening_date ? client.account_opening_date.toISOString().split('T')[0] : '',
+                'Responsável': client.created_by ? `${client.created_by.name} ${client.created_by.surname || ''}` : '',
+                'Data Criação': client.created_at.toISOString().split('T')[0],
+                // Qualification Fields
+                'Tabulação': qual.tabulacao || '',
+                'Agendamento': qual.agendamento ? qual.agendamento.toISOString() : '',
+                'Faturamento Mensal': qual.faturamento_mensal || 0,
+                'Faturamento Máquina': qual.faturamento_maquina || 0,
+                'Maquininha Atual': qual.maquininha_atual || '',
+                'Produto Interesse': qual.produto_interesse || '',
+                'Emite Boletos': qual.emite_boletos ? 'SIM' : 'NÃO',
+                'Deseja Ofertas': qual.deseja_receber_ofertas ? 'SIM' : 'NÃO',
+                'Informações Adicionais': qual.informacoes_adicionais || ''
+            };
+        });
+
+        return csvRows;
+    }
+
+    // --- TAKEOVER FUNCTIONALITY ---
+
+    async lookupByCnpj(cnpj: string, user: User) {
+        const cleanCnpj = cnpj.replace(/\D/g, '');
+
+        if (!cleanCnpj) {
+            throw new ConflictException('CNPJ inválido');
+        }
+
+        const client = await this.prisma.client.findFirst({
+            where: {
+                OR: [
+                    { cnpj: cnpj },
+                    { cnpj: cleanCnpj }
+                ]
+            },
+            include: {
+                created_by: { select: { id: true, name: true, surname: true } },
+                qualifications: {
+                    orderBy: { created_at: 'desc' },
+                    take: 1,
+                    select: { tabulacao: true }
+                }
+            }
+        });
+
+        if (!client) {
+            throw new ConflictException('CNPJ não encontrado na base.');
+        }
+
+        // Logic for "Takeover" (Legacy) - Kept for backward compatibility if needed, 
+        // but this method is now used by TakeoverModal.
+        // We will ALSO implement lookupForTransfer for the new flow.
+
+        let canTakeOver = false;
+        let denyReason = '';
+
+        if (user.role === Role.ADMIN || user.role === Role.SUPERVISOR) {
+            canTakeOver = true;
+        } else {
+            // @ts-ignore
+            if (client.last_contact_user_id === user.id) {
+                canTakeOver = true;
+                // @ts-ignore
+            } else if (!client.last_contact_user_id) {
+                denyReason = 'Você não foi o último atendente deste lead.';
+            } else {
+                denyReason = `Último atendente foi outro operador.`;
+            }
+        }
+
+        return {
+            lead_id: client.id,
+            company_name: client.name,
+            cnpj_masked: client.cnpj,
+            owner_name: `${client.created_by.name} ${client.created_by.surname || ''}`.trim(),
+            owner_id: client.created_by.id,
+            pipeline_stage: client.qualifications?.[0]?.tabulacao || 'Sem tabulação',
+            can_take_over: canTakeOver,
+            deny_reason: canTakeOver ? null : denyReason
+        };
+    }
+
+    // NEW: Explicit lookup for Transfer (No constraints)
+    async lookupForTransfer(cnpj: string, user: User) {
+        const cleanCnpj = cnpj.replace(/\D/g, '');
+        if (!cleanCnpj) throw new ConflictException('CNPJ inválido');
+
+        const client = await this.prisma.client.findFirst({
+            where: {
+                OR: [{ cnpj: cnpj }, { cnpj: cleanCnpj }]
+            },
+            include: {
+                created_by: { select: { id: true, name: true, surname: true } },
+                qualifications: {
+                    orderBy: { created_at: 'desc' },
+                    take: 1,
+                    select: { tabulacao: true }
+                }
+            }
+        });
+
+        console.log(`[LOOKUP TRANSFER] User ${user.email} searching CNPJ ${cnpj}. Found: ${!!client}`);
+
+        if (!client) {
+            // Return null or throw? Throwing 404 is better for frontend handling
+            return null; // Controller handles 404 or we return structured response
+        }
+
+        return {
+            lead_id: client.id,
+            company_name: client.name,
+            cnpj_masked: client.cnpj,
+            owner_name: `${client.created_by.name} ${client.created_by.surname || ''}`.trim(),
+            owner_id: client.created_by.id,
+            pipeline_stage: client.qualifications?.[0]?.tabulacao || 'Sem tabulação',
+            can_transfer: true // Always true per new rule
+        };
+    }
+
+    // NEW: Transfer By CNPJ (No constraints)
+    async transferByCnpj(cnpj: string, user: User, reason?: string) {
+        const cleanCnpj = cnpj.replace(/\D/g, '');
+
+        const client = await this.prisma.client.findFirst({
+            where: {
+                OR: [{ cnpj: cnpj }, { cnpj: cleanCnpj }]
+            },
+            include: { created_by: true }
+        });
+
+        if (!client) throw new ConflictException('Lead não encontrado.');
+
+        if (client.created_by_id === user.id) {
+            throw new ConflictException('Você já é o responsável por este lead.');
+        }
+
+        const oldOwnerId = client.created_by_id;
+        const newOwnerId = user.id;
+
+        // Transaction
+        const updatedClient = await this.prisma.$transaction(async (tx) => {
+            const updated = await tx.client.update({
+                where: { id: client.id },
+                data: { created_by_id: newOwnerId },
+                include: { created_by: true }
+            });
+
+            // Audit
+            await (tx as any).leadOwnerTransferAudit.create({
+                data: {
+                    lead_id: client.id,
+                    old_owner_id: oldOwnerId,
+                    new_owner_id: newOwnerId,
+                    requested_by_user_id: user.id,
+                    mode: 'operator_transfer_cnpj',
+                    reason: reason || 'Transferência manual por CNPJ (Novo Fluxo)'
+                }
+            });
+
+            return updated;
+        });
+
+        // N8N Notification (Fire and forget)
+        this.notifyN8N({
+            client: updatedClient,
+            oldOwner: client.created_by,
+            newOwner: updatedClient.created_by,
+            requestedBy: user,
+            mode: 'operator_transfer_cnpj',
+            reason,
+            auditId: 'tx-audit' // simplified since inside tx we didn't return ID, acceptable
+        });
+
+        return { success: true, message: 'Responsabilidade assumida com sucesso.' };
+    }
+
+    async takeover(id: string, user: User, reason?: string) {
+        const client = await this.prisma.client.findUnique({
+            where: { id },
+            include: { created_by: true }
+        });
+
+        if (!client) throw new ConflictException('Lead não encontrado.');
+
+        if (user.role === Role.OPERATOR) {
+            // @ts-ignore
+            if (client.last_contact_user_id !== user.id) {
+                throw new ConflictException('Você não tem permissão para assumir este lead (regra do último atendente).');
+            }
+        }
+
+        const oldOwnerId = client.created_by_id;
+        const newOwnerId = user.id;
+
+        if (oldOwnerId === newOwnerId) {
+            throw new ConflictException('Você já é o responsável por este lead.');
+        }
+
+        const updatedClient = await this.prisma.client.update({
+            where: { id },
+            data: {
+                created_by_id: newOwnerId
+            },
+            include: { created_by: true }
+        });
+
+        const auditId = await this.logTransferAudit(
+            client.id,
+            oldOwnerId,
+            newOwnerId,
+            user.id,
+            user.role === Role.OPERATOR ? 'operator_single' : 'supervisor_single',
+            reason
+        );
+
+        this.notifyN8N({
+            client: updatedClient,
+            oldOwner: client.created_by,
+            newOwner: updatedClient.created_by,
+            requestedBy: user,
+            mode: user.role === Role.OPERATOR ? 'operator_single' : 'supervisor_single',
+            reason,
+            auditId
+        });
+
+        return { success: true, message: 'Responsabilidade alterada com sucesso.' };
+    }
+
+    async takeoverBulk(data: { cnjp?: string, lead_id?: string, new_owner_id?: string, reason?: string }[], user: User) {
+        if (user.role === Role.OPERATOR) {
+            throw new ConflictException('Operadores não podem realizar ações em massa.');
+        }
+
+        const results = {
+            success: 0,
+            failed: 0,
+            items: []
+        };
+
+        for (const item of data) {
+            try {
+                let client;
+                if (item.lead_id) {
+                    client = await this.prisma.client.findUnique({ where: { id: item.lead_id }, include: { created_by: true } });
+                } else if (item.cnjp) {
+                    const clean = item.cnjp.replace(/\D/g, '');
+                    client = await this.prisma.client.findFirst({
+                        where: { OR: [{ cnpj: item.cnjp }, { cnpj: clean }] },
+                        include: { created_by: true }
+                    });
+                }
+
+                if (!client) {
+                    results.failed++;
+                    results.items.push({ cnpj: item.cnjp, status: 'error', reason: 'Lead não encontrado' });
+                    continue;
+                }
+
+                const newOwnerId = item.new_owner_id || user.id;
+
+                if (client.created_by_id === newOwnerId) {
+                    results.failed++;
+                    results.items.push({ cnpj: client.cnpj, status: 'skipped', reason: 'Já pertence ao responsável' });
+                    continue;
+                }
+
+                const oldOwnerId = client.created_by_id;
+
+                const updatedClient = await this.prisma.client.update({
+                    where: { id: client.id },
+                    data: { created_by_id: newOwnerId },
+                    include: { created_by: true }
+                });
+
+                const auditId = await this.logTransferAudit(
+                    client.id,
+                    oldOwnerId,
+                    newOwnerId,
+                    user.id,
+                    'supervisor_bulk',
+                    item.reason
+                );
+
+                this.notifyN8N({
+                    client: updatedClient,
+                    oldOwner: client.created_by,
+                    newOwner: updatedClient.created_by,
+                    requestedBy: user,
+                    mode: 'supervisor_bulk',
+                    reason: item.reason,
+                    auditId
+                });
+
+                results.success++;
+                results.items.push({ cnpj: client.cnpj, status: 'success', old_owner: oldOwnerId, new_owner: newOwnerId });
+
+            } catch (err) {
+                console.error('Bulk Takeover Error Item:', err);
+                results.failed++;
+                results.items.push({ cnpj: item.cnjp, status: 'error', reason: err.message });
+            }
+        }
+
+        return results;
+    }
+
+    private async logTransferAudit(leadId: string, oldOwnerId: string, newOwnerId: string, requesterId: string, mode: string, reason?: string) {
+        try {
+            const audit = await (this.prisma as any).leadOwnerTransferAudit.create({
+                data: {
+                    lead_id: leadId,
+                    old_owner_id: oldOwnerId,
+                    new_owner_id: newOwnerId,
+                    requested_by_user_id: requesterId,
+                    mode: mode,
+                    reason: reason || null
+                }
+            });
+            return audit.id;
+        } catch (e) {
+            console.error('Failed to create audit log:', e);
+            return null;
+        }
+    }
+
+    private async notifyN8N(payload: any) {
+        try {
+            const webhookUrl = process.env.N8N_TAKEOVER_WEBHOOK_URL || 'https://n8n.webhook.url/replace-me';
+
+            if (webhookUrl.includes('replace-me')) {
+                // console.warn('N8N Webhook URL not configured.');
+                return;
+            }
+
+            const data = {
+                lead_id: payload.client.id,
+                client: {
+                    name: payload.client.name,
+                    cnpj: payload.client.cnpj,
+                    phone: payload.client.phone,
+                    email: payload.client.email
+                },
+                old_owner: {
+                    id: payload.oldOwner.id,
+                    name: `${payload.oldOwner.name} ${payload.oldOwner.surname || ''}`
+                },
+                new_owner: {
+                    id: payload.newOwner.id,
+                    name: `${payload.newOwner.name} ${payload.newOwner.surname || ''}`
+                },
+                requested_by: {
+                    id: payload.requestedBy.id,
+                    name: `${payload.requestedBy.name} ${payload.requestedBy.surname || ''}`,
+                    role: payload.requestedBy.role
+                },
+                transfer_id: payload.auditId,
+                mode: payload.mode,
+                reason: payload.reason,
+                timestamp: new Date().toISOString()
+            };
+
+            axios.post(webhookUrl, data).catch(err => {
+                console.error('N8N Webhook Failed:', err.message);
+            });
+
+        } catch (e) {
+            console.error('Notify N8N Error:', e);
+        }
     }
 }

@@ -17,6 +17,20 @@ export class ImportsController {
         return this.importsService.createImportJob(file, req.user);
     }
 
+    @Post('leads')
+    @UseInterceptors(FileInterceptor('file'))
+    async uploadLeads(@UploadedFile() file: Express.Multer.File, @Request() req) {
+        if (!file) throw new NotFoundException('Arquivo não enviado');
+        // We reuse createImportJob but we need to tell service it's a LEADS import type? 
+        // The service logic currently hardcodes 'OPEN_ACCOUNTS' type or we need to pass strict type.
+        // Let's modify createImportJob slightly or duplicate.
+        // For speed, let's overload createImportJob or create a new one. 
+        // Actually, the service.createImportJob stored 'OPEN_ACCOUNTS' hardcoded.
+        // I will fix the service in next step or use a new method.
+        // Let's assume I fix the service method signature to accept TYPE.
+        return this.importsService.createImportJob(file, req.user, 'LEADS');
+    }
+
     @Get('open-accounts/:id')
     async getStatus(@Param('id') id: string, @Request() req) {
         return this.importsService.getJobStatus(id, req.user);

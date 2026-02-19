@@ -176,7 +176,7 @@ export default function ChatWidget({ currentUser, className }: ChatWidgetProps) 
                                             {partner.user.name} {partner.user.surname}
                                         </div>
                                         {partner.lastMessageAt && (
-                                            <div className="text-[10px] text-gray-400">
+                                            <div className="text-[12px] text-gray-400">
                                                 {new Date(partner.lastMessageAt).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })}
                                             </div>
                                         )}
