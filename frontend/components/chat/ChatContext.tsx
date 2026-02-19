@@ -20,9 +20,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
-        // Connect to Backend WebSocket URL (Root path usually, or /socket.io default)
-        // Assuming backend runs on port 3500
-        const socketInstance = io('http://localhost:3500', {
+        // Determine Socket URL:
+        // - In Development (localhost): Connect primarily to port 3500 (Backend)
+        // - In Production (Server): Use relative path (undefined) to let Nginx proxy handle it via /socket.io/
+        const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+        const socketUrl = isDevelopment ? 'http://localhost:3500' : undefined;
+
+        const socketInstance = io(socketUrl, {
             auth: {
                 token: token ? `Bearer ${token}` : '',
             },
