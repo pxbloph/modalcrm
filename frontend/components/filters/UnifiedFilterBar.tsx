@@ -134,10 +134,10 @@ export function UnifiedFilterBar({
                             onResponsibleChange={onResponsibleChange}
                             tabulation={tabulation}
                             onTabulationChange={onTabulationChange}
-                            // creationDate={creationDate} // Hidden per user request
-                            // onCreationDateChange={onCreationDateChange}
-                            // accountDate={accountDate} // Hidden per user request
-                            // onAccountDateChange={onAccountDateChange}
+                            creationDate={creationDate}
+                            onCreationDateChange={onCreationDateChange}
+                            accountDate={accountDate}
+                            onAccountDateChange={onAccountDateChange}
                             onApply={() => setIsPanelOpen(false)}
                             onClear={() => {
                                 onClear();
