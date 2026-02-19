@@ -83,7 +83,7 @@ export default function KanbanPage() {
     // Default Filter: Last 2 Days (Optimization)
     const [isDefaultView, setIsDefaultView] = useState(true);
     const [creationDate, setCreationDate] = useState<{ from: Date | undefined; to?: Date | undefined } | undefined>({
-        from: subDays(new Date(), 2),
+        from: subDays(new Date(), 10),
         to: undefined
     });
     const [accountDate, setAccountDate] = useState<{ from: Date | undefined; to?: Date | undefined } | undefined>(undefined);
