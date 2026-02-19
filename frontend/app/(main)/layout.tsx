@@ -150,6 +150,12 @@ export default function DashboardLayout({
                     icon: Settings,
                     show: user.role === 'ADMIN'
                 },
+                {
+                    name: 'Logs de Auditoria',
+                    href: '/admin/logs',
+                    icon: ShieldCheck,
+                    show: user.role === 'ADMIN' || user.role === 'SUPERVISOR'
+                },
             ]
         },
     ];

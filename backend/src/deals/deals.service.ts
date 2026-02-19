@@ -4,13 +4,15 @@ import { UpdateDealDto } from './dto/update-deal.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AutomationsService } from '../automations/automations.service';
 import { KanbanGateway } from './kanban.gateway';
+import { AuditService } from '../modules/audit/audit.service';
 
 @Injectable()
 export class DealsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly automationsService: AutomationsService,
-    private readonly kanbanGateway: KanbanGateway
+    private readonly kanbanGateway: KanbanGateway,
+    private readonly auditService: AuditService,
   ) { }
 
   async create(createDealDto: CreateDealDto, actorId?: string) {
@@ -71,6 +73,22 @@ export class DealsService {
       stage_id: deal.stage_id
     });
 
+    // [AUDIT] Log Deal Creation
+    this.auditService.log({
+      level: 'INFO',
+      event_type: 'DEAL_CREATED',
+      entity_type: 'DEAL',
+      entity_id: deal.id,
+      action: 'CREATE',
+      actor_id: actorId, // Passado explicito se vier do service, ou pego do contexto
+      before: null,
+      after: fullDeal,
+      metadata: {
+        pipelineId: deal.pipeline_id,
+        entity_name: fullDeal.title
+      }
+    });
+
     return deal;
   }
 
@@ -99,8 +117,8 @@ export class DealsService {
             name: true,
             surname: true,
             cnpj: true, // Shown in card now
-            // email: true, // Not shown in card usually
-            // phone: true, // Not shown in card usually
+            email: true, // Shown in list view
+            phone: true, // Shown in list view
             account_opening_date: true, // Used for 'Contas Abertas' badge
             created_at: true,
             qualifications: {
@@ -303,6 +321,36 @@ export class DealsService {
             }
           }
         });
+
+        // [FIX START] Sync Client Ownership (Carteira de Clientes relies on created_by_id)
+        if (currentDeal.client_id && actorId) {
+          const client = await tx.client.findUnique({ where: { id: currentDeal.client_id } });
+          // If client exists and owner is different from new responsible
+          if (client && client.created_by_id !== dealData.responsible_id) {
+            const oldOwnerId = client.created_by_id;
+
+            // 1. Update Client Owner
+            await tx.client.update({
+              where: { id: currentDeal.client_id },
+              data: { created_by_id: dealData.responsible_id }
+            });
+
+            // 2. Create Transfer Audit (Safe check for type)
+            if ((tx as any).leadOwnerTransferAudit) {
+              await (tx as any).leadOwnerTransferAudit.create({
+                data: {
+                  lead_id: currentDeal.client_id,
+                  old_owner_id: oldOwnerId,
+                  new_owner_id: dealData.responsible_id,
+                  requested_by_user_id: actorId,
+                  mode: 'kanban_transfer',
+                  reason: 'Sincronização automática via transferência de card no Kanban'
+                }
+              });
+            }
+          }
+        }
+        // [FIX END]
       }
 
       if (dealData.stage_id && dealData.stage_id !== currentDeal.stage_id) {
@@ -346,6 +394,26 @@ export class DealsService {
         stage_id: deal.stage_id
       });
     }
+
+    // [AUDIT] Log Update
+    const isMove = dealData.stage_id && oldStageId && oldStageId !== dealData.stage_id;
+    this.auditService.log({
+      level: 'INFO',
+      event_type: isMove ? 'DEAL_MOVED' : 'DEAL_UPDATED',
+      entity_type: 'DEAL',
+      entity_id: id,
+      action: isMove ? 'MOVE_STAGE' : 'UPDATE',
+      actor_id: actorId,
+      before: { stage_id: oldStageId, ...currentDeal },
+      after: deal,
+      metadata: {
+        pipelineId,
+        changes: Object.keys(dealData),
+        oldStageId: isMove ? oldStageId : undefined,
+        newStageId: isMove ? deal.stage_id : undefined,
+        entity_name: deal.title
+      }
+    });
 
     return deal;
   }

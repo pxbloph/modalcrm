@@ -140,8 +140,8 @@ export class ClientsService {
                 pipeline_id: pipeline.id,
                 responsible_id: userId,
                 priority: 'NORMAL'
-            } as any);
-            console.log(`Deal created for client ${client.id}`);
+            } as any, userId); // Pass actorId explicitly to ensure proper logging
+            console.log(`Deal created for client ${client.id} by actor ${userId}`);
         } catch (e) {
             console.error("Error auto-creating deal:", e);
         }
@@ -509,7 +509,7 @@ export class ClientsService {
                         if (tabConfig && tabConfig.target_stage_id) {
                             if (activeDeal.stage_id !== tabConfig.target_stage_id) {
                                 console.log(`[CLIENTS] Tabulation "${tabulacao}" dictates move to stage ${tabConfig.target_stage_id}. Moving Deal ${activeDeal.id}...`);
-                                await this.dealsService.update(activeDeal.id, { stage_id: tabConfig.target_stage_id } as any);
+                                await this.dealsService.update(activeDeal.id, { stage_id: tabConfig.target_stage_id } as any, user.id);
                             }
                         }
                     }
@@ -684,6 +684,11 @@ export class ClientsService {
                 qualifications: {
                     orderBy: { created_at: 'desc' },
                     take: 1
+                },
+                deals: {
+                    where: { status: 'OPEN' },
+                    take: 1,
+                    orderBy: { created_at: 'desc' }
                 }
             },
         });

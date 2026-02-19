@@ -71,10 +71,10 @@ const Row = memo(({ data, index, style }: any) => {
     const deal = deals[index];
 
     // Add padding to bottom for better spacing in list
-    // Also adjust width to account for scrollbar or padding if needed
+    // Adjust width to account for scrollbar or padding if needed
     const patchStyle = {
         ...style,
-        height: (style.height || 140) - 8,
+        height: (Number(style.height) || 165) - 2, // USER REQUEST: 3px margin
         left: Number(style.left || 0) + 4,
         width: "calc(100% - 12px)"
     };
@@ -156,7 +156,7 @@ export function KanbanColumnComponent({ stage, deals, totalValue, onDealClick, c
                                         height={dimensions.height}
                                         width={dimensions.width}
                                         itemCount={deals.length}
-                                        itemSize={140}
+                                        itemSize={165}
                                         itemData={{ deals, onDealClick, cardConfig, stageColor: stage.color, users, onResponsibleChange }}
                                         className="scrollbar-thin scrollbar-thumb-primary/20 pb-2"
                                     >
@@ -175,6 +175,7 @@ export function KanbanColumnComponent({ stage, deals, totalValue, onDealClick, c
             </div>
         </div>
     );
+
 }
 
 export const KanbanColumn = React.memo(KanbanColumnComponent);

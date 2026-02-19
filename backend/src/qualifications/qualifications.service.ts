@@ -254,7 +254,7 @@ export class QualificationsService {
                 await this.syncWithKanban(client, data, userId);
             } else if (source === 'manual_supervisor') {
                 // If updated manually, also check for Kanban Move
-                await this.handleKanbanMoveOnTabulation(client.id, data.tabulacao);
+                await this.handleKanbanMoveOnTabulation(client.id, data.tabulacao, userId);
             }
 
         } catch (webhookError: any) {
@@ -315,7 +315,7 @@ export class QualificationsService {
                     custom_fields: {
                         // Map known fields if needed, e.g. key: 'valor'
                     }
-                } as any);
+                } as any, userId);
 
                 console.log(`Deal created for client ${client.id} in pipeline ${pipeline.name}`);
             }
@@ -323,7 +323,7 @@ export class QualificationsService {
             // 4. Check for Tabulation Mapping (Move to specific stage if mapped)
             // This runs regardless of whether the deal existed or was just created
             if (data.tabulacao) {
-                await this.handleKanbanMoveOnTabulation(client.id, data.tabulacao);
+                await this.handleKanbanMoveOnTabulation(client.id, data.tabulacao, userId);
             }
 
         } catch (error) {
@@ -332,7 +332,7 @@ export class QualificationsService {
         }
     }
 
-    private async handleKanbanMoveOnTabulation(clientId: string, tabulationLabel: string) {
+    private async handleKanbanMoveOnTabulation(clientId: string, tabulationLabel: string, actorId: string) {
         try {
             if (!tabulationLabel) return;
 
@@ -355,8 +355,8 @@ export class QualificationsService {
             if (deal) {
                 // 3. Move Deal
                 if (deal.stage_id !== tabulation.target_stage_id) {
-                    await this.dealsService.update(deal.id, { stage_id: tabulation.target_stage_id } as any);
-                    console.log(`Deal ${deal.id} moved to stage ${tabulation.target_stage_id} due to tabulation ${tabulation.label}`);
+                    await this.dealsService.update(deal.id, { stage_id: tabulation.target_stage_id } as any, actorId);
+                    console.log(`Deal ${deal.id} moved to stage ${tabulation.target_stage_id} due to tabulation ${tabulation.label} by ${actorId}`);
                 }
             }
 

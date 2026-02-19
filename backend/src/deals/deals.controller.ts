@@ -15,6 +15,8 @@ export class DealsController {
   @UseGuards(AuthGuard('jwt'))
   @Post()
   create(@Body() createDealDto: CreateDealDto, @Request() req) {
+    console.log('[DEBUG] DealsController.create - User:', req.user);
+    console.log('[DEBUG] DealsController.create - ActorID:', req.user?.id);
     return this.dealsService.create(createDealDto, req.user?.id);
   }
 

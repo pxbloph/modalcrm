@@ -226,3 +226,6 @@ As cores são gerenciadas via variáveis CSS (`--primary`, `--background`, `--si
 ### Unificação de Tabulações
 - **Arquitetura Central**: A lógica de tabulações foi unificada no `TabulationsService`.
 - **Frontend**: Formulários de qualificação agora consomem a lista padronizada de tabulações, garantindo consistência entre Kanban e Modal.
+
+
+# NUNCA DE DEPLOY AUTOMATICO!

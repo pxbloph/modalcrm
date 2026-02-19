@@ -59,6 +59,9 @@ model User {
   authored_announcements Announcement[]
   read_announcements     AnnouncementRead[]
 
+  // Audit Relations
+  audit_actions          AuditLog[]
+
   @@map("users")
 }
 
@@ -698,4 +701,56 @@ model DealTag {
 
   @@id([deal_id, tag_id])
   @@map("deal_tags")
+}
+
+// --- AUDIT SYSTEM ---
+
+model AuditLog {
+  id                  String   @id @default(uuid())
+  created_at          DateTime @default(now())
+  environment         String   @default("prod") // prod, stage, dev
+  level               String   // DEBUG, INFO, WARN, ERROR
+  event_type          String   // USER_LOGIN, DEAL_UPDATED, etc
+  entity_type         String   // Client, Deal, Use, etc
+  entity_id           String?
+  action              String   // CREATE, UPDATE, DELETE, etc
+  
+  actor_id            String?
+  actor               User?    @relation(fields: [actor_id], references: [id])
+  
+  impersonated_by_id  String?
+  request_id          String?
+  trace_id            String?
+  ip_address          String?
+  user_agent          String?
+  route               String?
+  method              String?
+  status_code         Int?
+  duration_ms         Int?
+  success             Boolean  @default(true)
+  error_message       String?
+  tags                Json?
+
+  payload             AuditLogPayload?
+
+  @@index([created_at])
+  @@index([event_type])
+  @@index([entity_type, entity_id])
+  @@index([actor_id])
+  @@index([request_id])
+  @@map("audit_logs")
+}
+
+model AuditLogPayload {
+  id            String   @id @default(uuid())
+  audit_log_id  String   @unique
+  audit_log     AuditLog @relation(fields: [audit_log_id], references: [id], onDelete: Cascade)
+  
+  before        Json?
+  after         Json?
+  metadata      Json?
+  request_body  Json?
+  response_body Json?
+
+  @@map("audit_log_payloads")
 }

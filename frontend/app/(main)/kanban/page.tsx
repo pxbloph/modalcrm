@@ -39,7 +39,7 @@ interface Deal {
         account_opening_date?: string;
         qualifications?: { tabulacao?: string }[];
     };
-    responsible?: { id: string, name: string };
+    responsible?: { id: string, name: string; surname?: string };
     tags?: { tag: { id: string, name: string, color: string } }[];
 }
 
@@ -390,7 +390,7 @@ export default function KanbanPage() {
 
     const handleResponsibleChange = async (dealId: string, userId: string) => {
         try {
-            await api.patch(`/deals/${dealId}`, { user_id: userId });
+            await api.patch(`/deals/${dealId}`, { responsible_id: userId });
             toast({ title: "Responsável atualizado com sucesso" });
             fetchMetrics();
         } catch (error: any) {

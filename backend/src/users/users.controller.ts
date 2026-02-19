@@ -1,5 +1,5 @@
 
-import { Controller, Get, Post, Put, Delete, Patch, Body, Param, UseGuards, Request, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, UseGuards, Request, ForbiddenException, Query } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthGuard } from '@nestjs/passport';
 import { Role } from '@prisma/client';
@@ -10,13 +10,18 @@ export class UsersController {
     constructor(private readonly usersService: UsersService) { }
 
     @Get()
-    async findAll(@Request() req) {
+    async findAll(@Request() req, @Query('scope') scope?: string) {
         // Allow Admin and Supervisor to list users (for Teams/Reports)
         if (req.user.role !== Role.ADMIN && req.user.role !== Role.SUPERVISOR) {
             throw new ForbiddenException('Apenas administradores podem listar todos os usuários');
         }
 
-        return this.usersService.findAll(req.user);
+        // If scope is 'full', return all users (for Audit Filters, etc)
+        // Ignoring hierarchy restrictions temporarily for this purpose
+        if (scope === 'full') {
+            return this.usersService.findAll();
+        }
+
         return this.usersService.findAll(req.user);
     }
 

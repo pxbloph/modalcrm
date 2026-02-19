@@ -10,7 +10,7 @@ import { FilterPanel } from "./FilterPanel";
 import { Badge } from "@/components/ui/badge";
 
 interface UnifiedFilterBarProps {
-    users: { id: string, name: string }[];
+    users: { id: string, name: string; surname?: string }[];
     children?: React.ReactNode;
 
     // Search
@@ -68,7 +68,10 @@ export function UnifiedFilterBar({
         return `${format(range.from, "dd/MM", { locale: ptBR })} - ${format(range.to, "dd/MM", { locale: ptBR })}`;
     };
 
-    const getResponsibleName = (id: string) => users.find(u => u.id === id)?.name || 'Desconhecido';
+    const getResponsibleName = (id: string) => {
+        const u = users.find(u => u.id === id);
+        return u ? `${u.name} ${u.surname || ''}`.trim() : 'Desconhecido';
+    };
 
     const handleClearFilter = (type: string) => {
         if (type === 'responsible') onResponsibleChange(null);

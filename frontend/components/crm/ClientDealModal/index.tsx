@@ -231,12 +231,14 @@ export function ClientDealModal({
             }
         };
 
-        if (type === 'deal') {
+        const activeDeal = type === 'deal' ? data : (data.deals?.[0] || {});
+
+        if (type === 'deal' || activeDeal.id) {
             formValues.deal = {
-                title: data.title,
-                value: data.value,
-                pipeline_id: data.pipeline_id,
-                user_id: data.user_id || data.responsible?.id || ""
+                title: activeDeal.title || `Negócio - ${client?.name || ''}`,
+                value: activeDeal.value,
+                pipeline_id: activeDeal.pipeline_id || pipelineId || "",
+                user_id: activeDeal.user_id || activeDeal.responsible?.id || activeDeal.responsible_id || ""
             };
         } else {
             formValues.deal = {
@@ -252,6 +254,8 @@ export function ClientDealModal({
 
     const handleOpenAccount = async () => {
         const targetClientId = loadedData?.client?.id || loadedData?.id || initialClientId || initialData?.client?.id;
+        const targetDealId = dealId || loadedData?.deals?.[0]?.id; // Use detected deal if available
+
         if (!targetClientId) {
             toast({ title: "Erro", description: "Cliente não identificado.", variant: "destructive" });
             return;
@@ -271,7 +275,7 @@ export function ClientDealModal({
             methods.setValue("qualification.account_opening_date", new Date().toISOString().split('T')[0]);
 
             const currentPipelineId = pipelineId || loadedData?.pipeline_id;
-            if (currentPipelineId && dealId) {
+            if (currentPipelineId && targetDealId) {
                 try {
                     const pipelineRes = await api.get(`/pipelines/${currentPipelineId}`);
                     const stages = pipelineRes.data?.stages || [];
@@ -281,7 +285,7 @@ export function ClientDealModal({
                     );
 
                     if (targetStage) {
-                        await api.patch(`/deals/${dealId}`, { stage_id: targetStage.id });
+                        await api.patch(`/deals/${targetDealId}`, { stage_id: targetStage.id });
                         toast({ title: "Movido", description: `Negócio movido para etapa: ${targetStage.name}` });
                     }
                 } catch (err) {
@@ -339,7 +343,9 @@ export function ClientDealModal({
             }
 
             // 3. CREATE OR UPDATE DEAL
-            if (!dealId) {
+            const targetDealId = dealId || loadedData?.deals?.[0]?.id; // Use detected deal if available
+
+            if (!targetDealId) {
                 // CREATE NEW DEAL
                 await api.post('/deals', {
                     title: values.deal?.title || `Negócio - ${values.client.name}`,
@@ -351,7 +357,7 @@ export function ClientDealModal({
                 toast({ title: "Sucesso", description: "Negócio criado com sucesso!" });
             } else {
                 // UPDATE EXISTING DEAL
-                await api.patch(`/deals/${dealId}`, {
+                await api.patch(`/deals/${targetDealId}`, {
                     title: values.deal?.title,
                     value: values.deal?.value ? Number(values.deal?.value) : null,
                     responsible_id: values.deal?.user_id || undefined
@@ -395,6 +401,7 @@ export function ClientDealModal({
     }
 
     const currentClientId = loadedData?.client?.id || loadedData?.id || initialClientId || initialData?.client?.id;
+    const effectiveDealId = dealId || loadedData?.deals?.[0]?.id;
 
     return (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-[2px] flex items-center justify-center z-[100] p-4 font-sans">
@@ -406,7 +413,7 @@ export function ClientDealModal({
                     })} className="flex flex-col h-full overflow-hidden font-sans">
                         <ModalHeader
                             title={methods.watch("client.name") || "Carregando..."}
-                            subtitle={dealId ? `Deal: ${dealId.split('-')[0]}` : "Cliente"}
+                            subtitle={effectiveDealId ? `Deal: ${effectiveDealId.split('-')[0]}` : "Cliente Sem Negócio"}
                             integrationStatus={methods.watch("client.integration_status")}
                             onClose={onClose}
                         />

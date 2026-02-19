@@ -14,7 +14,7 @@ interface KanbanBoardProps {
 
 export function KanbanBoard({ stages, dealsByStage, onDragEnd, onDealClick, cardConfig, users, onResponsibleChange, totalCounts }: KanbanBoardProps) {
     return (
-        <div className="h-full overflow-x-auto overflow-y-hidden bg-white">
+        <div className="h-full overflow-x-auto overflow-y-hidden bg-background">
             <DragDropContext onDragEnd={onDragEnd}>
                 <div className="flex h-full gap-2">
                     {stages.map(stage => {

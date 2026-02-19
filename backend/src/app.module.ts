@@ -1,5 +1,4 @@
-
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, RequestMethod, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
@@ -24,13 +23,26 @@ import { DashboardsModule } from './dashboards/dashboards.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
-
+// Audit System Imports
+import { ClsModule } from 'nestjs-cls';
+import { AuditModule } from './modules/audit/audit.module';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditInterceptor } from './modules/audit/audit.interceptor';
+import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
 
 @Module({
     imports: [
         ConfigModule.forRoot({
             isGlobal: true,
         }),
+
+        // Context and Audit
+        ClsModule.forRoot({
+            global: true,
+            middleware: { mount: true },
+        }),
+        AuditModule,
+
         PrismaModule,
         AuthModule,
         UsersModule,
@@ -41,7 +53,6 @@ import { join } from 'path';
         ImportsModule,
         ChatModule,
         ScheduleModule.forRoot(),
-        PipelinesModule,
         PipelinesModule,
         TabulationsModule,
         StagesModule,
@@ -57,6 +68,17 @@ import { join } from 'path';
         }),
 
     ],
-
+    providers: [
+        {
+            provide: APP_INTERCEPTOR,
+            useClass: AuditInterceptor,
+        },
+    ],
 })
-export class AppModule { }
+export class AppModule implements NestModule {
+    configure(consumer: MiddlewareConsumer) {
+        consumer
+            .apply(RequestContextMiddleware)
+            .forRoutes('*');
+    }
+}

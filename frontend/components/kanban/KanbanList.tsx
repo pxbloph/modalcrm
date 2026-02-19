@@ -31,7 +31,7 @@ interface Deal {
     created_at: string;
     // Allow any client field access for dynamic columns
     client?: any;
-    responsible?: { id: string, name: string };
+    responsible?: { id: string, name: string; surname?: string };
     tags?: { tag: Tag }[];
     [key: string]: any; // Allow direct access
 }
@@ -320,7 +320,11 @@ export function KanbanList({ stages, dealsByStage, onDealClick }: KanbanListProp
             );
         }
 
-        if (colId === 'responsible') return deal.responsible?.name || '—';
+        if (colId === 'responsible') {
+            const name = deal.responsible?.name || '';
+            const surname = deal.responsible?.surname || '';
+            return `${name} ${surname}`.trim() || '—';
+        }
         if (colId === 'title') return <span className="font-medium text-gray-900 dark:text-gray-100">{deal.title}</span>;
 
         // Generic renderer based on path/format

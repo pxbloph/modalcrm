@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { subDays, startOfDay, endOfDay } from 'date-fns';
 
 interface FilterPanelProps {
-    users: { id: string, name: string }[];
+    users: { id: string, name: string; surname?: string }[];
     tabulationOptions: string[];
 
     // Filter States
@@ -142,7 +142,7 @@ export function FilterPanel({
                         >
                             <option value="">Todos</option>
                             {users.map(u => (
-                                <option key={u.id} value={u.id}>{u.name}</option>
+                                <option key={u.id} value={u.id}>{u.name} {u.surname || ''}</option>
                             ))}
                         </select>
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
