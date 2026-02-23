@@ -81,14 +81,14 @@ export class ClientsController {
         return this.clientsService.findAll(req.user, query);
     }
 
-    @Get(':id')
-    async findOne(@Param('id') id: string, @Request() req) {
-        return this.clientsService.findOne(id, req.user);
-    }
-
     @Get('tabulations')
     async getTabulations() {
         return this.tabulationsService.findActive();
+    }
+
+    @Get(':id')
+    async findOne(@Param('id') id: string, @Request() req) {
+        return this.clientsService.findOne(id, req.user);
     }
 
     @Put(':id')

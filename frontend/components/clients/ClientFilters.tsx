@@ -45,7 +45,7 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
         // Fetch Tabulation Options
         api.get('/clients/tabulations').then(res => {
             if (Array.isArray(res.data)) {
-                setTabulationOptions(res.data);
+                setTabulationOptions(res.data.map((t: any) => typeof t === 'string' ? t : t.label));
             }
         }).catch(err => console.error("Failed to fetch tabulations", err));
     }, [userRole]);

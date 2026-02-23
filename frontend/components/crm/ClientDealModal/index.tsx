@@ -176,8 +176,11 @@ export function ClientDealModal({
                     }
                 }
 
-                if (Array.isArray(tabs.data)) setTabulationOptions(tabs.data);
-                else setTabulationOptions([ /* defaults */ "Aguardando abertura", "Retornar outro horário", "Conta aberta"]);
+                if (Array.isArray(tabs.data)) {
+                    setTabulationOptions(tabs.data.map((t: any) => typeof t === 'string' ? t : t.label));
+                } else {
+                    setTabulationOptions(["Aguardando abertura", "Retornar outro horário", "Conta aberta"]);
+                }
 
                 if (mainData) {
                     setLoadedData(mainData);

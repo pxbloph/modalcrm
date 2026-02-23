@@ -222,9 +222,12 @@ As cores são gerenciadas via variáveis CSS (`--primary`, `--background`, `--si
 - **Log de Criação**: Novos negócios agora registram explicitamente quem os criou ("Negócio criado" + "Por: [Nome]").
 - **Fallback**: Ações automáticas ou legadas aparecem como "Por: Sistema".
 
-### Unificação de Tabulações
-- **Unificação de Tabulações**: A lógica de tabulações e qualificações foi unificada na tabela `clients`. O endpoint `POST /qualifications` foi descontinuado em favor de `PATCH /clients/:id`.
-- **Frontend**: Formulários de qualificação agora consomem a lista padronizada de tabulações, garantindo consistência entre Kanban e Modal.
+### Unificação de Tabulações e Qualificações
+- **Estrutura de Dados**: A tabela `qualifications` foi descontinuada e todos os seus campos (faturamento, maquininha, agendamento, etc.) foram mesclados diretamente na tabela `clients`.
+- **Roteamento Global**: Todas as rotas que anteriormente usavam `/qualifications/*` foram redirecionadas para `/clients/*`.
+  - **Busca de Opções**: Use `GET /clients/tabulations` para buscar a lista de tabulações ativas.
+  - **Salvamento**: Use `PUT /clients/:id` para atualizar dados de qualificação e tabulação.
+- **Frontend**: Componentes como `ClientDealModal`, `ClientFilters` e `ClientRegistrationForm` devem obrigatoriamente usar os novos endpoints unificados para garantir consistência e evitar erros 404.
 
 
-# NUNCA DE DEPLOY AUTOMATICO!
+# NUNCA FAÇA DEPLOY AUTOMATICO!

@@ -80,8 +80,8 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
                     // Default to current user
                     setSelectedResponsible(parsedUser.id);
                 }
-                if (tabsRes?.data) {
-                    setTabulations(Array.isArray(tabsRes.data) ? tabsRes.data : []);
+                if (tabsRes?.data && Array.isArray(tabsRes.data)) {
+                    setTabulations(tabsRes.data.map((t: any) => typeof t === 'string' ? t : t.label));
                 }
 
             } catch (error) {

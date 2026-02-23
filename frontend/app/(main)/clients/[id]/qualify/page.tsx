@@ -36,26 +36,26 @@ export default function QualifyPage() {
         const loadData = async () => {
             if (!params?.id) return;
             try {
-                // Parallel fetch: Client + Active Template
-                const [clientRes, templateRes] = await Promise.all([
+                // Parallel fetch: Client + Active Template + Tabulations
+                const [clientRes, templateRes, tabsRes] = await Promise.all([
                     api.get(`/clients/${params.id}`),
-                    api.get('/form-templates/active')
+                    api.get('/form-templates/active'),
+                    api.get('/clients/tabulations').catch(() => ({ data: [] }))
                 ]);
 
                 setClient(clientRes.data);
 
-                // Initialize form data with client name if needed (system field)
-                const initialData: any = {};
-
-                const correctTabulacaoOptions = [
-                    { label: 'Aguardando abertura', value: 'Aguardando abertura' },
-                    { label: 'Retornar outro horário', value: 'Retornar outro horário' },
-                    { label: 'Conta aberta', value: 'Conta aberta' },
-                    { label: 'Sem interesse', value: 'Sem interesse' },
-                    { label: 'Inapto na Receita Federal', value: 'Inapto na Receita Federal' },
-                    { label: 'Telefone Incorreto', value: 'Telefone Incorreto' },
-                    { label: 'Recusado pelo banco', value: 'Recusado pelo banco' }
-                ];
+                // Map Tabulations from API
+                const correctTabulacaoOptions = Array.isArray(tabsRes.data)
+                    ? tabsRes.data.map((t: any) => ({
+                        label: typeof t === 'string' ? t : t.label,
+                        value: typeof t === 'string' ? t : t.label
+                    }))
+                    : [
+                        { label: 'Aguardando abertura', value: 'Aguardando abertura' },
+                        { label: 'Retornar outro horário', value: 'Retornar outro horário' },
+                        { label: 'Conta aberta', value: 'Conta aberta' }
+                    ];
 
                 let finalFields: FormField[] = [];
 
