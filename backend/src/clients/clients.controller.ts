@@ -51,14 +51,35 @@ export class ClientsController {
 
     @Get('export')
     async exportClients(@Request() req, @Query() query, @Res() res: Response) {
+        // query includes filters and 'columns' (visible columns array/string)
         const data = await this.clientsService.exportClients(req.user, query);
 
-        const ws = XLSX.utils.json_to_sheet(data);
-        const csv = XLSX.utils.sheet_to_csv(ws);
+        if (!data || data.length === 0) {
+            res.status(404).send('Nenhum dado encontrado para os filtros aplicados.');
+            return;
+        }
 
-        res.header('Content-Type', 'text/csv');
-        res.attachment(`clientes_export_${new Date().toISOString().split('T')[0]}.csv`);
-        res.send(csv);
+        const keys = Object.keys(data[0]);
+        const header = keys.join(';');
+        const rows = data.map(row => {
+            return keys.map(key => {
+                let cell = row[key];
+                if (cell === null || cell === undefined) cell = '';
+                // Escapar ponto e vírgula se houver no texto para não quebrar o CSV
+                if (typeof cell === 'string') {
+                    cell = cell.replace(/;/g, ',');
+                    cell = cell.replace(/\r?\n|\r/g, ' '); // Remover quebras de linha
+                }
+                return cell;
+            }).join(';');
+        });
+
+        const csvContent = [header, ...rows].join('\n');
+        const bom = '\ufeff'; // UTF-8 BOM for Excel acentuation
+
+        res.header('Content-Type', 'text/csv; charset=utf-8');
+        res.attachment(`leads_export_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`);
+        res.send(bom + csvContent);
     }
 
     @Get('notifications')

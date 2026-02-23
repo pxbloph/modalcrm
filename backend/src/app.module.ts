@@ -21,6 +21,7 @@ import { ClientCustomFieldsModule } from './client-custom-fields/client-custom-f
 import { DashboardsModule } from './dashboards/dashboards.module';
 import { ResponsibilityModule } from './modules/responsibility/responsibility.module';
 import { KanbanFilterPresetsModule } from './kanban-filter-presets/kanban-filter-presets.module';
+import { KanbanPreferencesModule } from './kanban-preferences/kanban-preferences.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
@@ -64,6 +65,7 @@ import { RequestContextMiddleware } from './common/middleware/request-context.mi
         DashboardsModule,
         ResponsibilityModule,
         KanbanFilterPresetsModule,
+        KanbanPreferencesModule,
         ServeStaticModule.forRoot({
             rootPath: join(__dirname, '..', 'uploads'),
             serveRoot: '/api/uploads',

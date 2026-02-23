@@ -104,6 +104,8 @@ export function useKanbanFilters() {
         clearAll,
         addField,
         removeField,
+        setVisibleFields,
+        setActiveFilters,
         allFields: FILTER_FIELDS
     };
 }

@@ -6,8 +6,9 @@ import api from "@/lib/api";
 import { Plus, LayoutGrid, List, Zap, Settings2 } from "lucide-react";
 import DealModal from "@/components/kanban/DealModal";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
-import { KanbanList } from "@/components/kanban/KanbanList";
+import { KanbanList, AVAILABLE_COLUMNS } from "@/components/kanban/KanbanList";
 import { UnifiedFilterBar } from "@/components/filters/UnifiedFilterBar";
+import { ExportButton } from "@/components/kanban/ExportButton";
 import { KanbanCardConfigModal } from "@/components/kanban/KanbanCardConfigModal";
 import { AutomationEditor } from "@/components/automations/AutomationEditor";
 import { useChat } from "@/components/chat/ChatContext";
@@ -72,6 +73,8 @@ export default function KanbanPage() {
 
     // View State
     const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
+    const [pageSize, setPageSize] = useState(25);
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
 
     // Filter Data & States
     const [users, setUsers] = useState<any[]>([]);
@@ -87,8 +90,46 @@ export default function KanbanPage() {
         removeFilter,
         clearAll,
         addField,
-        removeField
+        removeField,
+        setVisibleFields,
+        setActiveFilters
     } = useKanbanFilters();
+
+    const [draftFilters, setDraftFilters] = useState<{ id: string, value: any }[]>([]);
+    const [draftVisibleFields, setDraftVisibleFields] = useState<string[]>([]);
+
+    // Elevated Column State for KanbanList/Export logic
+    const [columnOrder, setColumnOrder] = useState<string[]>([]);
+    useEffect(() => {
+        const saved = localStorage.getItem('crm-list-config-v2');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                if (parsed.order && Array.isArray(parsed.order)) {
+                    setColumnOrder(parsed.order);
+                }
+            } catch (e) { }
+        } else {
+            // Default columns if none saved
+            setColumnOrder(['title', 'client_name', 'stage_name', 'value', 'created_at', 'responsible']);
+        }
+    }, []);
+
+    const handleColumnOrderChange = (newOrder: string[]) => {
+        setColumnOrder(newOrder);
+        localStorage.setItem('crm-list-config-v2', JSON.stringify({ order: newOrder }));
+    };
+    const [draftSearchTerm, setDraftSearchTerm] = useState("");
+
+    // SYNC DRAFT WITH ACTIVE (Only when preferences load or on mount)
+    useEffect(() => {
+        setDraftFilters(activeFilters);
+        setDraftSearchTerm(searchTerm);
+    }, [activeFilters, searchTerm]);
+
+    useEffect(() => {
+        setDraftVisibleFields(visibleFields);
+    }, [visibleFields]);
 
     // Map active filters for backend consumption
     const filterParams = useMemo(() => {
@@ -109,22 +150,91 @@ export default function KanbanPage() {
         return params;
     }, [activeFilters]);
 
+    // Initial Preferences Load
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
             const parsedUser = JSON.parse(storedUser);
             setCurrentUser(parsedUser);
 
-            // SECURITY: Redirect Operators away from Kanban
             if (parsedUser.role === 'OPERATOR') {
-                window.location.href = '/new-client'; // Force redirect
+                window.location.href = '/new-client';
                 return;
             }
+            fetchPresets(parsedUser.id);
         }
         fetchPipelines();
         fetchFiltersData();
-        // REMOVED fetchMetrics() here to avoid initial global fetch
     }, []);
+
+    // Load Preferences from DB when pipeline is selected
+    useEffect(() => {
+        if (selectedPipeline && currentUser) {
+            fetchUserPreferences(selectedPipeline);
+        }
+    }, [selectedPipeline, currentUser]);
+
+    const fetchUserPreferences = async (pipelineId: string) => {
+        try {
+            const res = await api.get(`/kanban-preferences?pipelineId=${pipelineId}`);
+            if (res.data) {
+                const prefs = res.data;
+                setViewMode(prefs.view_mode as 'board' | 'list');
+                setPageSize(prefs.page_size || 25);
+
+                if (Array.isArray(prefs.visible_fields) && prefs.visible_fields.length > 0) {
+                    setVisibleFields(prefs.visible_fields);
+                }
+
+                if (prefs.filters_config && Object.keys(prefs.filters_config).length > 0) {
+                    const filters = Object.entries(prefs.filters_config).map(([id, value]) => ({ id, value }));
+                    setActiveFilters(filters);
+                }
+            }
+        } catch (error) {
+            console.error("Erro ao carregar preferências:", error);
+        } finally {
+            setIsInitialLoading(false);
+        }
+    };
+
+    const saveUserPreferences = async (updates: any) => {
+        if (!selectedPipeline || !currentUser) return;
+        try {
+            await api.put(`/kanban-preferences?pipelineId=${selectedPipeline}`, updates);
+        } catch (error) {
+            console.error("Erro ao salvar preferências:", error);
+        }
+    };
+
+    // Auto-save view mode and page size with debounce
+    useEffect(() => {
+        if (isInitialLoading) return;
+        const timer = setTimeout(() => {
+            saveUserPreferences({
+                view_mode: viewMode,
+                page_size: pageSize,
+                visible_fields: visibleFields,
+                filters_config: filterParams // Current applied filters
+            });
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, [viewMode, pageSize]);
+
+    const handleApplyFilters = () => {
+        setActiveFilters(draftFilters);
+        setVisibleFields(draftVisibleFields);
+        setSearchTerm(draftSearchTerm);
+        // Save current config to DB
+        const config: any = {};
+        draftFilters.forEach(f => {
+            config[f.id] = f.value;
+        });
+        saveUserPreferences({
+            filters_config: config,
+            visible_fields: draftVisibleFields
+        });
+    };
 
     // WebSocket Listeners
     useEffect(() => {
@@ -484,14 +594,36 @@ export default function KanbanPage() {
                             variant="inline"
                             users={users}
                             tabulationOptions={tabulationOptions}
-                            searchTerm={searchTerm}
-                            onSearchChange={setSearchTerm}
-                            activeFilters={activeFilters}
-                            visibleFields={visibleFields}
-                            onFilterChange={setFilter}
-                            onRemoveField={removeField}
-                            onAddField={addField}
-                            onClearAll={clearAll}
+                            searchTerm={draftSearchTerm}
+                            onSearchChange={setDraftSearchTerm}
+                            activeFilters={draftFilters}
+                            visibleFields={draftVisibleFields}
+                            onFilterChange={(id, value) => {
+                                setDraftFilters(prev => {
+                                    const existing = prev.find(f => f.id === id);
+                                    const next = existing
+                                        ? prev.map(f => f.id === id ? { ...f, value } : f)
+                                        : [...prev, { id, value }];
+                                    return next.filter(f => f.value !== null && f.value !== undefined && f.value !== '');
+                                });
+                            }}
+                            onRemoveField={(id) => {
+                                setDraftVisibleFields(prev => prev.filter(f => f !== id));
+                                setDraftFilters(prev => prev.filter(f => f.id !== id));
+                            }}
+                            onAddField={(id) => {
+                                if (!draftVisibleFields.includes(id)) {
+                                    setDraftVisibleFields(prev => [...prev, id]);
+                                }
+                            }}
+                            onClearAll={() => {
+                                setDraftFilters([]);
+                                setActiveFilters([]); // Also clear applied filters for immediate feedback? 
+                                // Actually better to just clear draft and then user clicks apply.
+                                // But "Clear All" usually implies immediate reset.
+                                clearAll();
+                            }}
+                            onApply={handleApplyFilters}
                             presets={presets}
                             onSavePreset={handleSavePreset}
                             onDeletePreset={handleDeletePreset}
@@ -506,6 +638,16 @@ export default function KanbanPage() {
                         >
                             <Zap size={16} /> <span className="hidden xl:inline">Automações</span>
                         </button>
+
+                        {viewMode === 'list' && (
+                            <ExportButton
+                                pipelineId={selectedPipeline || undefined}
+                                filters={{ ...filterParams, search: searchTerm }}
+                                visibleColumns={columnOrder}
+                                className="h-9 font-medium shadow-sm"
+                                variant="outline"
+                            />
+                        )}
 
                         <button
                             onClick={() => router.push('/new-client')}
@@ -534,6 +676,8 @@ export default function KanbanPage() {
                         stages={stages}
                         dealsByStage={filteredDeals}
                         onDealClick={setSelectedDealId}
+                        columnOrder={columnOrder}
+                        onColumnOrderChange={handleColumnOrderChange}
                     />
                 )}
             </div>

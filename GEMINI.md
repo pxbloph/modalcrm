@@ -232,5 +232,17 @@ As cores são gerenciadas via variáveis CSS (`--primary`, `--background`, `--si
 - **Frontend**: Componentes como `ClientDealModal`, `ClientFilters` e `ClientRegistrationForm` devem usar o endpoint `/clients/tabulations` e realizar o mapeamento dinâmico dos labels.
 - **Limpeza Global**: Nenhuma parte funcional do sistema deve referenciar a tabela legada `qualifications` ou tentar acessar o array `client.qualifications`. Todos os dados de qualificação (faturamento, maquininha, agendamento, etc.) são propriedades diretas do objeto `client`.
 
+### Persistência e Controle de Filtros (Kanban) - 02/2026
+- **Persistência de Preferências**: Implementada a tabela `user_kanban_preferences`. O sistema agora salva e restaura automaticamente por usuário/pipeline:
+  - Modo de Visualização (`Board` vs `Lista`).
+  - Tamanho da página (`pageSize`).
+  - Campos visíveis na barra de filtros.
+  - Filtros aplicados (mantidos após refresh/login).
+- **Controle de Reload (Draft Filters)**:
+  - Mudança no comportamento de filtragem: Alterações nos filtros ou na busca agora utilizam um estado de "rascunho".
+  - O recarregamento dos dados só ocorre após ação explícita: clicar em **"Pesquisar"** ou pressionar **"Enter"**.
+  - Evita requisições excessivas ao backend e recarregamentos indesejados durante a configuração de filtros complexos.
+- **Backend**: Endpoint `GET/PUT /kanban-preferences` gerencia a persistência via Prisma.
 
-# NUNCA FAÇA DEPLOY AUTOMATICO!
+
+### NUNCA FAÇA DEPLOY AUTOMATICO!

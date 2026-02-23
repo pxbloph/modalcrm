@@ -154,10 +154,43 @@ export class ClientsService {
     }
 
     private async buildFilterConditions(user: User, query: any = {}): Promise<Prisma.ClientWhereInput> {
-        const { search, startDate, endDate, responsibleId, status, tabulation, hasOpenAccount, openAccountStartDate, openAccountEndDate, pipelineId } = query;
+        let {
+            search,
+            startDate, endDate,
+            creationDate, // Frontend param
+            responsibleId,
+            responsible_id, // Also check snake_case
+            status,
+            tabulation,
+            hasOpenAccount,
+            openAccountStartDate, openAccountEndDate,
+            accountOpeningDate, // Frontend param
+            pipelineId,
+            pipeline_id, // Also check snake_case
+            isQualified
+        } = query;
         const andConditions: Prisma.ClientWhereInput[] = [];
 
-        // Search Logic
+        // Consolidate camelCase and snake_case
+        const finalResponsibleId = responsibleId || responsible_id;
+        const finalPipelineId = pipelineId || pipeline_id;
+
+        // Map Frontend parameters to Backend
+        if (creationDate) {
+            try {
+                const parsed = typeof creationDate === 'string' ? JSON.parse(creationDate) : creationDate;
+                if (parsed.from) startDate = parsed.from;
+                if (parsed.to) endDate = parsed.to;
+            } catch (e) { }
+        }
+
+        if (accountOpeningDate) {
+            try {
+                const parsed = typeof accountOpeningDate === 'string' ? JSON.parse(accountOpeningDate) : accountOpeningDate;
+                if (parsed.from) openAccountStartDate = parsed.from;
+                if (parsed.to) openAccountEndDate = parsed.to;
+            } catch (e) { }
+        }
         if (search) {
             andConditions.push({
                 OR: [
@@ -170,12 +203,15 @@ export class ClientsService {
         }
 
         // Pipeline Filter (NEW) - Filter Clients that have at least one deal in this pipeline
-        if (pipelineId) {
+        if (finalPipelineId) {
+            const dealCondition: any = { pipeline_id: finalPipelineId };
+            if (finalResponsibleId) {
+                dealCondition.responsible_id = finalResponsibleId === 'unassigned' ? null : finalResponsibleId;
+            }
+
             andConditions.push({
                 deals: {
-                    some: {
-                        pipeline_id: pipelineId
-                    }
+                    some: dealCondition
                 }
             });
         }
@@ -191,44 +227,47 @@ export class ClientsService {
             }
         }
 
-        // Responsible Filter
-        if (responsibleId) {
-            andConditions.push({ created_by_id: responsibleId });
+        if (finalResponsibleId && !finalPipelineId) {
+            // Only filter by created_by_id if NO pipeline is selected
+            if (finalResponsibleId === 'unassigned') {
+                andConditions.push({ created_by_id: null });
+            } else {
+                andConditions.push({ created_by_id: finalResponsibleId });
+            }
+        }
+
+        if (isQualified !== undefined) {
+            const val = isQualified === 'true' || isQualified === true;
+            andConditions.push({ is_qualified: val });
         }
 
         // Date Range Filter (Creation Date)
         if (startDate || endDate) {
             const dateFilter: Prisma.DateTimeFilter = {};
             if (startDate) {
-                dateFilter.gte = new Date(startDate);
+                dateFilter.gte = startDate.length <= 10 ? new Date(`${startDate}T00:00:00.000Z`) : new Date(startDate);
             }
             if (endDate) {
-                const end = new Date(endDate);
-                if (endDate.length <= 10) {
-                    end.setHours(23, 59, 59, 999);
-                }
-                dateFilter.lte = end;
+                dateFilter.lte = endDate.length <= 10 ? new Date(`${endDate}T23:59:59.999Z`) : new Date(endDate);
             }
             andConditions.push({ created_at: dateFilter });
         }
 
-        // Tabulation Filter (Tabulação da ÚLTIMA Qualificação -> AGORA DIRETO NO CLIENTE)
+        // Tabulation Filter
         if (tabulation) {
-            andConditions.push({ tabulacao: tabulation });
+            andConditions.push({
+                tabulacao: { contains: tabulation, mode: 'insensitive' }
+            });
         }
 
         // Conta Aberta Filter (Boolean OR Date Range)
         if (openAccountStartDate || openAccountEndDate) {
             const dateFilter: Prisma.DateTimeFilter = {};
             if (openAccountStartDate) {
-                dateFilter.gte = new Date(openAccountStartDate);
+                dateFilter.gte = openAccountStartDate.length <= 10 ? new Date(`${openAccountStartDate}T00:00:00.000Z`) : new Date(openAccountStartDate);
             }
             if (openAccountEndDate) {
-                const end = new Date(openAccountEndDate);
-                if (openAccountEndDate.length <= 10) {
-                    end.setHours(23, 59, 59, 999);
-                }
-                dateFilter.lte = end;
+                dateFilter.lte = openAccountEndDate.length <= 10 ? new Date(`${openAccountEndDate}T23:59:59.999Z`) : new Date(openAccountEndDate);
             }
             andConditions.push({ account_opening_date: dateFilter });
         } else if (hasOpenAccount === 'true' || hasOpenAccount === true) {
@@ -689,46 +728,98 @@ export class ClientsService {
 
     async exportClients(user: User, query: any = {}) {
         const where = await this.buildFilterConditions(user, query);
+        const { columns } = query; // IDs from frontend
 
-        // Fetch all matching data (heavy query)
+        const visibleColumns: string[] = Array.isArray(columns) ? columns : (typeof columns === 'string' ? columns.split(',') : []);
+
         const clients = await this.prisma.client.findMany({
             where,
             include: {
-                created_by: { select: { name: true, surname: true } }
+                created_by: { select: { name: true, surname: true } },
+                deals: {
+                    where: { status: 'OPEN' },
+                    include: { stage: true },
+                    take: 1,
+                    orderBy: { created_at: 'desc' }
+                }
             },
             orderBy: { created_at: 'desc' }
         });
 
-        // Flatten Data
-        const csvRows = clients.map(client => {
-            const qual: any = client;
+        if (clients.length === 0) return [];
 
-            return {
-                'ID': client.id,
-                'Razão Social': client.name,
-                'Nome Sócio': client.surname || '',
-                'CNPJ': client.cnpj,
-                'Email': client.email,
-                'Telefone': client.phone,
-                'Status Integração': client.integration_status,
-                'Conta Aberta': client.has_open_account ? 'SIM' : 'NÃO',
-                'Data Conta Aberta': client.account_opening_date ? client.account_opening_date.toISOString().split('T')[0] : '',
-                'Responsável': client.created_by ? `${client.created_by.name} ${client.created_by.surname || ''}` : '',
-                'Data Criação': client.created_at.toISOString().split('T')[0],
-                // Qualification Fields
-                'Tabulação': qual.tabulacao || '',
-                'Agendamento': qual.agendamento ? qual.agendamento.toISOString() : '',
-                'Faturamento Mensal': qual.faturamento_mensal || 0,
-                'Faturamento Máquina': qual.faturamento_maquina || 0,
-                'Maquininha Atual': qual.maquininha_atual || '',
-                'Produto Interesse': qual.produto_interesse || '',
-                'Emite Boletos': qual.emite_boletos ? 'SIM' : 'NÃO',
-                'Deseja Ofertas': qual.deseja_receber_ofertas ? 'SIM' : 'NÃO',
-                'Informações Adicionais': qual.informacoes_adicionais || ''
-            };
+        // Mapper: Frontend ID -> Data Resolver
+        const mapper: Record<string, (c: any) => any> = {
+            'title': (c) => c.deals?.[0]?.title || 'Sem negócio',
+            'stage_name': (c) => c.deals?.[0]?.stage?.name || '-',
+            'value': (c) => c.deals?.[0]?.value ? Number(c.deals?.[0]?.value) : 0,
+            'created_at': (c) => c.created_at,
+            'responsible': (c) => c.created_by ? `${c.created_by.name} ${c.created_by.surname || ''}`.trim() : 'Sem responsável',
+            'client_name': (c) => c.name,
+            'client_surname': (c) => c.surname,
+            'client_cnpj': (c) => c.cnpj,
+            'client_email': (c) => c.email,
+            'client_phone': (c) => c.phone,
+            'client_city': (c) => c.address,
+            'qual_fat_mensal': (c) => c.faturamento_mensal ? Number(c.faturamento_mensal) : 0,
+            'qual_fat_maq': (c) => c.faturamento_maquina ? Number(c.faturamento_maquina) : 0,
+            'qual_maq_atual': (c) => c.maquininha_atual,
+            'qual_tabulacao': (c) => c.tabulacao,
+            'qual_agendamento': (c) => c.agendamento,
+            'account_opening_date': (c) => c.account_opening_date,
+            'qual_cc_banco': (c) => c.cc_tipo_conta,
+            'qual_cc_saldo': (c) => c.cc_saldo ? Number(c.cc_saldo) : 0,
+            'qual_cc_limite': (c) => c.cc_limite_disponivel ? Number(c.cc_limite_disponivel) : 0,
+            'qual_card_tipo': (c) => c.card_tipo,
+            'qual_card_limite': (c) => c.limit_cartao_aprovado ? Number(c.limit_cartao_aprovado) : 0,
+            'qual_card_fatura': (c) => c.card_fatura_aberta_valor ? Number(c.card_fatura_aberta_valor) : 0,
+        };
+
+        const columnsToExport = visibleColumns.length > 0
+            ? visibleColumns
+            : ['created_at', 'title', 'client_name', 'client_cnpj', 'client_email', 'client_phone', 'responsible', 'qual_tabulacao'];
+
+        const labels: Record<string, string> = {
+            'title': 'Negócio',
+            'stage_name': 'Etapa',
+            'value': 'Valor',
+            'created_at': 'Data Criação',
+            'responsible': 'Responsável',
+            'client_name': 'Razão Social',
+            'client_surname': 'Sócio',
+            'client_cnpj': 'CNPJ',
+            'client_email': 'Email',
+            'client_phone': 'Telefone',
+            'client_city': 'Endereço',
+            'qual_fat_mensal': 'Fat. Mensal',
+            'qual_fat_maq': 'Fat. Máquina',
+            'qual_maq_atual': 'Máquina Atual',
+            'qual_tabulacao': 'Tabulação',
+            'qual_agendamento': 'Agendamento',
+            'account_opening_date': 'Abertura Conta',
+            'qual_cc_banco': 'Banco',
+            'qual_cc_saldo': 'Saldo CC',
+            'qual_cc_limite': 'Limite CC',
+            'qual_card_tipo': 'Tipo Cartão',
+            'qual_card_limite': 'Limite Cartão',
+            'qual_card_fatura': 'Fatura Cartão',
+        };
+
+        return clients.map(client => {
+            const row: any = {};
+            columnsToExport.forEach(colId => {
+                const resolver = mapper[colId];
+                const label = labels[colId] || colId;
+                let value = resolver ? resolver(client) : (client as any)[colId];
+                if (value instanceof Date) {
+                    value = value.toISOString();
+                } else if (value === null || value === undefined) {
+                    value = '';
+                }
+                row[label] = value;
+            });
+            return row;
         });
-
-        return csvRows;
     }
 
     // --- TAKEOVER FUNCTIONALITY ---

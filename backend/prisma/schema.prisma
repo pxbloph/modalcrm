@@ -61,6 +61,7 @@ model User {
   // Audit Relations
   audit_actions          AuditLog[]
   kanban_filter_presets  KanbanFilterPreset[]
+  kanban_preferences     UserKanbanPreference[]
 
   @@map("users")
 }
@@ -76,6 +77,25 @@ model KanbanFilterPreset {
   updated_at  DateTime @updatedAt
 
   @@map("kanban_filter_presets")
+}
+
+model UserKanbanPreference {
+  id              String   @id @default(uuid())
+  user_id         String
+  user            User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  pipeline_id     String
+  pipeline        Pipeline @relation(fields: [pipeline_id], references: [id], onDelete: Cascade)
+  
+  view_mode       String   @default("board") // board, list
+  page_size       Int      @default(25)
+  visible_fields  Json     @default("[]")    // Fields in the filter bar
+  visible_columns Json     @default("[]")    // Columns in the list view
+  filters_config  Json     @default("{}")    // Applied filter values
+  
+  updated_at      DateTime @updatedAt
+
+  @@unique([user_id, pipeline_id])
+  @@map("user_kanban_preferences")
 }
 
 model Client {
@@ -323,6 +343,7 @@ model Pipeline {
   automations  Automation[]
   tabulation_triggers DealTabulationTrigger[]
   user_configs UserPipelineConfig[]
+  kanban_preferences   UserKanbanPreference[]
 
   @@map("pipelines")
 }

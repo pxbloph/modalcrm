@@ -46,6 +46,8 @@ interface KanbanListProps {
     stages: Stage[];
     dealsByStage: Record<string, Deal[]>;
     onDealClick: (id: string) => void;
+    columnOrder: string[];
+    onColumnOrderChange: (newOrder: string[]) => void;
 }
 
 type SortConfig = {
@@ -76,7 +78,7 @@ const getNestedValue = (obj: any, path: string) => {
 };
 
 // Column Definitions
-const AVAILABLE_COLUMNS = [
+export const AVAILABLE_COLUMNS = [
     // --- Negócio ---
     { id: 'title', label: 'Negócio', category: 'Negócio' },
     { id: 'stage_name', label: 'Etapa', category: 'Negócio' },
@@ -98,7 +100,7 @@ const AVAILABLE_COLUMNS = [
     { id: 'qual_maq_atual', label: 'Máquina Atual', category: 'Financeiro', path: 'client.maquininha_atual' },
 
     // --- Qualificação: Conta ---
-    { id: 'qual_cc_banco', label: 'Banco (CC)', category: 'Conta', path: 'client.cc_tipo_conta' }, // Using cc_tipo_conta as proxy for bank info if needed or map correctly
+    { id: 'qual_cc_banco', label: 'Banco (CC)', category: 'Conta', path: 'client.cc_tipo_conta' },
     { id: 'qual_cc_saldo', label: 'Saldo (CC)', category: 'Conta', path: 'client.cc_saldo', format: formatCurrency },
     { id: 'qual_cc_limite', label: 'Limite Global', category: 'Conta', path: 'client.cc_limite_disponivel', format: formatCurrency },
 
@@ -157,14 +159,13 @@ const SortableColumnItem = ({ id, label, category, isVisible, onToggle }: any) =
 
 // --- Main Component ---
 
-export function KanbanList({ stages, dealsByStage, onDealClick }: KanbanListProps) {
+export function KanbanList({ stages, dealsByStage, onDealClick, columnOrder, onColumnOrderChange }: KanbanListProps) {
     const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(25);
 
-    // Column State
-    const [columnOrder, setColumnOrder] = useState<string[]>(DEFAULT_VISIBLE_COLUMNS);
-    const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(DEFAULT_VISIBLE_COLUMNS));
+    // Column State used derived from props
+    const visibleColumns = useMemo(() => new Set(columnOrder), [columnOrder]);
 
     // Configuration UI State
     const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -172,25 +173,7 @@ export function KanbanList({ stages, dealsByStage, onDealClick }: KanbanListProp
     const [tempOrder, setTempOrder] = useState<string[]>([]); // For modal
     const [tempVisible, setTempVisible] = useState<Set<string>>(new Set());
 
-    // Load Preferences
-    useEffect(() => {
-        const saved = localStorage.getItem('crm-list-config-v2');
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                if (parsed.order && Array.isArray(parsed.order)) {
-                    setColumnOrder(parsed.order);
-                    setVisibleColumns(new Set(parsed.order)); // Sync visibility with order list presence for simplicity, or use separate
-                }
-            } catch (e) {
-                console.error("Failed to load list config", e);
-            }
-        }
-    }, []);
-
-    const savePreferences = (order: string[]) => {
-        localStorage.setItem('crm-list-config-v2', JSON.stringify({ order }));
-    };
+    // Load Preferences - REMOVED (Now in KanbanPage)
 
     // Flatten Data
     const flatDeals = useMemo(() => {
@@ -253,7 +236,6 @@ export function KanbanList({ stages, dealsByStage, onDealClick }: KanbanListProp
 
     // Config Handlers
     const openConfig = () => {
-        // Initialize temp state with current ALL available columns, but ordered: visible first (in order), then hidden
         const currentVisible = columnOrder;
         const hidden = AVAILABLE_COLUMNS.filter(c => !visibleColumns.has(c.id)).map(c => c.id);
 
@@ -265,9 +247,7 @@ export function KanbanList({ stages, dealsByStage, onDealClick }: KanbanListProp
     const applyConfig = () => {
         // Filter tempOrder to only include those that are marked visible
         const newOrder = tempOrder.filter(id => tempVisible.has(id));
-        setColumnOrder(newOrder);
-        setVisibleColumns(tempVisible);
-        savePreferences(newOrder);
+        onColumnOrderChange(newOrder);
         setIsConfigOpen(false);
     };
 

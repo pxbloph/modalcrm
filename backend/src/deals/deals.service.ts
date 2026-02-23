@@ -180,7 +180,7 @@ export class DealsService {
     if (pipelineId) where.AND.push({ pipeline_id: pipelineId });
     if (responsibleId) {
       where.AND.push({
-        client: { created_by_id: responsibleId }
+        responsible_id: responsibleId === 'unassigned' ? null : responsibleId
       });
     }
     if (clientId) where.AND.push({ client_id: clientId });

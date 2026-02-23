@@ -30,6 +30,7 @@ interface UnifiedFilterBarProps {
     presets?: any[];
     onSavePreset?: (name: string) => void;
     onDeletePreset?: (id: string) => void;
+    onApply?: () => void;
 
     // Style Variant
     variant?: 'default' | 'inline';
@@ -49,6 +50,7 @@ export function UnifiedFilterBar({
     presets,
     onSavePreset,
     onDeletePreset,
+    onApply,
     variant = 'default'
 }: UnifiedFilterBarProps) {
     const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -106,6 +108,12 @@ export function UnifiedFilterBar({
                                     className="flex-1 bg-transparent border-none outline-none text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 min-w-[120px]"
                                     value={searchTerm}
                                     onChange={e => onSearchChange(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            onApply?.();
+                                            setIsPanelOpen(false);
+                                        }
+                                    }}
                                 />
 
                                 <div className="flex items-center gap-1 ml-auto">
@@ -136,7 +144,10 @@ export function UnifiedFilterBar({
                             onRemoveField={onRemoveField}
                             onAddField={onAddField}
                             onClearAll={onClearAll}
-                            onApply={() => setIsPanelOpen(false)}
+                            onApply={() => {
+                                onApply?.();
+                                setIsPanelOpen(false);
+                            }}
                             presets={presets}
                             onSavePreset={onSavePreset}
                             onDeletePreset={onDeletePreset}
