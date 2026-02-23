@@ -177,6 +177,7 @@ export function TakeoverModal({ onClose, onSuccess, userRole }: TakeoverModalPro
 
                             {/* Action Button */}
                             {result.can_take_over && (
+                                <>
                                     {/* Reason Input */}
                                     <div className="mt-4">
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -201,21 +202,23 @@ export function TakeoverModal({ onClose, onSuccess, userRole }: TakeoverModalPro
                                             {!processing && <CheckCircle className="h-4 w-4" />}
                                         </button>
                                     </div>
-                    )}
-                </div>
+                                </>
+                            )}
+                        </div>
                     )}
 
-                {/* Error State */}
-                {error && (
-                    <div className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-100 flex items-center gap-2 animate-in fade-in">
-                        <AlertTriangle className="h-5 w-5 shrink-0" />
-                        <span className="text-sm font-medium">{error}</span>
-                    </div>
-                )}
+                    {/* Error State */}
+                    {error && (
+                        <div className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-100 flex items-center gap-2 animate-in fade-in">
+                            <AlertTriangle className="h-5 w-5 shrink-0" />
+                            <span className="text-sm font-medium">{error}</span>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
-        </div >
     );
 }
+
 
 export default TakeoverModal;
