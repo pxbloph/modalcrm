@@ -19,7 +19,7 @@ export class ResponsibilityService {
             where: { id: data.leadId },
             include: {
                 created_by: true,
-                // qualifications: { orderBy: { created_at: 'desc' }, take: 1 } // Deprecated
+                // clients: { select: { name: true, surname: true } }
             }
         });
 

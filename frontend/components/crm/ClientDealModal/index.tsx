@@ -205,12 +205,9 @@ export function ClientDealModal({
 
     const populateForm = (data: any, type: 'deal' | 'client') => {
         const client = type === 'deal' ? data.client : data;
-        const qual = client?.qualifications?.[0] || {};
 
-        // [SIMPLIFICATION] Read directly from Client, fallback to Qualification array (migration safety)
-        const getVal = (key: string, qualKey?: string) => {
-            return client?.[key] ?? qual[qualKey || key];
-        };
+        // Read directly from Client (consolidated model)
+        const getVal = (key: string) => client?.[key];
 
         let maqAtual = getVal('maquininha_atual') || "";
         if (typeof maqAtual === 'string' && maqAtual.includes(',')) {

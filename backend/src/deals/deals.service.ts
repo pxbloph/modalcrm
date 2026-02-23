@@ -133,12 +133,6 @@ export class DealsService {
             phone: true, // Shown in list view
             account_opening_date: true, // Used for 'Contas Abertas' badge
             created_at: true,
-            // [API COMPATIBILITY] Return empty array or map new fields?
-            // Ideally we return the fields directly on client.
-            // Frontend likely expects client.qualifications[0]?.tabulacao
-            // We can map it "virtually" or just return the fields on Client and update frontend.
-            // Let's return fields on client AND keep qualifications for backward compat if needed (but we want to simplify).
-            // Simplification: We return the FIELDS directly.
             tabulacao: true,
             faturamento_mensal: true,
             agendamento: true

@@ -41,7 +41,6 @@ interface Deal {
         // [SIMPLIFICATION] Direct fields
         tabulacao?: string;
         faturamento_mensal?: number;
-        // qualifications?: { tabulacao?: string }[];
     };
     responsible?: { id: string, name: string; surname?: string };
     tags?: { tag: { id: string, name: string, color: string } }[];

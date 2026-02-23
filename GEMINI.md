@@ -87,6 +87,7 @@ server {
   - Consistente com padrões e nomenclaturas existentes
 - Frontend, backend e banco de dados **já estão integrados**.
 - Evitar retrabalho, duplicidade de lógica ou comportamentos divergentes.
+- **VALIDAÇÃO E REGISTRO**: Após qualquer modificação relevante, confirme com o usuário se funcionou corretamente. Somente após a confirmação positiva, registre no arquivo `GEMINI.md` exatamente o que foi alterado. Sempre pergunte para validar antes de documentar.
 
 O estado atual do código deve ser considerado **a verdade absoluta**.
 
@@ -225,9 +226,11 @@ As cores são gerenciadas via variáveis CSS (`--primary`, `--background`, `--si
 ### Unificação de Tabulações e Qualificações
 - **Estrutura de Dados**: A tabela `qualifications` foi descontinuada e todos os seus campos (faturamento, maquininha, agendamento, etc.) foram mesclados diretamente na tabela `clients`.
 - **Roteamento Global**: Todas as rotas que anteriormente usavam `/qualifications/*` foram redirecionadas para `/clients/*`.
-  - **Busca de Opções**: Use `GET /clients/tabulations` para buscar a lista de tabulações ativas.
+  - **Shadowing de Rota**: A rota `GET /clients/tabulations` deve obrigatoriamente estar declarada **antes** de `GET /clients/:id` no controlador para evitar que o NestJS interprete "tabulations" como um ID.
+  - **Busca de Opções**: Use `GET /clients/tabulations` para buscar a lista de tabulações ativas. Retorna um array de objetos (e.g., `{ label, is_active }`) que deve ser mapeado para strings no frontend.
   - **Salvamento**: Use `PUT /clients/:id` para atualizar dados de qualificação e tabulação.
-- **Frontend**: Componentes como `ClientDealModal`, `ClientFilters` e `ClientRegistrationForm` devem obrigatoriamente usar os novos endpoints unificados para garantir consistência e evitar erros 404.
+- **Frontend**: Componentes como `ClientDealModal`, `ClientFilters` e `ClientRegistrationForm` devem usar o endpoint `/clients/tabulations` e realizar o mapeamento dinâmico dos labels.
+- **Limpeza Global**: Nenhuma parte funcional do sistema deve referenciar a tabela legada `qualifications` ou tentar acessar o array `client.qualifications`. Todos os dados de qualificação (faturamento, maquininha, agendamento, etc.) são propriedades diretas do objeto `client`.
 
 
 # NUNCA FAÇA DEPLOY AUTOMATICO!

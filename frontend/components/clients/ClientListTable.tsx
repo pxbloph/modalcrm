@@ -51,7 +51,6 @@ interface Client {
     // [SIMPLIFICATION] Direct fields
     tabulacao?: string;
     agendamento?: string;
-    // qualifications?: { agendamento?: string; tabulacao?: string; }[]; // Deprecated
     has_open_account?: boolean;
     [key: string]: any;
 }

@@ -635,7 +635,7 @@ export class ClientsService {
 
         // Using queryRaw to bypass Prisma Client validation issues if schema isn't regenerated
         try {
-            const qualifications: any[] = await this.prisma.$queryRaw`
+            const scheduledClients: any[] = await this.prisma.$queryRaw`
                 SELECT 
                     c.id, 
                     c.agendamento, 
@@ -651,10 +651,10 @@ export class ClientsService {
                 AND c.agendamento <= ${now}
             `;
 
-            return qualifications.map(q => ({
+            return scheduledClients.map(q => ({
                 clientName: q.client_name,
-                contactName: q.client_surname || q.nome_do_cliente,
-                clientId: q.client_id || q.client_id_explicit,
+                contactName: q.client_surname || q.name,
+                clientId: q.id,
                 scheduleTime: q.agendamento,
                 phone: q.client_phone,
                 email: q.client_email,

@@ -140,9 +140,8 @@ export class TvDashboardService {
             }
         });
 
-        // B) Qualifications (Proxy: is_qualified = true AND updated_at = today)
-        // Ideally we would have a 'qualification_date', but using updated_at as proxy for now
-        const totalQualifications = await this.prisma.client.count({
+        // B) Qualificações (Proxy: is_qualified = true AND updated_at = hoje)
+        const totalQualifiedClients = await this.prisma.client.count({
             where: {
                 is_qualified: true,
                 updated_at: {
@@ -152,7 +151,7 @@ export class TvDashboardService {
             }
         });
 
-        // 4. Calculate User Ranking (Same as V1)
+        // 4. Calcular Ranking de Usuários
         const userIds = openAccountsGrouped.map((m) => m.created_by_id).filter((id) => id);
         const users = await this.prisma.user.findMany({
             where: { id: { in: userIds } },
@@ -186,7 +185,7 @@ export class TvDashboardService {
             date: startDate.toISOString().split('T')[0],
             total_open_accounts: totalOpenAccounts,
             total_leads_created: totalLeadsCreated,
-            total_qualifications: totalQualifications,
+            total_clients: totalQualifiedClients,
             conversion_rate: conversionRate,
             ranking,
             updated_at: new Date().toISOString(),
