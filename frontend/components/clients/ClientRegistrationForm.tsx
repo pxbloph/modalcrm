@@ -55,7 +55,7 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
                 // If Admin/Supervisor, fetch users and tabulations
                 if (parsedUser && (parsedUser.role === 'ADMIN' || parsedUser.role === 'SUPERVISOR')) {
                     promises.push(api.get('/users').catch(() => ({ data: [] })));
-                    promises.push(api.get('/qualifications/tabulations').catch(() => ({ data: [] })));
+                    promises.push(api.get('/clients/tabulations').catch(() => ({ data: [] })));
                 }
 
                 const [templateRes, usersRes, tabsRes] = await Promise.all(promises);
@@ -268,36 +268,37 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
                     <form onSubmit={handleSubmit} className="space-y-6">
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg border border-border">
-                            {isAdminOrSupervisor && (
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">Responsável *</Label>
-                                    <select
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
-                                        value={selectedResponsible}
-                                        onChange={(e) => setSelectedResponsible(e.target.value)}
-                                        required
-                                    >
-                                        <option value="">Selecione...</option>
-                                        {users.map(u => (
-                                            <option key={u.id} value={u.id}>{u.name} {u.surname}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-                            <div className={isAdminOrSupervisor ? "space-y-2" : "space-y-2 col-span-2"}>
-                                <Label className="text-foreground">Tabulação {isAdminOrSupervisor ? "(Opcional)" : "*"}</Label>
-                                <select
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
-                                    value={selectedTabulation}
-                                    onChange={(e) => setSelectedTabulation(e.target.value)}
-                                    required={!isAdminOrSupervisor}
-                                >
-                                    <option value="">Selecione...</option>
-                                    {tabulations.map(t => (
-                                        <option key={t} value={t}>{t}</option>
-                                    ))}
-                                </select>
-                            </div>
+                            {isAdminOrSupervisor ? (
+                                <>
+                                    <div className="space-y-2">
+                                        <Label className="text-foreground">Responsável *</Label>
+                                        <select
+                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                                            value={selectedResponsible}
+                                            onChange={(e) => setSelectedResponsible(e.target.value)}
+                                            required
+                                        >
+                                            <option value="">Selecione...</option>
+                                            {users.map(u => (
+                                                <option key={u.id} value={u.id}>{u.name} {u.surname}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-foreground">Tabulação (Opcional)</Label>
+                                        <select
+                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                                            value={selectedTabulation}
+                                            onChange={(e) => setSelectedTabulation(e.target.value)}
+                                        >
+                                            <option value="">Selecione...</option>
+                                            {tabulations.map(t => (
+                                                <option key={t} value={t}>{t}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </>
+                            ) : null}
                         </div>
 
                         {fields.map((field) => (

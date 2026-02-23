@@ -193,7 +193,7 @@ export default function QualifyPage() {
                 }
             });
 
-            const response = await api.post(`/qualifications/${params?.id}`, payload);
+            const response = await api.put(`/clients/${params?.id}`, payload);
 
             if (response.data.integration_status === 'FAILED') {
                 // Show warning but redirect as it was saved

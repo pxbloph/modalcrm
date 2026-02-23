@@ -43,7 +43,7 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
         }
 
         // Fetch Tabulation Options
-        api.get('/qualifications/tabulations').then(res => {
+        api.get('/clients/tabulations').then(res => {
             if (Array.isArray(res.data)) {
                 setTabulationOptions(res.data);
             }

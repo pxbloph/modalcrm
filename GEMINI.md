@@ -80,6 +80,7 @@ server {
 
 - O código **já existe** e deve ser **analisado antes de qualquer alteração**.
 - **Nunca recriar estruturas, telas ou fluxos do zero** se já existirem.
+- **RESTRIÇÃO OPERADOR**: Os campos, fluxos e a visualização da tela do Operador (`role === 'OPERATOR'`) **NUNCA** devem ser alterados sem uma ordem direta e explícita do usuário.
 - Toda mudança deve ser:
   - Incremental
   - Compatível com a arquitetura atual
@@ -112,6 +113,9 @@ O estado atual do código deve ser considerado **a verdade absoluta**.
   - Qualificação
 - Garantir que uma mesma entidade (lead/cliente) tenha:
   - Mesma tela
+    - O Prisma deve estar na versão 5.21.0.
+    - As qualificações/tabulações agora residem diretamente na tabela `clients`.
+    - Sempre rodar 'npx prisma generate' antes de buildar o backend.
   - Mesmo comportamento
   - Mesmas regras, independentemente do ponto de acesso.
 
@@ -219,7 +223,7 @@ As cores são gerenciadas via variáveis CSS (`--primary`, `--background`, `--si
 - **Fallback**: Ações automáticas ou legadas aparecem como "Por: Sistema".
 
 ### Unificação de Tabulações
-- **Arquitetura Central**: A lógica de tabulações foi unificada no `TabulationsService`.
+- **Unificação de Tabulações**: A lógica de tabulações e qualificações foi unificada na tabela `clients`. O endpoint `POST /qualifications` foi descontinuado em favor de `PATCH /clients/:id`.
 - **Frontend**: Formulários de qualificação agora consomem a lista padronizada de tabulações, garantindo consistência entre Kanban e Modal.
 
 

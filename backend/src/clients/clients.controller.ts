@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, Query, Patch, Res } from '@nestjs/common';
 import { ClientsService } from './clients.service';
+import { TabulationsService } from '../tabulations/tabulations.service';
 import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 import * as XLSX from 'xlsx';
@@ -7,7 +8,10 @@ import * as XLSX from 'xlsx';
 @Controller('clients')
 @UseGuards(AuthGuard('jwt'))
 export class ClientsController {
-    constructor(private readonly clientsService: ClientsService) { }
+    constructor(
+        private readonly clientsService: ClientsService,
+        private readonly tabulationsService: TabulationsService
+    ) { }
 
     @Post()
     create(@Body() createClientDto: any, @Request() req) {
@@ -80,6 +84,11 @@ export class ClientsController {
     @Get(':id')
     async findOne(@Param('id') id: string, @Request() req) {
         return this.clientsService.findOne(id, req.user);
+    }
+
+    @Get('tabulations')
+    async getTabulations() {
+        return this.tabulationsService.findActive();
     }
 
     @Put(':id')

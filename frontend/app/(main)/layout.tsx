@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { Users, LayoutDashboard, LogOut, PlusCircle, ShieldCheck, Menu, ChevronLeft, ChevronRight, Settings, BarChart, Upload, MessageCircle, Briefcase, UserCheck } from 'lucide-react';
+import { Users, LayoutDashboard, LogOut, PlusCircle, ShieldCheck, Menu, ChevronLeft, ChevronRight, Settings, BarChart, Upload, MessageCircle, Briefcase, UserCheck, Loader2 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -462,7 +462,9 @@ export default function DashboardLayout({
                     )}
 
                     <main className="flex-1 py-10 px-4 sm:px-6 lg:px-8 relative">
-                        {children}
+                        <Suspense fallback={<div className="flex items-center justify-center min-h-[400px]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
+                            {children}
+                        </Suspense>
 
                         {/* Floating Action Buttons for Operator */}
                         {isOperator && (

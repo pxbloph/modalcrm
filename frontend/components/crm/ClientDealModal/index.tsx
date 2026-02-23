@@ -134,7 +134,7 @@ export function ClientDealModal({
             setLoading(true);
             try {
                 // ... existing loads ...
-                const tabsRes = api.get('/qualifications/tabulations').catch(() => ({ data: [] }));
+                const tabsRes = api.get('/clients/tabulations').catch(() => ({ data: [] }));
                 const templateRes = api.get('/form-templates/active').catch(() => ({ data: null }));
 
                 let dataPromise = Promise.resolve(null);
