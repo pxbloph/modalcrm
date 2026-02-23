@@ -171,11 +171,9 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
         // Prepare Payload
         const payload: any = { answers: {} };
 
-        // Admin Fields
-        if (currentUser && (currentUser.role === 'ADMIN' || currentUser.role === 'SUPERVISOR')) {
-            if (selectedResponsible) payload.created_by_id = selectedResponsible;
-            if (selectedTabulation) payload.tabulacao = selectedTabulation;
-        }
+        // Admin/Operator Fields
+        if (selectedResponsible) payload.created_by_id = selectedResponsible;
+        if (selectedTabulation) payload.tabulacao = selectedTabulation;
 
         fields.forEach(field => {
             const value = formData[field.id];
@@ -269,9 +267,8 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-6">
 
-                        {/* ADMIN/SUPERVISOR FIELDS */}
-                        {isAdminOrSupervisor && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg border border-border">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg border border-border">
+                            {isAdminOrSupervisor && (
                                 <div className="space-y-2">
                                     <Label className="text-foreground">Responsável *</Label>
                                     <select
@@ -286,21 +283,22 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
                                         ))}
                                     </select>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">Tabulação (Opcional)</Label>
-                                    <select
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
-                                        value={selectedTabulation}
-                                        onChange={(e) => setSelectedTabulation(e.target.value)}
-                                    >
-                                        <option value="">Selecione...</option>
-                                        {tabulations.map(t => (
-                                            <option key={t} value={t}>{t}</option>
-                                        ))}
-                                    </select>
-                                </div>
+                            )}
+                            <div className={isAdminOrSupervisor ? "space-y-2" : "space-y-2 col-span-2"}>
+                                <Label className="text-foreground">Tabulação {isAdminOrSupervisor ? "(Opcional)" : "*"}</Label>
+                                <select
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                                    value={selectedTabulation}
+                                    onChange={(e) => setSelectedTabulation(e.target.value)}
+                                    required={!isAdminOrSupervisor}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {tabulations.map(t => (
+                                        <option key={t} value={t}>{t}</option>
+                                    ))}
+                                </select>
                             </div>
-                        )}
+                        </div>
 
                         {fields.map((field) => (
                             <div key={field.id} className={field.type === 'checkbox' ? '' : 'space-y-2'}>

@@ -35,7 +35,6 @@ model User {
 
 
   clients        Client[]
-  qualifications Qualification[]
   import_jobs    ImportJob[]
 
   // Kanban Relations
@@ -61,8 +60,22 @@ model User {
 
   // Audit Relations
   audit_actions          AuditLog[]
+  kanban_filter_presets  KanbanFilterPreset[]
 
   @@map("users")
+}
+
+model KanbanFilterPreset {
+  id          String   @id @default(uuid())
+  user_id     String
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  name        String
+  is_default  Boolean  @default(false)
+  config_json Json     // { visible_fields: string[], values: any, order: string[] }
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@map("kanban_filter_presets")
 }
 
 model Client {
@@ -99,7 +112,6 @@ model Client {
   created_by_id String
   created_by    User   @relation(fields: [created_by_id], references: [id])
 
-  qualifications Qualification[]
   deals          Deal[]
   custom_field_values ClientCustomFieldValue[]
 
@@ -108,32 +120,20 @@ model Client {
   last_contact_user    User?    @relation("ClientLastContact", fields: [last_contact_user_id], references: [id])
   last_contact_at      DateTime?
   
-  transfer_audits      LeadOwnerTransferAudit[]
-
-  @@map("clients")
-}
-
-model Qualification {
-  id         String   @id @default(uuid())
-  answers    Json
+  // --- Merged Qualification Fields (Simplification) ---
   
-  // New Qualification fields
-  emite_boletos         Boolean? @default(false)
-  maquininha_atual      String?
-  faturamento_maquina   Decimal? @db.Decimal(15, 2)
+  // Financial & Business
   faturamento_mensal    Decimal? @db.Decimal(15, 2)
+  faturamento_maquina   Decimal? @db.Decimal(15, 2)
+  maquininha_atual      String?
   produto_interesse     String?
+  emite_boletos         Boolean? @default(false)
   deseja_receber_ofertas Boolean? @default(false)
   informacoes_adicionais String?
-  nome_do_cliente       String?
-  fase                  String?
   tabulacao             String?
   agendamento           DateTime?
-  created_at DateTime @default(now())
 
-  // --- Extended Financial Data (Novo Painel) ---
-  
-  // A) Conta Corrente
+  // A) Conta Corrente (New Panel)
   cc_tipo_conta         String?
   cc_status             String?
   cc_numero             String?
@@ -179,20 +179,11 @@ model Qualification {
   limit_parcelado_aprovado  Decimal? @db.Decimal(15, 2)
   limit_anticipacao_disponivel String? @default("Informação indisponível")
   
-  // Integration Control
-  integration_status       String?  @default("PENDING")
-  integration_attempts     Int?     @default(0)
-  last_integration_attempt DateTime?
-  webhook_response         String?
+  transfer_audits      LeadOwnerTransferAudit[]
 
-  client_id String
-  client    Client @relation(fields: [client_id], references: [id])
-
-  created_by_id String
-  created_by    User   @relation(fields: [created_by_id], references: [id])
-
-  @@map("qualifications")
+  @@map("clients")
 }
+
 
 model FormTemplate {
   id        String   @id @default(uuid())

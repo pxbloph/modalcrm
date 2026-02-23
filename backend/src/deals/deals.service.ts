@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef, ForbiddenException } from '@nestjs/common';
 import { CreateDealDto, DealStatus, DealPriority } from './dto/create-deal.dto';
 import { UpdateDealDto } from './dto/update-deal.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AutomationsService } from '../automations/automations.service';
 import { KanbanGateway } from './kanban.gateway';
 import { AuditService } from '../modules/audit/audit.service';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class DealsService {
@@ -37,9 +38,20 @@ export class DealsService {
 
     // Transaction to create deal + custom values + history
     const deal = await this.prisma.$transaction(async (tx) => {
+      // [FIX] Sync Deal Creation with Client Creation (if client exists)
+      let finalCreatedAt = new Date();
+      if (dealData.client_id) {
+        const client = await tx.client.findUnique({ where: { id: dealData.client_id } });
+        if (client) {
+          finalCreatedAt = client.created_at;
+        }
+      }
+
       const newDeal = await tx.deal.create({
         data: {
           ...dealData,
+          responsible_id: dealData.responsible_id || (dealData.client_id ? (await tx.client.findUnique({ where: { id: dealData.client_id } }))?.created_by_id : undefined),
+          created_at: finalCreatedAt, // Override with Client Date
           stage_id: stageId,
           custom_values: custom_fields
             ? {
@@ -92,8 +104,8 @@ export class DealsService {
     return deal;
   }
 
-  async findAll(pipelineId?: string, responsibleId?: string, clientId?: string, search?: string, startDate?: string, endDate?: string) {
-    const where = this.buildWhere(pipelineId, responsibleId, clientId, search, startDate, endDate);
+  async findAll(pipelineId?: string, responsibleId?: string, clientId?: string, search?: string, tabulation?: string, startDate?: string, endDate?: string, openAccountStartDate?: string, openAccountEndDate?: string) {
+    const where = this.buildWhere(pipelineId, responsibleId, clientId, search, tabulation, startDate, endDate, openAccountStartDate, openAccountEndDate);
 
     return this.prisma.deal.findMany({
       where,
@@ -121,15 +133,15 @@ export class DealsService {
             phone: true, // Shown in list view
             account_opening_date: true, // Used for 'Contas Abertas' badge
             created_at: true,
-            qualifications: {
-              orderBy: { created_at: 'desc' },
-              take: 1,
-              select: {
-                id: true,
-                tabulacao: true,
-                // faturamento_mensal: true // Not critical for card
-              }
-            }
+            // [API COMPATIBILITY] Return empty array or map new fields?
+            // Ideally we return the fields directly on client.
+            // Frontend likely expects client.qualifications[0]?.tabulacao
+            // We can map it "virtually" or just return the fields on Client and update frontend.
+            // Let's return fields on client AND keep qualifications for backward compat if needed (but we want to simplify).
+            // Simplification: We return the FIELDS directly.
+            tabulacao: true,
+            faturamento_mensal: true,
+            agendamento: true
           }
         },
         responsible: {
@@ -152,8 +164,8 @@ export class DealsService {
     });
   }
 
-  async countByStage(pipelineId?: string, responsibleId?: string, clientId?: string, search?: string, startDate?: string, endDate?: string) {
-    const where = this.buildWhere(pipelineId, responsibleId, clientId, search, startDate, endDate);
+  async countByStage(pipelineId?: string, responsibleId?: string, clientId?: string, search?: string, tabulation?: string, startDate?: string, endDate?: string, openAccountStartDate?: string, openAccountEndDate?: string) {
+    const where = this.buildWhere(pipelineId, responsibleId, clientId, search, tabulation, startDate, endDate, openAccountStartDate, openAccountEndDate);
 
     const counts = await this.prisma.deal.groupBy({
       by: ['stage_id'],
@@ -168,28 +180,70 @@ export class DealsService {
     }, {});
   }
 
-  private buildWhere(pipelineId?: string, responsibleId?: string, clientId?: string, search?: string, startDate?: string, endDate?: string) {
-    const where: any = {};
-    if (pipelineId) where.pipeline_id = pipelineId;
-    if (responsibleId) where.responsible_id = responsibleId;
-    if (clientId) where.client_id = clientId;
+  private buildWhere(pipelineId?: string, responsibleId?: string, clientId?: string, search?: string, tabulation?: string, startDate?: string, endDate?: string, openAccountStartDate?: string, openAccountEndDate?: string) {
+    const where: any = { AND: [] };
+
+    if (pipelineId) where.AND.push({ pipeline_id: pipelineId });
+    if (responsibleId) {
+      where.AND.push({
+        client: { created_by_id: responsibleId }
+      });
+    }
+    if (clientId) where.AND.push({ client_id: clientId });
+
+    if (tabulation) {
+      where.AND.push({
+        client: {
+          tabulacao: { contains: tabulation, mode: 'insensitive' }
+        }
+      });
+    }
 
     if (startDate || endDate) {
-      where.created_at = {};
-      if (startDate) where.created_at.gte = new Date(startDate);
-      if (endDate) where.created_at.lte = new Date(endDate);
+      const dateFilter: any = {};
+      if (startDate) {
+        dateFilter.gte = startDate.length <= 10 ? new Date(`${startDate}T00:00:00.000Z`) : new Date(startDate);
+      }
+      if (endDate) {
+        if (endDate.length <= 10) {
+          dateFilter.lte = new Date(`${endDate}T23:59:59.999Z`);
+        } else {
+          dateFilter.lte = new Date(endDate);
+        }
+      }
+      where.AND.push({ created_at: dateFilter });
+    }
+
+    if (openAccountStartDate || openAccountEndDate) {
+      const dateFilter: any = {};
+      if (openAccountStartDate) {
+        dateFilter.gte = openAccountStartDate.length <= 10 ? new Date(`${openAccountStartDate}T00:00:00.000Z`) : new Date(openAccountStartDate);
+      }
+      if (openAccountEndDate) {
+        if (openAccountEndDate.length <= 10) {
+          dateFilter.lte = new Date(`${openAccountEndDate}T23:59:59.999Z`);
+        } else {
+          dateFilter.lte = new Date(openAccountEndDate);
+        }
+      }
+      where.AND.push({ client: { account_opening_date: dateFilter } });
     }
 
     if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { client: { name: { contains: search, mode: 'insensitive' } } },
-        { client: { surname: { contains: search, mode: 'insensitive' } } },
-        { client: { cnpj: { contains: search, mode: 'insensitive' } } },
-        { client: { email: { contains: search, mode: 'insensitive' } } },
-        { client: { phone: { contains: search, mode: 'insensitive' } } },
-      ];
+      where.AND.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { client: { name: { contains: search, mode: 'insensitive' } } },
+          { client: { surname: { contains: search, mode: 'insensitive' } } },
+          { client: { cnpj: { contains: search, mode: 'insensitive' } } },
+          { client: { email: { contains: search, mode: 'insensitive' } } },
+          { client: { phone: { contains: search, mode: 'insensitive' } } },
+        ]
+      });
     }
+
+    // Simplifica se houver apenas um elemento ou nenhum
+    if (where.AND.length === 0) return {};
     return where;
   }
 
@@ -198,14 +252,7 @@ export class DealsService {
       where: { id },
       include: {
         stage: true,
-        client: {
-          include: {
-            qualifications: {
-              orderBy: { created_at: 'desc' },
-              take: 1
-            }
-          }
-        },
+        client: true,
         responsible: true,
 
         custom_values: { include: { field: true } },
@@ -244,6 +291,24 @@ export class DealsService {
     const pipelineId = currentDeal.pipeline_id;
 
     // 2. Perform Update in Transaction
+    // [NEW] Check Role for Responsibility Change
+    if (updateDealDto.responsible_id && updateDealDto.responsible_id !== currentDeal.responsible_id) {
+      if (actorId) {
+        const actor = await this.prisma.user.findUnique({ where: { id: actorId } });
+
+        console.log('--- DEBUG DEAL UPDATE (RESPONSIBLE) ---');
+        console.log(`Actor ID: ${actorId}`);
+        console.log(`Actor Role: ${actor?.role}`);
+        console.log(`Target Responsible: ${updateDealDto.responsible_id}`);
+        console.log(`Current Responsible: ${currentDeal.responsible_id}`);
+
+        if (actor && (actor.role === Role.OPERATOR || actor.role === Role.LEADER)) {
+          console.log('>> BLOCKING DIRECT UPDATE');
+          throw new ForbiddenException('Operadores não podem alterar o responsável diretamente. Use a solicitação de troca.');
+        }
+      }
+    }
+
     const deal = await this.prisma.$transaction(async (tx) => {
       // Update Fields
       if (custom_fields) {
@@ -558,7 +623,7 @@ export class DealsService {
     return this.create({
       title: `${client.name} - Oportunidade`,
       pipeline_id: pipeline.id,
-      responsible_id: userId,
+      responsible_id: client.created_by_id || userId,
       status: DealStatus.OPEN,
       priority: DealPriority.NORMAL
     } as any, userId);

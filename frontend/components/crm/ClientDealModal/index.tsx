@@ -15,6 +15,7 @@ import {
     Div5_Qualification,
     Div6_CustomGroups
 } from "./ModalComponents";
+import { RequestResponsibilityModal } from "@/components/RequestResponsibilityModal";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -89,6 +90,8 @@ export function ClientDealModal({
     const [users, setUsers] = useState<any[]>([]);
     const [loadedData, setLoadedData] = useState<any>(null);
     const [activeTab, setActiveTab] = useState<"data" | "history">("data");
+    const [currentUser, setCurrentUser] = useState<any>(null);
+    const [showRequestModal, setShowRequestModal] = useState(false);
 
     const methods = useForm({
         resolver: zodResolver(clientDealFormSchema),
@@ -143,10 +146,13 @@ export function ClientDealModal({
                 }
 
                 const usersPromise = api.get('/users').catch(() => ({ data: [] }));
+                // Fetch current user
+                const mePromise = api.get('/auth/me').catch(() => ({ data: null }));
 
-                const [tabs, tmpl, mainData, usersRes] = await Promise.all([tabsRes, templateRes, dataPromise, usersPromise]);
+                const [tabs, tmpl, mainData, usersRes, meRes] = await Promise.all([tabsRes, templateRes, dataPromise, usersPromise, mePromise]);
 
                 if (usersRes.data) setUsers(usersRes.data);
+                if (meRes.data) setCurrentUser(meRes.data);
 
                 // ... handle machines ...
                 if (tmpl.data && tmpl.data.fields) {
@@ -198,7 +204,12 @@ export function ClientDealModal({
         const client = type === 'deal' ? data.client : data;
         const qual = client?.qualifications?.[0] || {};
 
-        let maqAtual = qual.maquininha_atual || "";
+        // [SIMPLIFICATION] Read directly from Client, fallback to Qualification array (migration safety)
+        const getVal = (key: string, qualKey?: string) => {
+            return client?.[key] ?? qual[qualKey || key];
+        };
+
+        let maqAtual = getVal('maquininha_atual') || "";
         if (typeof maqAtual === 'string' && maqAtual.includes(',')) {
             maqAtual = maqAtual.split(',').map((s: string) => s.trim());
         } else if (typeof maqAtual === 'string' && maqAtual) {
@@ -219,14 +230,14 @@ export function ClientDealModal({
                 has_open_account: client?.has_open_account || false,
             },
             qualification: {
-                tabulacao: qual.tabulacao || "",
-                faturamento_mensal: String(qual.faturamento_mensal || ""),
-                faturamento_maquina: String(qual.faturamento_maquina || ""),
+                tabulacao: getVal('tabulacao') || "",
+                faturamento_mensal: String(getVal('faturamento_mensal') || ""),
+                faturamento_maquina: String(getVal('faturamento_maquina') || ""),
                 maquininha_atual: maqAtual,
-                produto_interesse: qual.produto_interesse || "",
-                emite_boletos: !!qual.emite_boletos,
-                deseja_receber_ofertas: !!qual.deseja_receber_ofertas,
-                informacoes_adicionais: qual.informacoes_adicionais || "",
+                produto_interesse: getVal('produto_interesse') || "",
+                emite_boletos: !!getVal('emite_boletos'),
+                deseja_receber_ofertas: !!getVal('deseja_receber_ofertas'),
+                informacoes_adicionais: getVal('informacoes_adicionais') || "",
                 account_opening_date: client?.account_opening_date ? client.account_opening_date.split('T')[0] : "",
             }
         };
@@ -444,7 +455,12 @@ export function ClientDealModal({
                                         <Div2_ClientData>
                                             <ClientForm />
                                         </Div2_ClientData>
-                                        <Div3_Responsible users={users} />
+                                        <Div3_Responsible
+                                            users={users}
+                                            currentUser={currentUser}
+                                            onRequestResponsibility={() => setShowRequestModal(true)}
+                                            control={methods.control}
+                                        />
                                         <Div4_Tabulation options={tabulationOptions} />
                                     </div>
                                     <div className="flex flex-col gap-6">
@@ -491,6 +507,14 @@ export function ClientDealModal({
                     </form>
                 </FormProvider>
             </div>
+            {showRequestModal && (
+                <RequestResponsibilityModal
+                    leadId={currentClientId}
+                    currentUser={currentUser}
+                    users={users}
+                    onClose={() => setShowRequestModal(false)}
+                />
+            )}
         </div>
     );
 }

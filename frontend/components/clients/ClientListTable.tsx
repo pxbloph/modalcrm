@@ -48,10 +48,10 @@ interface Client {
     };
     surname?: string;
     cnpj?: string; // New field
-    qualifications?: {
-        agendamento?: string;
-        tabulacao?: string;
-    }[];
+    // [SIMPLIFICATION] Direct fields
+    tabulacao?: string;
+    agendamento?: string;
+    // qualifications?: { agendamento?: string; tabulacao?: string; }[]; // Deprecated
     has_open_account?: boolean;
     [key: string]: any;
 }
@@ -378,14 +378,14 @@ export default function ClientListTable({
             {
                 id: 'tabulacao',
                 header: 'Tabulação',
-                accessorFn: (row) => row.qualifications?.[0]?.tabulacao || '-',
+                accessorFn: (row) => row.tabulacao || '-',
                 cell: (info) => <span className="text-muted-foreground">{info.getValue() as string}</span>,
                 minSize: 150,
             },
             {
                 id: 'agendamento',
                 header: 'Agendamento',
-                accessorFn: (row) => row.qualifications?.[0]?.agendamento,
+                accessorFn: (row) => row.agendamento,
                 cell: (info) => {
                     const val = info.getValue() as string;
                     return val ? new Date(val).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-';

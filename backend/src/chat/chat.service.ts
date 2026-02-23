@@ -389,11 +389,7 @@ export class ChatService {
                     gte: startOfMonth,
                     lte: endOfMonth
                 },
-                qualifications: {
-                    some: {
-                        tabulacao: 'Conta aberta'
-                    }
-                }
+                tabulacao: 'Conta aberta'
             }
         });
 

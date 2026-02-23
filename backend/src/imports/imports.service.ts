@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User } from '@prisma/client';
 import * as XLSX from 'xlsx';
+import { ClientsService } from '../clients/clients.service';
 
 // Define Interface for Row Data
 interface ImportRow {
@@ -11,7 +12,10 @@ interface ImportRow {
 
 @Injectable()
 export class ImportsService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private clientsService: ClientsService
+    ) { }
 
     async createImportJob(file: Express.Multer.File, user: User, type: 'OPEN_ACCOUNTS' | 'LEADS' = 'OPEN_ACCOUNTS') {
         // 1. Create Job Record
@@ -171,6 +175,9 @@ export class ImportsService {
             const sheet = workbook.Sheets[sheetName];
             const rows: any[] = XLSX.utils.sheet_to_json(sheet);
 
+            const job = await this.prisma.importJob.findUnique({ where: { id: jobId } });
+            if (!job) throw new Error('Job lost context');
+
             await this.prisma.importJob.update({
                 where: { id: jobId },
                 data: { total_records: rows.length }
@@ -208,59 +215,29 @@ export class ImportsService {
                     const existingClient = await this.prisma.client.findUnique({ where: { cnpj: cnpjRaw } });
 
                     if (existingClient) {
-                        // UPDATE
-                        await this.prisma.client.update({
-                            where: { id: existingClient.id },
-                            data: {
-                                name: name || undefined,
-                                surname: surname || undefined,
-                                email: email || undefined,
-                                phone: phone || undefined,
-                            }
-                        });
-
-                        // Create Qualification if Tabulation provided
-                        if (tabulacao) {
-                            await this.prisma.qualification.create({
-                                data: {
-                                    client_id: existingClient.id,
-                                    created_by_id: existingClient.created_by_id, // Keep owner
-                                    tabulacao: tabulacao,
-                                    answers: {}
-                                }
-                            });
-                        }
+                        // UPDATE via ClientsService to trigger syncs
+                        await this.clientsService.update(existingClient.id, {
+                            name: name || undefined,
+                            surname: surname || undefined,
+                            email: email || undefined,
+                            phone: phone || undefined,
+                            tabulacao: tabulacao || undefined
+                        }, { id: job.created_by_id } as any);
 
                         result.status = 'UPDATED';
                         result.message = 'Lead atualizado com sucesso';
                         success++;
                     } else {
-                        // CREATE
-                        const job = await this.prisma.importJob.findUnique({ where: { id: jobId } });
-                        if (!job) throw new Error('Job lost context');
-
-                        const newClient = await this.prisma.client.create({
-                            data: {
-                                cnpj: cnpjRaw,
-                                name: name || `Lead ${cnpjRaw}`,
-                                surname: surname,
-                                email: email,
-                                phone: phone,
-                                created_by_id: job.created_by_id,
-                                integration_status: 'CADASTRADO'
-                            }
-                        });
-
-                        if (tabulacao) {
-                            await this.prisma.qualification.create({
-                                data: {
-                                    client_id: newClient.id,
-                                    created_by_id: job.created_by_id,
-                                    tabulacao: tabulacao,
-                                    answers: {}
-                                }
-                            });
-                        }
+                        // CREATE via ClientsService to trigger syncs
+                        const newClient = await this.clientsService.create({
+                            cnpj: cnpjRaw,
+                            name: name || `Lead ${cnpjRaw}`,
+                            surname: surname,
+                            email: email,
+                            phone: phone,
+                            tabulacao: tabulacao || undefined,
+                            integration_status: 'CADASTRADO'
+                        } as any, { id: job.created_by_id } as any);
 
                         result.status = 'CREATED';
                         result.message = 'Lead criado com sucesso';

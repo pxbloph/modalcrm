@@ -3,13 +3,13 @@ import { DealsService } from './deals.service';
 import { CreateDealDto } from './dto/create-deal.dto';
 import { UpdateDealDto } from './dto/update-deal.dto';
 import { AuthGuard } from '@nestjs/passport';
-import { QualificationsService } from '../qualifications/qualifications.service';
+import { ClientsService } from '../clients/clients.service';
 
 @Controller('deals')
 export class DealsController {
   constructor(
     private readonly dealsService: DealsService,
-    private readonly qualificationsService: QualificationsService
+    private readonly clientsService: ClientsService
   ) { }
 
   @UseGuards(AuthGuard('jwt'))
@@ -33,10 +33,13 @@ export class DealsController {
     @Query('client_id') clientId?: string,
     @Query('tags') tags?: string,
     @Query('search') search?: string,
+    @Query('tabulation') tabulation?: string, // [NEW]
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('openAccountStartDate') openAccountStartDate?: string,
+    @Query('openAccountEndDate') openAccountEndDate?: string,
   ) {
-    return this.dealsService.countByStage(pipelineId, responsibleId, clientId, search, startDate, endDate);
+    return this.dealsService.countByStage(pipelineId, responsibleId, clientId, search, tabulation, startDate, endDate, openAccountStartDate, openAccountEndDate);
   }
 
   @Get()
@@ -46,11 +49,14 @@ export class DealsController {
     @Query('client_id') clientId?: string,
     @Query('tags') tags?: string,
     @Query('search') search?: string,
+    @Query('tabulation') tabulation?: string, // [NEW]
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('openAccountStartDate') openAccountStartDate?: string,
+    @Query('openAccountEndDate') openAccountEndDate?: string,
   ) {
     const tagIds = tags ? tags.split(',') : undefined;
-    return this.dealsService.findAll(pipelineId, responsibleId, clientId, search, startDate, endDate);
+    return this.dealsService.findAll(pipelineId, responsibleId, clientId, search, tabulation, startDate, endDate, openAccountStartDate, openAccountEndDate);
   }
 
   @Get(':id')
@@ -67,26 +73,30 @@ export class DealsController {
   @UseGuards(AuthGuard('jwt'))
   @Patch(':id/tabulation')
   async updateTabulation(@Param('id') id: string, @Body() body: { tabulacao: string }, @Request() req) {
-    // 1. Check Role
     if (req.user.role !== 'ADMIN' && req.user.role !== 'SUPERVISOR') {
       throw new ForbiddenException('Apenas Supervisores podem alterar tabulação manualmente.');
     }
 
-    // 2. Get Deal
     const deal = await this.dealsService.findOne(id);
     if (!deal.client_id) return { message: 'Deal sem cliente vinculado.' };
 
-    // 3. Update Integration/Qualification Service
-    const result = await this.qualificationsService.updateTabulation(deal.client_id, body.tabulacao, req.user);
+    const oldTabulation = (deal.client as any)?.tabulacao || 'Aguardando contato';
 
-    // 4. Log in Deal History
+    // Update Client directly
+    const result = await this.clientsService.update(deal.client_id, { tabulacao: body.tabulacao } as any, req.user);
+
+    // Filter History: Log the change
     await this.dealsService.addHistory(id, 'TABULATION_UPDATE', {
-      old: result.prior_tabulation,
-      new: result.new_tabulation,
+      old: oldTabulation,
+      new: body.tabulacao,
       by: req.user.name
     }, req.user.id);
 
-    return result;
+    return {
+      success: true,
+      prior_tabulation: oldTabulation,
+      new_tabulation: body.tabulacao
+    };
   }
 
   @Post(':id/tabulate')

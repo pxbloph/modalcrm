@@ -5,10 +5,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { AutomationsModule } from '../automations/automations.module';
 import { KanbanGateway } from './kanban.gateway';
 
-import { QualificationsModule } from '../qualifications/qualifications.module';
+import { ClientsModule } from '../clients/clients.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => AutomationsModule), forwardRef(() => QualificationsModule)],
+  imports: [PrismaModule, forwardRef(() => AutomationsModule), forwardRef(() => ClientsModule)],
   controllers: [DealsController],
   providers: [DealsService, KanbanGateway],
   exports: [DealsService, KanbanGateway],

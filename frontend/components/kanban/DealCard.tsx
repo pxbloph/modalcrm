@@ -23,10 +23,10 @@ interface Deal {
         cnpj?: string;
         email?: string;
         phone?: string;
-        qualifications?: {
-            tabulacao?: string;
-            faturamento_mensal?: number;
-        }[];
+        // [SIMPLIFICATION] Direct fields
+        tabulacao?: string;
+        faturamento_mensal?: number;
+        // qualifications?: { tabulacao?: string; faturamento_mensal?: number; }[]; // Deprecated
     };
     responsible?: { id: string, name: string, surname?: string };
     tags?: { tag: Tag }[];
@@ -160,20 +160,21 @@ export function DealCardComponent({ deal, index, onClick, cardConfig, stageColor
                 );
 
             case "qual_tabulation":
-                const tab = deal.client?.qualifications?.[0]?.tabulacao;
+                const tab = deal.client?.tabulacao;
                 if (!tab) return null;
                 return (
-                    <div className="inline-block px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-medium border border-border mb-1">
+                    <div className="inline-block px-1.5 py-0.5 rounded bg-green-500/10 text-green-700 dark:text-green-400 text-[10px] font-bold border border-green-200 dark:border-green-500/20 mb-1">
                         {tab}
                     </div>
                 );
 
             case "qual_faturamento":
-                const fat = deal.client?.qualifications?.[0]?.faturamento_mensal;
+                const fat = deal.client?.faturamento_mensal;
                 if (!fat) return null;
                 return (
-                    <div className="flex items-center gap-1 text-[12px] text-muted-foreground mb-1">
-                        <span className="font-medium">Fat:</span>
+                    <div className="flex items-center gap-1 text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
+                        <DollarSign size={11} className="text-green-500" />
+                        <span className="opacity-70 font-medium mr-0.5 text-[9px]">FAT:</span>
                         {Number(fat).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </div>
                 );

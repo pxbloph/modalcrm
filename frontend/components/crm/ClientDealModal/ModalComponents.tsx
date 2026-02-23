@@ -1,6 +1,6 @@
 import React from "react";
 import { useFormContext } from "react-hook-form";
-import { Copy, User, CheckCircle, FileText, Briefcase } from "lucide-react";
+import { Copy, User, CheckCircle, FileText, Briefcase, ArrowRightLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ModalInput, ModalSelect } from "./ModalUI";
 import { ClientCustomFieldsRenderer } from "./ClientCustomFieldsRenderer";
@@ -43,22 +43,55 @@ export function Div2_ClientData({ className, children }: { className?: string, c
 }
 
 // --- DIV 3: Responsible ---
-export function Div3_Responsible({ users, className }: { users: any[], className?: string }) {
-    const { register } = useFormContext();
+export function Div3_Responsible({ users, currentUser, onRequestResponsibility, className }: { users: any[], currentUser?: any, onRequestResponsibility?: () => void, className?: string, control?: any }) {
+    const { register, watch } = useFormContext();
+    const currentUserId = watch("deal.user_id");
+
+    // Check if user is operator
+    const isOperator = currentUser?.role === 'OPERATOR';
+
     return (
         <div className={cn("bg-card p-4 rounded-lg border border-border flex flex-col justify-center", className)}>
             <label className="text-xs font-bold text-muted-foreground uppercase mb-2 block">Responsável</label>
-            <div className="relative">
-                <select
-                    className="w-full bg-input/20 border border-input rounded-lg px-3 py-2.5 text-xs font-medium text-foreground outline-none transition-all duration-200 focus:bg-background focus:border-ring focus:ring-2 focus:ring-ring/20 appearance-none cursor-pointer"
-                    {...register("deal.user_id")}
-                >
-                    <option value="">Sem responsável</option>
-                    {users.map((u: any) => (
-                        <option key={u.id} value={u.id}>{u.name} {u.surname}</option>
-                    ))}
-                </select>
-            </div>
+
+            {isOperator ? (
+                <div className="flex gap-2">
+                    <div className="relative flex-1">
+                        <select
+                            className="w-full bg-muted/50 border border-input rounded-lg px-3 py-2.5 text-xs font-medium text-foreground outline-none appearance-none cursor-not-allowed opacity-70"
+                            disabled
+                            value={currentUserId || ""}
+                        >
+                            <option value="">Sem responsável</option>
+                            {users.map((u: any) => (
+                                <option key={u.id} value={u.id}>{u.name} {u.surname}</option>
+                            ))}
+                        </select>
+                    </div>
+                    {onRequestResponsibility && (
+                        <button
+                            type="button"
+                            onClick={onRequestResponsibility}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-lg transition-colors flex items-center justify-center shrink-0"
+                            title="Solicitar Troca de Responsável"
+                        >
+                            <ArrowRightLeft size={16} />
+                        </button>
+                    )}
+                </div>
+            ) : (
+                <div className="relative">
+                    <select
+                        className="w-full bg-input/20 border border-input rounded-lg px-3 py-2.5 text-xs font-medium text-foreground outline-none transition-all duration-200 focus:bg-background focus:border-ring focus:ring-2 focus:ring-ring/20 appearance-none cursor-pointer"
+                        {...register("deal.user_id")}
+                    >
+                        <option value="">Sem responsável</option>
+                        {users.map((u: any) => (
+                            <option key={u.id} value={u.id}>{u.name} {u.surname}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
         </div>
     );
 }

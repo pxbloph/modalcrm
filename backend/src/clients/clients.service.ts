@@ -6,6 +6,8 @@ import { User, Role, Prisma } from '@prisma/client';
 import { DealsService } from '../deals/deals.service';
 import { AutomationsService } from '../automations/automations.service';
 import { TabulationsService } from '../tabulations/tabulations.service';
+import { ResponsibilityService } from '../modules/responsibility/responsibility.service';
+import { forwardRef, Inject } from '@nestjs/common';
 import axios from 'axios';
 
 
@@ -15,7 +17,9 @@ export class ClientsService {
         private prisma: PrismaService,
         private dealsService: DealsService,
         private automationsService: AutomationsService,
-        private tabulationsService: TabulationsService
+        private tabulationsService: TabulationsService,
+        @Inject(forwardRef(() => ResponsibilityService))
+        private responsibilityService: ResponsibilityService
     ) { }
 
     async create(data: Prisma.ClientCreateInput, user: User) {
@@ -60,45 +64,28 @@ export class ClientsService {
                 finalCreatorId = created_by_id;
             }
 
+            // 2. [REFACTORED] Consolidate Qualification Data directly into Client
+            const qualFieldsValues = {
+                faturamento_mensal: faturamento_mensal ? new Prisma.Decimal(faturamento_mensal) : undefined,
+                faturamento_maquina: faturamento_maquina ? new Prisma.Decimal(faturamento_maquina) : undefined,
+                maquininha_atual: maquininha_atual,
+                produto_interesse: produto_interesse,
+                emite_boletos: emite_boletos !== undefined ? (emite_boletos === true || emite_boletos === 'true') : false,
+                deseja_receber_ofertas: deseja_receber_ofertas !== undefined ? (deseja_receber_ofertas === true || deseja_receber_ofertas === 'true') : false,
+                informacoes_adicionais: informacoes_adicionais,
+                tabulacao: tabulacao || "Aguardando contato",
+                agendamento: agendamento ? new Date(agendamento) : null
+            };
+
             const client = await this.prisma.client.create({
                 data: {
                     ...cleanClientData,
-                    // Parse date if present
+                    ...qualFieldsValues,
                     account_opening_date: account_opening_date ? new Date(account_opening_date) : null,
                     answers: answers || {},
                     created_by: { connect: { id: finalCreatorId } },
                 },
             });
-
-            // 2. Create Initial Qualification (if any data provided)
-            const qualFields = [
-                faturamento_mensal, faturamento_maquina, maquininha_atual, produto_interesse,
-                emite_boletos, deseja_receber_ofertas, informacoes_adicionais, tabulacao, agendamento
-            ];
-            const hasQualificationInfo = qualFields.some(f => f !== undefined && f !== null && f !== "");
-
-            if (hasQualificationInfo || tabulacao) {
-                // Helper to parse decimals/ints safely (reused logic)
-                const toDec = (val: any) => val ? new Prisma.Decimal(val) : undefined;
-                const toBool = (val: any) => val === true || val === 'true';
-
-                await this.prisma.qualification.create({
-                    data: {
-                        client_id: client.id,
-                        created_by_id: finalCreatorId,
-                        answers: {},
-                        tabulacao: tabulacao || "Aguardando contato", // Default if not provided? Or keep undefined?
-                        faturamento_mensal: toDec(faturamento_mensal),
-                        faturamento_maquina: toDec(faturamento_maquina),
-                        maquininha_atual: maquininha_atual,
-                        produto_interesse: produto_interesse,
-                        emite_boletos: emite_boletos !== undefined ? toBool(emite_boletos) : false,
-                        deseja_receber_ofertas: deseja_receber_ofertas !== undefined ? toBool(deseja_receber_ofertas) : false,
-                        informacoes_adicionais: informacoes_adicionais,
-                        agendamento: agendamento ? new Date(agendamento) : null
-                    }
-                });
-            }
 
             // 3. Auto-create Deal (Kanban) - Controlled by Flag
             if (!skip_auto_deal) {
@@ -118,15 +105,31 @@ export class ClientsService {
 
     private async createDefaultDeal(client: any, userId: string) {
         try {
-            let pipeline = await this.prisma.pipeline.findFirst({
-                where: { is_default: true }
-            });
+            let targetStageId: string | undefined = undefined;
+            let targetPipelineId: string | undefined = undefined;
 
-            // Fallback: Use first available pipeline if no default is set
+            // 1. Check if the initial tabulation has a target stage
+            if (client.tabulacao) {
+                const tabConfig = await this.tabulationsService.findByLabel(client.tabulacao);
+                if (tabConfig && tabConfig.target_stage_id) {
+                    targetStageId = tabConfig.target_stage_id;
+                    targetPipelineId = tabConfig.target_stage?.pipeline_id;
+                }
+            }
+
+            // 2. Determine Pipeline
+            let pipeline;
+            if (targetPipelineId) {
+                pipeline = await this.prisma.pipeline.findUnique({ where: { id: targetPipelineId } });
+            }
+
             if (!pipeline) {
-                pipeline = await this.prisma.pipeline.findFirst({
-                    orderBy: { created_at: 'asc' } // Oldest pipeline usually "Main"
-                });
+                pipeline = await this.prisma.pipeline.findFirst({ where: { is_default: true } });
+            }
+
+            // Fallback: Use first available pipeline
+            if (!pipeline) {
+                pipeline = await this.prisma.pipeline.findFirst({ orderBy: { created_at: 'asc' } });
             }
 
             if (!pipeline) {
@@ -134,14 +137,17 @@ export class ClientsService {
                 return;
             }
 
+            // 3. Create Deal
             await this.dealsService.create({
                 title: `${client.name}`,
                 client_id: client.id,
                 pipeline_id: pipeline.id,
+                stage_id: targetStageId, // If undefined, DealsService will pick the first stage
                 responsible_id: userId,
                 priority: 'NORMAL'
-            } as any, userId); // Pass actorId explicitly to ensure proper logging
-            console.log(`Deal created for client ${client.id} by actor ${userId}`);
+            } as any, userId);
+
+            console.log(`[CLIENTS] Deal auto-created for client ${client.id} (Tab: ${client.tabulacao || 'None'})`);
         } catch (e) {
             console.error("Error auto-creating deal:", e);
         }
@@ -206,30 +212,9 @@ export class ClientsService {
             andConditions.push({ created_at: dateFilter });
         }
 
-        // Tabulation Filter (Tabulação da ÚLTIMA Qualificação)
+        // Tabulation Filter (Tabulação da ÚLTIMA Qualificação -> AGORA DIRETO NO CLIENTE)
         if (tabulation) {
-            try {
-                // Busca IDs de clientes onde a ÚLTIMA qualificação tem a tabulação especificada
-                const clientIds = await this.prisma.$queryRaw<{ client_id: string }[]>`
-                    SELECT DISTINCT q1."client_id"
-                    FROM "qualifications" q1
-                    WHERE q1."tabulacao" = ${tabulation}
-                    AND NOT EXISTS (
-                        SELECT 1 FROM "qualifications" q2
-                        WHERE q2."client_id" = q1."client_id"
-                        AND q2."created_at" > q1."created_at"
-                    )
-                `;
-
-                if (clientIds.length > 0) {
-                    andConditions.push({ id: { in: clientIds.map(c => c.client_id) } });
-                } else {
-                    // Se nenhum ID encontrado, forçar resultado vazio
-                    andConditions.push({ id: '00000000-0000-0000-0000-000000000000' });
-                }
-            } catch (err) {
-                console.error("Erro ao filtrar por tabulação:", err);
-            }
+            andConditions.push({ tabulacao: tabulation });
         }
 
         // Conta Aberta Filter (Boolean OR Date Range)
@@ -293,11 +278,8 @@ export class ClientsService {
                 if (duplicate && duplicate.id !== id) {
                     console.log(`Merging Lead ${id} into existing Client ${duplicate.id} (CNPJ ${inputData.cnpj}) - Triggered by Success Status`);
 
-                    // 1. Move qualifications from Lead to Existing Client
-                    await this.prisma.qualification.updateMany({
-                        where: { client_id: id },
-                        data: { client_id: duplicate.id }
-                    });
+                    // 1. [DEPRECATED] Data already on client, no need to move qualifications
+                    console.log(`Merging Lead ${id} into existing Client ${duplicate.id} (CNPJ ${inputData.cnpj})`);
 
                     // 2. Prepare data for generic update on existing client
                     // Remove CNPJ from update to avoid unique constraint if it's identical (it is)
@@ -397,124 +379,77 @@ export class ClientsService {
             console.log('[DEBUG] Clean Client Data:', JSON.stringify(cleanClientData));
             if (account_opening_date) console.log('[DEBUG] Opening Date:', account_opening_date);
 
-            // Update Client Basic Info
+            // Update Client directly with combined data
             let updatedClient;
             try {
+                // Helper to parse decimals/ints safely
+                const toDec = (val: any) => val !== undefined && val !== null ? new Prisma.Decimal(val) : undefined;
+                const toInt = (val: any) => val !== undefined && val !== null ? Number(val) : undefined;
+                const toBool = (val: any) => val === true || val === 'true';
+
                 updatedClient = await this.prisma.client.update({
                     where: { id },
                     data: {
                         ...cleanClientData,
-                        account_opening_date: account_opening_date ? new Date(account_opening_date) : undefined
+                        account_opening_date: account_opening_date ? new Date(account_opening_date) : undefined,
+
+                        // Consolidated Qualification Data
+                        faturamento_mensal: toDec(faturamento_mensal),
+                        faturamento_maquina: toDec(faturamento_maquina),
+                        maquininha_atual: maquininha_atual,
+                        produto_interesse: produto_interesse,
+                        emite_boletos: emite_boletos !== undefined ? toBool(emite_boletos) : undefined,
+                        deseja_receber_ofertas: deseja_receber_ofertas !== undefined ? toBool(deseja_receber_ofertas) : undefined,
+                        informacoes_adicionais: informacoes_adicionais,
+                        tabulacao: tabulacao,
+                        agendamento: agendamento ? new Date(agendamento) : undefined,
+
+                        cc_tipo_conta: cc_tipo_conta,
+                        cc_status: cc_status,
+                        cc_numero: cc_numero,
+                        cc_saldo: toDec(cc_saldo),
+                        cc_limite_utilizado: toDec(cc_limite_utilizado),
+                        cc_limite_disponivel: toDec(cc_limite_disponivel),
+
+                        card_final: card_final,
+                        card_status: card_status,
+                        card_tipo: card_tipo,
+                        card_adicionais: toInt(card_adicionais),
+                        card_fatura_aberta_data: card_fatura_aberta_data ? new Date(card_fatura_aberta_data) : undefined,
+                        card_fatura_aberta_valor: toDec(card_fatura_aberta_valor),
+
+                        global_dolar: global_dolar !== undefined ? toBool(global_dolar) : undefined,
+                        global_euro: global_euro !== undefined ? toBool(global_euro) : undefined,
+
+                        prod_multiplos_acessos: prod_multiplos_acessos !== undefined ? toBool(prod_multiplos_acessos) : undefined,
+                        prod_c6_pay: prod_c6_pay !== undefined ? toBool(prod_c6_pay) : undefined,
+                        prod_c6_tag: prod_c6_tag !== undefined ? toBool(prod_c6_tag) : undefined,
+                        prod_debito_automatico: prod_debito_automatico !== undefined ? toBool(prod_debito_automatico) : undefined,
+                        prod_seguros: prod_seguros !== undefined ? toBool(prod_seguros) : undefined,
+                        prod_chaves_pix: prod_chaves_pix !== undefined ? toBool(prod_chaves_pix) : undefined,
+                        prod_web_banking: prod_web_banking !== undefined ? toBool(prod_web_banking) : undefined,
+                        prod_link_pagamento: prod_link_pagamento !== undefined ? toBool(prod_link_pagamento) : undefined,
+                        prod_boleto_dda: prod_boleto_dda !== undefined ? toBool(prod_boleto_dda) : undefined,
+                        prod_boleto_cobranca: prod_boleto_cobranca !== undefined ? toBool(prod_boleto_cobranca) : undefined,
+
+                        credit_blocklist: credit_blocklist !== undefined ? toBool(credit_blocklist) : undefined,
+                        credit_score_interno: credit_score_interno,
+                        credit_score_serasa: credit_score_serasa,
+                        credit_inadimplencia: credit_inadimplencia,
+
+                        limit_cartao_utilizado: toDec(limit_cartao_utilizado),
+                        limit_cartao_aprovado: toDec(limit_cartao_aprovado),
+                        limit_cheque_utilizado: toDec(limit_cheque_utilizado),
+                        limit_cheque_aprovado: toDec(limit_cheque_aprovado),
+                        limit_parcelado_utilizado: toDec(limit_parcelado_utilizado),
+                        limit_parcelado_aprovado: toDec(limit_parcelado_aprovado),
+                        limit_anticipacao_disponivel: limit_anticipacao_disponivel
                     },
                 });
-            } catch (error) {
-                console.error('[UPDATE ERROR] Failed to update client (Prisma):', error);
-                throw error;
-            }
 
-            // Update/Create Qualification if data provided
-            if (hasQualificationInfo) {
-                const latestQual: any = await this.prisma.qualification.findFirst({
-                    where: { client_id: id },
-                    orderBy: { created_at: 'desc' }
-                });
-
-                // Helper to parse decimals/ints safely
-                const toDec = (val: any) => val ? new Prisma.Decimal(val) : undefined;
-                const toInt = (val: any) => val ? Number(val) : undefined;
-                const toBool = (val: any) => val === true || val === 'true';
-
-                const qualDataPayload = {
-                    faturamento_mensal: toDec(faturamento_mensal) ?? latestQual?.faturamento_mensal,
-                    faturamento_maquina: toDec(faturamento_maquina) ?? latestQual?.faturamento_maquina,
-                    maquininha_atual: maquininha_atual ?? latestQual?.maquininha_atual,
-                    produto_interesse: produto_interesse ?? latestQual?.produto_interesse,
-                    emite_boletos: emite_boletos !== undefined ? toBool(emite_boletos) : latestQual?.emite_boletos,
-                    deseja_receber_ofertas: deseja_receber_ofertas !== undefined ? toBool(deseja_receber_ofertas) : latestQual?.deseja_receber_ofertas,
-                    informacoes_adicionais: informacoes_adicionais ?? latestQual?.informacoes_adicionais,
-                    tabulacao: tabulacao ?? latestQual?.tabulacao,
-                    agendamento: agendamento ? new Date(agendamento) : latestQual?.agendamento,
-
-                    // New Fields
-                    cc_tipo_conta: cc_tipo_conta ?? latestQual?.cc_tipo_conta,
-                    cc_status: cc_status ?? latestQual?.cc_status,
-                    cc_numero: cc_numero ?? latestQual?.cc_numero,
-                    cc_saldo: toDec(cc_saldo) ?? latestQual?.cc_saldo,
-                    cc_limite_utilizado: toDec(cc_limite_utilizado) ?? latestQual?.cc_limite_utilizado,
-                    cc_limite_disponivel: toDec(cc_limite_disponivel) ?? latestQual?.cc_limite_disponivel,
-
-                    card_final: card_final ?? latestQual?.card_final,
-                    card_status: card_status ?? latestQual?.card_status,
-                    card_tipo: card_tipo ?? latestQual?.card_tipo,
-                    card_adicionais: toInt(card_adicionais) ?? latestQual?.card_adicionais,
-                    card_fatura_aberta_data: card_fatura_aberta_data ? new Date(card_fatura_aberta_data) : latestQual?.card_fatura_aberta_data,
-                    card_fatura_aberta_valor: toDec(card_fatura_aberta_valor) ?? latestQual?.card_fatura_aberta_valor,
-
-                    global_dolar: global_dolar !== undefined ? toBool(global_dolar) : latestQual?.global_dolar,
-                    global_euro: global_euro !== undefined ? toBool(global_euro) : latestQual?.global_euro,
-
-                    prod_multiplos_acessos: prod_multiplos_acessos !== undefined ? toBool(prod_multiplos_acessos) : latestQual?.prod_multiplos_acessos,
-                    prod_c6_pay: prod_c6_pay !== undefined ? toBool(prod_c6_pay) : latestQual?.prod_c6_pay,
-                    prod_c6_tag: prod_c6_tag !== undefined ? toBool(prod_c6_tag) : latestQual?.prod_c6_tag,
-                    prod_debito_automatico: prod_debito_automatico !== undefined ? toBool(prod_debito_automatico) : latestQual?.prod_debito_automatico,
-                    prod_seguros: prod_seguros !== undefined ? toBool(prod_seguros) : latestQual?.prod_seguros,
-                    prod_chaves_pix: prod_chaves_pix !== undefined ? toBool(prod_chaves_pix) : latestQual?.prod_chaves_pix,
-                    prod_web_banking: prod_web_banking !== undefined ? toBool(prod_web_banking) : latestQual?.prod_web_banking,
-                    prod_link_pagamento: prod_link_pagamento !== undefined ? toBool(prod_link_pagamento) : latestQual?.prod_link_pagamento,
-                    prod_boleto_dda: prod_boleto_dda !== undefined ? toBool(prod_boleto_dda) : latestQual?.prod_boleto_dda,
-                    prod_boleto_cobranca: prod_boleto_cobranca !== undefined ? toBool(prod_boleto_cobranca) : latestQual?.prod_boleto_cobranca,
-
-                    credit_blocklist: credit_blocklist !== undefined ? toBool(credit_blocklist) : latestQual?.credit_blocklist,
-                    credit_score_interno: credit_score_interno ?? latestQual?.credit_score_interno,
-                    credit_score_serasa: credit_score_serasa ?? latestQual?.credit_score_serasa,
-                    credit_inadimplencia: credit_inadimplencia ?? latestQual?.credit_inadimplencia,
-
-                    limit_cartao_utilizado: toDec(limit_cartao_utilizado) ?? latestQual?.limit_cartao_utilizado,
-                    limit_cartao_aprovado: toDec(limit_cartao_aprovado) ?? latestQual?.limit_cartao_aprovado,
-                    limit_cheque_utilizado: toDec(limit_cheque_utilizado) ?? latestQual?.limit_cheque_utilizado,
-                    limit_cheque_aprovado: toDec(limit_cheque_aprovado) ?? latestQual?.limit_cheque_aprovado,
-                    limit_parcelado_utilizado: toDec(limit_parcelado_utilizado) ?? latestQual?.limit_parcelado_utilizado,
-                    limit_parcelado_aprovado: toDec(limit_parcelado_aprovado) ?? latestQual?.limit_parcelado_aprovado,
-                    limit_anticipacao_disponivel: limit_anticipacao_disponivel ?? latestQual?.limit_anticipacao_disponivel
-                };
-
-                if (latestQual) {
-                    await this.prisma.qualification.update({
-                        where: { id: latestQual.id },
-                        data: qualDataPayload
-                    });
-                } else {
-                    await this.prisma.qualification.create({
-                        data: {
-                            client_id: id,
-                            created_by_id: user.id,
-                            answers: {},
-                            ...qualDataPayload
-                        }
-                    });
-                }
-
-                // --- NEW: DIRECT TABULATION LOGIC (Centralized) ---
-                if (tabulacao && tabulacao !== latestQual?.tabulacao) {
-                    // Find active Deal for this client
-                    const activeDeal = await this.prisma.deal.findFirst({
-                        where: { client_id: id, status: 'OPEN' },
-                        orderBy: { created_at: 'desc' }
-                    });
-
-                    if (activeDeal) {
-                        // Check if this tabulation has a target stage configured in Settings > Tabulations
-                        const tabConfig = await this.tabulationsService.findByLabel(tabulacao);
-
-                        if (tabConfig && tabConfig.target_stage_id) {
-                            if (activeDeal.stage_id !== tabConfig.target_stage_id) {
-                                console.log(`[CLIENTS] Tabulation "${tabulacao}" dictates move to stage ${tabConfig.target_stage_id}. Moving Deal ${activeDeal.id}...`);
-                                await this.dealsService.update(activeDeal.id, { stage_id: tabConfig.target_stage_id } as any, user.id);
-                            }
-                        }
-                    }
-                }
-                // -----------------------------------------------------
+                // --- CENTRALIZED TABULATION SYNC ---
+                await this.syncTabulationToKanban(id, tabulacao, user.id, client.tabulacao);
+                // ------------------------------------
 
                 // Check if we should qualify the client
                 const hasRealData =
@@ -532,9 +467,12 @@ export class ClientsService {
                         data: { is_qualified: true }
                     });
                 }
-            }
 
-            return updatedClient;
+                return updatedClient;
+            } catch (error) {
+                console.error('[UPDATE ERROR] Failed to update client (Prisma):', error);
+                throw error;
+            }
         } catch (fatalError) {
             console.error('[FATAL UPDATE ERROR]', fatalError);
             throw new InternalServerErrorException('Erro grave ao atualizar cliente. Verifique os logs.');
@@ -546,10 +484,6 @@ export class ClientsService {
             throw new ConflictException('Apenas admin pode excluir clientes.');
         }
 
-        // Delete related qualifications first to avoid Foreign Key Constraint violation
-        await this.prisma.qualification.deleteMany({
-            where: { client_id: id }
-        });
 
         return this.prisma.client.delete({
             where: { id }
@@ -659,15 +593,8 @@ export class ClientsService {
                 created_by: { // Renamed from 'responsible' to 'created_by' to match schema
                     select: { id: true, name: true, surname: true }
                 },
-                qualifications: {
-                    orderBy: { created_at: 'desc' },
-                    take: 1,
-                    select: {
-                        id: true,
-                        tabulacao: true,
-                        faturamento_mensal: true
-                    }
-                }
+                tabulacao: true,
+                faturamento_mensal: true
             },
             orderBy: { created_at: 'desc' },
             // TODO: Implement pagination args (skip/take) efficiently in next step if requested
@@ -681,10 +608,6 @@ export class ClientsService {
             where: { id },
             include: {
                 created_by: true,
-                qualifications: {
-                    orderBy: { created_at: 'desc' },
-                    take: 1
-                },
                 deals: {
                     where: { status: 'OPEN' },
                     take: 1,
@@ -714,22 +637,18 @@ export class ClientsService {
         try {
             const qualifications: any[] = await this.prisma.$queryRaw`
                 SELECT 
-                    q.id, 
-                    q.agendamento, 
-                    q.nome_do_cliente, 
-                    q.tabulacao,
-                    q.client_id,
+                    c.id, 
+                    c.agendamento, 
                     c.name as client_name, 
                     c.surname as client_surname, 
                     c.phone as client_phone, 
                     c.email as client_email, 
                     c.cnpj as client_cnpj, 
-                    c.id as client_id_explicit
-                FROM qualifications q
-                JOIN clients c ON q.client_id = c.id
-                WHERE q.created_by_id = ${user.id}
-                AND q.agendamento >= ${oneMinuteAgo}
-                AND q.agendamento <= ${now}
+                    c.tabulacao
+                FROM clients c
+                WHERE c.created_by_id = ${user.id}
+                AND c.agendamento >= ${oneMinuteAgo}
+                AND c.agendamento <= ${now}
             `;
 
             return qualifications.map(q => ({
@@ -751,10 +670,6 @@ export class ClientsService {
             throw new ConflictException('Apenas admin pode excluir clientes.');
         }
 
-        // Delete qualifications for all clients first
-        await this.prisma.qualification.deleteMany({
-            where: { client_id: { in: ids } }
-        });
 
         return this.prisma.client.deleteMany({
             where: { id: { in: ids } }
@@ -779,18 +694,14 @@ export class ClientsService {
         const clients = await this.prisma.client.findMany({
             where,
             include: {
-                created_by: { select: { name: true, surname: true } },
-                qualifications: {
-                    orderBy: { created_at: 'desc' },
-                    take: 1
-                }
+                created_by: { select: { name: true, surname: true } }
             },
             orderBy: { created_at: 'desc' }
         });
 
         // Flatten Data
         const csvRows = clients.map(client => {
-            const qual: any = client.qualifications[0] || {};
+            const qual: any = client;
 
             return {
                 'ID': client.id,
@@ -837,12 +748,7 @@ export class ClientsService {
                 ]
             },
             include: {
-                created_by: { select: { id: true, name: true, surname: true } },
-                qualifications: {
-                    orderBy: { created_at: 'desc' },
-                    take: 1,
-                    select: { tabulacao: true }
-                }
+                created_by: true
             }
         });
 
@@ -875,9 +781,9 @@ export class ClientsService {
             lead_id: client.id,
             company_name: client.name,
             cnpj_masked: client.cnpj,
-            owner_name: `${client.created_by.name} ${client.created_by.surname || ''}`.trim(),
-            owner_id: client.created_by.id,
-            pipeline_stage: client.qualifications?.[0]?.tabulacao || 'Sem tabulação',
+            owner_name: client.created_by ? `${client.created_by.name} ${client.created_by.surname || ''}`.trim() : 'Sem responsável',
+            owner_id: client.created_by?.id,
+            pipeline_stage: client.tabulacao || 'Sem tabulação',
             can_take_over: canTakeOver,
             deny_reason: canTakeOver ? null : denyReason
         };
@@ -893,12 +799,7 @@ export class ClientsService {
                 OR: [{ cnpj: cnpj }, { cnpj: cleanCnpj }]
             },
             include: {
-                created_by: { select: { id: true, name: true, surname: true } },
-                qualifications: {
-                    orderBy: { created_at: 'desc' },
-                    take: 1,
-                    select: { tabulacao: true }
-                }
+                created_by: true
             }
         });
 
@@ -913,9 +814,9 @@ export class ClientsService {
             lead_id: client.id,
             company_name: client.name,
             cnpj_masked: client.cnpj,
-            owner_name: `${client.created_by.name} ${client.created_by.surname || ''}`.trim(),
-            owner_id: client.created_by.id,
-            pipeline_stage: client.qualifications?.[0]?.tabulacao || 'Sem tabulação',
+            owner_name: client.created_by ? `${client.created_by.name} ${client.created_by.surname || ''}`.trim() : 'Sem responsável',
+            owner_id: client.created_by?.id,
+            pipeline_stage: client.tabulacao || 'Sem tabulação',
             can_transfer: true // Always true per new rule
         };
     }
@@ -999,6 +900,27 @@ export class ClientsService {
             throw new ConflictException('Você já é o responsável por este lead.');
         }
 
+        // [NEW] Operator Request Logic
+        console.log('--- DEBUG TAKEOVER START ---');
+        console.log(`User ID: ${user.id}`);
+        console.log(`User Name: ${user.name}`);
+        console.log(`User Role (Value): '${user.role}'`);
+        console.log(`User Role (Type): ${typeof user.role}`);
+        console.log(`Enum Role.OPERATOR: '${Role.OPERATOR}'`);
+        console.log(`Is Match?: ${user.role === Role.OPERATOR}`);
+        console.log('--- DEBUG TAKEOVER END ---');
+
+        if (user.role === Role.OPERATOR || user.role === Role.LEADER) {
+            console.log('>> ENTERING REQUEST FLOW');
+            await this.responsibilityService.createRequest({
+                leadId: id,
+                toUserId: user.id,
+                reason: reason || 'Solicitado via Puxar Lead (Takeover)'
+            }, user);
+
+            return { success: true, message: 'Solicitação enviada para aprovação.' };
+        }
+
         const updatedClient = await this.prisma.client.update({
             where: { id },
             data: {
@@ -1012,7 +934,7 @@ export class ClientsService {
             oldOwnerId,
             newOwnerId,
             user.id,
-            user.role === Role.OPERATOR ? 'operator_single' : 'supervisor_single',
+            'supervisor_single', // Operators don't reach here anymore
             reason
         );
 
@@ -1021,7 +943,7 @@ export class ClientsService {
             oldOwner: client.created_by,
             newOwner: updatedClient.created_by,
             requestedBy: user,
-            mode: user.role === Role.OPERATOR ? 'operator_single' : 'supervisor_single',
+            mode: 'supervisor_single',
             reason,
             auditId
         });
@@ -1168,6 +1090,32 @@ export class ClientsService {
 
         } catch (e) {
             console.error('Notify N8N Error:', e);
+        }
+    }
+
+    async syncTabulationToKanban(clientId: string, newTabulation: string, actorId: string, oldTabulation?: string) {
+        if (!newTabulation || newTabulation === oldTabulation) return;
+
+        try {
+            // Find active Deal for this client
+            const activeDeal = await this.prisma.deal.findFirst({
+                where: { client_id: clientId, status: 'OPEN' },
+                orderBy: { created_at: 'desc' }
+            });
+
+            if (activeDeal) {
+                // Check if this tabulation has a target stage configured in Settings > Tabulations
+                const tabConfig = await this.tabulationsService.findByLabel(newTabulation);
+
+                if (tabConfig && tabConfig.target_stage_id) {
+                    if (activeDeal.stage_id !== tabConfig.target_stage_id) {
+                        console.log(`[SYNC] Tabulação "${newTabulation}" moveu card para estágio ${tabConfig.target_stage_id}`);
+                        await this.dealsService.update(activeDeal.id, { stage_id: tabConfig.target_stage_id } as any, actorId);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("[SYNC] Erro ao sincronizar tabulação -> kanban:", e);
         }
     }
 }

@@ -12,8 +12,9 @@ import { KanbanCardConfigModal } from "@/components/kanban/KanbanCardConfigModal
 import { AutomationEditor } from "@/components/automations/AutomationEditor";
 import { useChat } from "@/components/chat/ChatContext";
 import { useToast } from "@/components/ui/use-toast";
-import { isWithinInterval, parseISO, startOfDay, endOfDay, subDays } from "date-fns";
+import { isWithinInterval, parseISO, startOfDay, endOfDay, subDays, format } from "date-fns";
 import { MetricsCards, DashboardMetrics } from "@/components/dashboard/MetricsCards";
+import { useKanbanFilters } from "@/hooks/useKanbanFilters";
 
 interface Pipeline {
     id: string;
@@ -37,7 +38,10 @@ interface Deal {
         surname?: string;
         created_at?: string;
         account_opening_date?: string;
-        qualifications?: { tabulacao?: string }[];
+        // [SIMPLIFICATION] Direct fields
+        tabulacao?: string;
+        faturamento_mensal?: number;
+        // qualifications?: { tabulacao?: string }[];
     };
     responsible?: { id: string, name: string; surname?: string };
     tags?: { tag: { id: string, name: string, color: string } }[];
@@ -74,19 +78,37 @@ export default function KanbanPage() {
     const [users, setUsers] = useState<any[]>([]);
     const [currentUser, setCurrentUser] = useState<any>(null); // To store current logged in user
     const [searchTerm, setSearchTerm] = useState("");
-    const [filterResponsible, setFilterResponsible] = useState<string | null>(null);
-
-    // New Filters
-    const [tabulation, setTabulation] = useState<string>("");
     const [tabulationOptions, setTabulationOptions] = useState<string[]>([]);
+    const [presets, setPresets] = useState<any[]>([]);
 
-    // Default Filter: Last 2 Days (Optimization)
-    const [isDefaultView, setIsDefaultView] = useState(true);
-    const [creationDate, setCreationDate] = useState<{ from: Date | undefined; to?: Date | undefined } | undefined>({
-        from: subDays(new Date(), 10),
-        to: undefined
-    });
-    const [accountDate, setAccountDate] = useState<{ from: Date | undefined; to?: Date | undefined } | undefined>(undefined);
+    const {
+        activeFilters,
+        visibleFields,
+        setFilter,
+        removeFilter,
+        clearAll,
+        addField,
+        removeField
+    } = useKanbanFilters();
+
+    // Map active filters for backend consumption
+    const filterParams = useMemo(() => {
+        const params: any = {};
+        activeFilters.forEach(f => {
+            if (f.id === 'creationDate') {
+                params.startDate = f.value?.from ? format(new Date(f.value.from), 'yyyy-MM-dd') : undefined;
+                params.endDate = f.value?.to ? format(new Date(f.value.to), 'yyyy-MM-dd') : undefined;
+            } else if (f.id === 'accountOpeningDate') {
+                params.openAccountStartDate = f.value?.from ? format(new Date(f.value.from), 'yyyy-MM-dd') : undefined;
+                params.openAccountEndDate = f.value?.to ? format(new Date(f.value.to), 'yyyy-MM-dd') : undefined;
+            } else if (f.id === 'responsibleId') {
+                params.responsible_id = f.value;
+            } else {
+                params[f.id] = f.value;
+            }
+        });
+        return params;
+    }, [activeFilters]);
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
@@ -102,7 +124,7 @@ export default function KanbanPage() {
         }
         fetchPipelines();
         fetchFiltersData();
-        fetchMetrics();
+        // REMOVED fetchMetrics() here to avoid initial global fetch
     }, []);
 
     // WebSocket Listeners
@@ -172,11 +194,20 @@ export default function KanbanPage() {
         try {
             const [usersRes, tabsRes] = await Promise.all([
                 api.get('/users'),
-                api.get('/qualifications/tabulations')
+                api.get('/tabulations/active')
             ]);
-            setUsers(usersRes.data);
+
+            // Sort users alphabetically
+            const sortedUsers = Array.isArray(usersRes.data)
+                ? usersRes.data.sort((a, b) => a.name.localeCompare(b.name))
+                : [];
+
+            setUsers(sortedUsers);
+
             if (Array.isArray(tabsRes.data)) {
-                setTabulationOptions(tabsRes.data);
+                // Ensure tabulations are also sorted and extracted (assuming tabsRes.data is [{label: '...'}, ...])
+                const tabOptions = tabsRes.data.map((t: any) => t.label).sort((a, b) => a.localeCompare(b));
+                setTabulationOptions(tabOptions);
             }
         } catch (error) {
             console.error("Erro ao carregar filtros:", error);
@@ -186,24 +217,9 @@ export default function KanbanPage() {
     const fetchMetrics = async () => {
         setMetricsLoading(true);
         try {
-            const params: any = {};
-
-            // Filters
+            const params: any = { ...filterParams };
             if (selectedPipeline) params.pipelineId = selectedPipeline;
             if (searchTerm) params.search = searchTerm;
-            if (filterResponsible) params.responsibleId = filterResponsible;
-            if (tabulation) params.tabulation = tabulation;
-
-            if (tabulation) params.tabulation = tabulation;
-
-            // Only apply Date Filter to metrics if it's explicitly set by user (not the default optimization)
-            if (!isDefaultView) {
-                if (creationDate?.from) params.startDate = creationDate.from.toISOString();
-                if (creationDate?.to) params.endDate = creationDate.to.toISOString();
-            }
-
-            if (accountDate?.from) params.openAccountStartDate = accountDate.from.toISOString();
-            if (accountDate?.to) params.openAccountEndDate = accountDate.to.toISOString();
 
             const res = await api.get('/clients/dashboard-metrics', { params });
             setMetrics(res.data);
@@ -214,17 +230,16 @@ export default function KanbanPage() {
         }
     };
 
-    // Reactive Metrics (Update when filters change)
+    // Reactive Data Fetch (Update when filters change)
     useEffect(() => {
-        // Debounce to prevent spam during typing
+        if (!selectedPipeline) return;
+
         const timer = setTimeout(() => {
             fetchMetrics();
-            if (selectedPipeline) {
-                fetchStagesAndDeals(selectedPipeline);
-            }
+            fetchStagesAndDeals(selectedPipeline);
         }, 500);
         return () => clearTimeout(timer);
-    }, [selectedPipeline, searchTerm, filterResponsible, tabulation, creationDate, accountDate]);
+    }, [selectedPipeline, searchTerm, filterParams]);
 
     // Initial Load (already covered by effect above, but fetchPipelines is separate)
     useEffect(() => {
@@ -233,15 +248,45 @@ export default function KanbanPage() {
             const parsedUser = JSON.parse(storedUser);
             setCurrentUser(parsedUser);
 
-            // SECURITY: Redirect Operators away from Kanban
             if (parsedUser.role === 'OPERATOR') {
-                window.location.href = '/new-client'; // Force redirect
+                window.location.href = '/new-client';
                 return;
             }
+            fetchPresets(parsedUser.id);
         }
         fetchPipelines();
         fetchFiltersData();
     }, []);
+
+    const fetchPresets = async (userId: string) => {
+        try {
+            const res = await api.get(`/kanban/filter-presets`);
+            setPresets(res.data);
+        } catch (error) { console.error("Erro ao buscar presets:", error); }
+    };
+
+    const handleSavePreset = async (name: string) => {
+        if (!currentUser) return;
+        try {
+            const res = await api.post('/kanban/filter-presets', {
+                name,
+                config_json: {
+                    filters: activeFilters,
+                    visible_fields: visibleFields
+                }
+            });
+            setPresets(prev => [res.data, ...prev]);
+            toast({ title: "Filtro salvo com sucesso" });
+        } catch (error) { toast({ title: "Erro ao salvar filtro", variant: "destructive" }); }
+    };
+
+    const handleDeletePreset = async (id: string) => {
+        try {
+            await api.delete(`/kanban/filter-presets/${id}`);
+            setPresets(prev => prev.filter(p => p.id !== id));
+            toast({ title: "Filtro removido" });
+        } catch (error) { toast({ title: "Erro ao remover filtro", variant: "destructive" }); }
+    };
 
     const fetchCardConfig = async (pipelineId: string, userId: string) => {
         try {
@@ -280,46 +325,17 @@ export default function KanbanPage() {
     // ... (keep fetchStagesAndDeals and others) ...
     const fetchStagesAndDeals = async (pipelineId: string) => {
         try {
-            const params: any = { pipeline_id: pipelineId };
+            const params: any = { pipeline_id: pipelineId, ...filterParams };
             if (searchTerm) params.search = searchTerm;
-
-            // Date Filter (Sent to backend now)
-            if (creationDate?.from) {
-                params.startDate = startOfDay(creationDate.from).toISOString();
-                if (creationDate.to) {
-                    params.endDate = endOfDay(creationDate.to).toISOString();
-                } else {
-                    // Implicitly from strict start date, or open ended? Usually "Last X Days" implies from X to Now.
-                    // If no 'to' is set, we send current date as end? 
-                    // No, usually date picker 'from' means ">= from". If 'to' is missing it might mean "single day" or "range start".
-                    // In DateRangePicker, usually both are set or just one. If just one, it's open or single day.
-                    // For "Last 15 days", we want ">= X". 
-                    // Let's purposefully NOT send endDate if it's undefined, letting backend handle it as "from X onwards".
-                }
-            }
-            if (creationDate?.to) { // If explicitly set
-                params.endDate = endOfDay(creationDate.to).toISOString();
-            }
-
-            const countsParams: any = { pipeline_id: pipelineId };
-            if (searchTerm) countsParams.search = searchTerm;
-            if (tabulation) countsParams.tabulation = tabulation;
-            if (filterResponsible) countsParams.responsible_id = filterResponsible;
-            // For counts, we ignore the default 2-day limit to show TRUE TOTAL.
-            // Only apply date if EXPLICITLY set.
-            if (!isDefaultView) {
-                if (creationDate?.from) countsParams.startDate = startOfDay(creationDate.from).toISOString();
-                if (creationDate?.to) countsParams.endDate = endOfDay(creationDate.to).toISOString();
-            }
 
             const [stagesRes, dealsRes, countsRes] = await Promise.all([
                 api.get(`/stages?pipeline_id=${pipelineId}`),
                 api.get(`/deals`, { params }),
-                api.get(`/deals/counts-by-stage`, { params: countsParams })
+                api.get(`/deals/counts-by-stage`, { params }) // Backend handles count filters now
             ]);
 
             setStages(stagesRes.data);
-            setStageCounts(countsRes.data); // New State
+            setStageCounts(countsRes.data);
 
             const dealsByStage: Record<string, Deal[]> = {};
             stagesRes.data.forEach((stage: Stage) => {
@@ -404,40 +420,13 @@ export default function KanbanPage() {
 
     const filteredDeals = useMemo(() => {
         const filteredDealsByStage: Record<string, Deal[]> = {};
-
         stages.forEach(stage => {
             const stageDeals = deals[stage.id] || [];
-            filteredDealsByStage[stage.id] = stageDeals.filter(deal => {
-                // Search Term - Handled by Backend
-                // if (searchTerm) { ... }
-
-                // Responsible
-                if (filterResponsible && deal.responsible?.id !== filterResponsible) return false;
-
-                // Tabulation (via Client Qualifications)
-                if (tabulation) {
-                    const latestQual = deal.client?.qualifications?.[0];
-                    if (!latestQual || latestQual.tabulacao !== tabulation) return false;
-                }
-
-                // Creation Date (Deal) - HANDLED BY BACKEND NOW
-                // if (creationDate?.from) { ... }
-
-                // Account Opening Date (Client)
-                if (accountDate?.from) {
-                    if (!deal.client?.account_opening_date) return false; // Filter active but no date = exclude
-                    const accDate = parseISO(deal.client.account_opening_date);
-                    const start = startOfDay(accountDate.from);
-                    const end = accountDate.to ? endOfDay(accountDate.to) : endOfDay(accountDate.from);
-                    if (!isWithinInterval(accDate, { start, end })) return false;
-                }
-
-                return true;
-            });
+            // FE filtering is minimal now as backend handles most params
+            filteredDealsByStage[stage.id] = stageDeals;
         });
-
         return filteredDealsByStage;
-    }, [deals, stages, searchTerm, filterResponsible, tabulation, creationDate, accountDate]);
+    }, [deals, stages]);
 
     return (
         <div className="flex flex-col bg-background h-[calc(100vh-64px)]">
@@ -495,28 +484,18 @@ export default function KanbanPage() {
                         <UnifiedFilterBar
                             variant="inline"
                             users={users}
+                            tabulationOptions={tabulationOptions}
                             searchTerm={searchTerm}
                             onSearchChange={setSearchTerm}
-                            responsible={filterResponsible}
-                            onResponsibleChange={setFilterResponsible}
-                            tabulation={tabulation}
-                            onTabulationChange={setTabulation}
-                            tabulationOptions={tabulationOptions}
-                            creationDate={creationDate}
-                            onCreationDateChange={(val) => {
-                                setCreationDate(val);
-                                setIsDefaultView(false);
-                            }}
-                            accountDate={accountDate}
-                            onAccountDateChange={setAccountDate}
-                            onClear={() => {
-                                setSearchTerm('');
-                                setFilterResponsible(null);
-                                setTabulation('');
-                                setCreationDate(undefined);
-                                setIsDefaultView(false); // Clear means show all, so not default optimization
-                                setAccountDate(undefined);
-                            }}
+                            activeFilters={activeFilters}
+                            visibleFields={visibleFields}
+                            onFilterChange={setFilter}
+                            onRemoveField={removeField}
+                            onAddField={addField}
+                            onClearAll={clearAll}
+                            presets={presets}
+                            onSavePreset={handleSavePreset}
+                            onDeletePreset={handleDeletePreset}
                         />
                     </div>
 

@@ -18,11 +18,7 @@ async function main() {
         gte: startDate,
         lte: endDate,
       },
-      qualifications: {
-        some: {
-          tabulacao: targetTabulation,
-        },
-      },
+      tabulacao: targetTabulation,
     },
     select: {
       name: true,

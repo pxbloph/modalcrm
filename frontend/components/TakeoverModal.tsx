@@ -26,6 +26,8 @@ export function TakeoverModal({ onClose, onSuccess, userRole }: TakeoverModalPro
     const [error, setError] = useState<string | null>(null);
     const [processing, setProcessing] = useState(false);
 
+    const [reason, setReason] = useState('');
+
     // Initial Search
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -56,13 +58,18 @@ export function TakeoverModal({ onClose, onSuccess, userRole }: TakeoverModalPro
     // Confirm Takeover
     const handleTakeover = async () => {
         if (!result) return;
+        if (reason.length < 20) {
+            toast.error('O motivo deve ter pelo menos 20 caracteres.');
+            return;
+        }
 
         setProcessing(true);
         try {
-            await api.post(`/clients/${result.lead_id}/takeover`, {
-                reason: 'Solicitado via Troca de Responsabilidade (Operador)'
+            const response = await api.post(`/clients/${result.lead_id}/takeover`, {
+                reason: reason
             });
-            toast.success('Responsabilidade assumida com sucesso!');
+
+            toast.success(response.data.message || 'Responsabilidade assumida com sucesso!');
             onSuccess();
             onClose();
         } catch (err: any) {
@@ -170,30 +177,44 @@ export function TakeoverModal({ onClose, onSuccess, userRole }: TakeoverModalPro
 
                             {/* Action Button */}
                             {result.can_take_over && (
-                                <div className="mt-6 flex justify-end">
-                                    <button
-                                        onClick={handleTakeover}
-                                        disabled={processing}
-                                        className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg shadow-sm font-semibold transition-all hover:shadow-md disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                    >
-                                        {processing ? 'Processando...' : 'Assumir Responsabilidade'}
-                                        {!processing && <CheckCircle className="h-4 w-4" />}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                    {/* Reason Input */}
+                                    <div className="mt-4">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Motivo da Solicitação <span className="text-red-500">*</span>
+                                            <span className="text-xs text-gray-400 font-normal ml-2">(Mínimo 20 caracteres)</span>
+                                        </label>
+                                        <textarea
+                                            value={reason}
+                                            onChange={(e) => setReason(e.target.value)}
+                                            placeholder="Descreva o motivo para assumir este lead..."
+                                            className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-24"
+                                        />
+                                    </div>
 
-                    {/* Error State */}
-                    {error && (
-                        <div className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-100 flex items-center gap-2 animate-in fade-in">
-                            <AlertTriangle className="h-5 w-5 shrink-0" />
-                            <span className="text-sm font-medium">{error}</span>
-                        </div>
+                                    <div className="mt-4 flex justify-end">
+                                        <button
+                                            onClick={handleTakeover}
+                                            disabled={processing || reason.length < 20}
+                                            className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg shadow-sm font-semibold transition-all hover:shadow-md disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                        >
+                                            {processing ? 'Processando...' : 'Assumir Responsabilidade'}
+                                            {!processing && <CheckCircle className="h-4 w-4" />}
+                                        </button>
+                                    </div>
                     )}
                 </div>
+                    )}
+
+                {/* Error State */}
+                {error && (
+                    <div className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-100 flex items-center gap-2 animate-in fade-in">
+                        <AlertTriangle className="h-5 w-5 shrink-0" />
+                        <span className="text-sm font-medium">{error}</span>
+                    </div>
+                )}
             </div>
         </div>
+        </div >
     );
 }
 

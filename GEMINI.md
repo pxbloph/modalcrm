@@ -208,11 +208,6 @@ As cores são gerenciadas via variáveis CSS (`--primary`, `--background`, `--si
 
 ## Atualizações Recentes (02/2026) - Performance e Histórico
 
-### Otimização de Performance (Kanban)
-- **Filtro Padrão**: O Kanban agora carrega apenas negócios criados nos **últimos 15 dias** por padrão.
-- **Backend Otimizado**: O método `findAll` foi ajustado para ignorar relacionamentos pesados (histórico, valores customizados detalhados) na listagem inicial.
-- **Objetivo**: Reduzir drasticamente o tempo de carregamento inicial do quadro.
-
 ### Histórico do Negócio (Deal Modal)
 - **Nova Aba "Histórico"**: Adicionada ao modal de detalhes do negócio (`ClientDealModal`).
 - **Log Detalhado**:

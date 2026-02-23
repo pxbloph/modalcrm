@@ -1,38 +1,35 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react";
-import { Search, Filter, X, ChevronDown, Calendar, User, List } from "lucide-react";
+import { Search, Filter, X, ChevronDown, Calendar, User, List, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FilterPanel } from "./FilterPanel";
 import { Badge } from "@/components/ui/badge";
+import { FILTER_FIELDS } from "@/lib/filter-definitions";
 
 interface UnifiedFilterBarProps {
     users: { id: string, name: string; surname?: string }[];
-    children?: React.ReactNode;
+    tabulationOptions: string[];
 
     // Search
     searchTerm: string;
     onSearchChange: (val: string) => void;
 
-    // Filters
-    responsible: string | null;
-    onResponsibleChange: (id: string | null) => void;
+    // Dynamic Filter Props
+    activeFilters: { id: string, value: any }[];
+    visibleFields: string[];
+    onFilterChange: (id: string, value: any) => void;
+    onRemoveField: (id: string) => void;
+    onAddField: (id: string) => void;
+    onClearAll: () => void;
 
-    tabulation: string;
-    onTabulationChange: (val: string) => void;
-    tabulationOptions: string[];
-
-    // Dates
-    creationDate?: { from: Date | undefined; to?: Date | undefined };
-    onCreationDateChange: (range: { from: Date | undefined; to?: Date | undefined } | undefined) => void;
-
-    accountDate?: { from: Date | undefined; to?: Date | undefined };
-    onAccountDateChange: (range: { from: Date | undefined; to?: Date | undefined } | undefined) => void;
-
-    onClear: () => void;
+    // Presets
+    presets?: any[];
+    onSavePreset?: (name: string) => void;
+    onDeletePreset?: (id: string) => void;
 
     // Style Variant
     variant?: 'default' | 'inline';
@@ -40,45 +37,48 @@ interface UnifiedFilterBarProps {
 
 export function UnifiedFilterBar({
     users,
+    tabulationOptions,
     searchTerm,
     onSearchChange,
-    responsible,
-    onResponsibleChange,
-    tabulation,
-    onTabulationChange,
-    tabulationOptions,
-    creationDate,
-    onCreationDateChange,
-    accountDate,
-    onAccountDateChange,
-    onClear,
+    activeFilters,
+    visibleFields,
+    onFilterChange,
+    onRemoveField,
+    onAddField,
+    onClearAll,
+    presets,
+    onSavePreset,
+    onDeletePreset,
     variant = 'default'
 }: UnifiedFilterBarProps) {
     const [isPanelOpen, setIsPanelOpen] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // Helpers to display active filters
-    const hasActiveFilters = responsible || tabulation || creationDate?.from || accountDate?.from;
+    const hasActiveFilters = activeFilters.length > 0;
 
-    const formatDateRange = (range: { from: Date | undefined; to?: Date | undefined } | undefined) => {
-        if (!range?.from) return '';
-        if (!range.to || range.from.getTime() === range.to.getTime()) {
-            return format(range.from, "dd/MM", { locale: ptBR });
+    const getFieldName = (id: string) => FILTER_FIELDS.find(f => f.id === id)?.label || id;
+
+    const getFilterLabel = (id: string, value: any) => {
+        const field = FILTER_FIELDS.find(f => f.id === id);
+        if (!field) return String(value);
+
+        if (field.type === 'user') {
+            const u = users.find(u => u.id === value);
+            return u ? `${u.name} ${u.surname || ''}`.trim() : 'Desconhecido';
         }
-        return `${format(range.from, "dd/MM", { locale: ptBR })} - ${format(range.to, "dd/MM", { locale: ptBR })}`;
-    };
 
-    const getResponsibleName = (id: string) => {
-        const u = users.find(u => u.id === id);
-        return u ? `${u.name} ${u.surname || ''}`.trim() : 'Desconhecido';
-    };
+        if (field.type === 'date-range' && value?.from) {
+            const fromStr = format(new Date(value.from), "dd/MM", { locale: ptBR });
+            if (!value.to) return fromStr;
+            const toStr = format(new Date(value.to), "dd/MM", { locale: ptBR });
+            return `${fromStr} - ${toStr}`;
+        }
 
-    const handleClearFilter = (type: string) => {
-        if (type === 'responsible') onResponsibleChange(null);
-        if (type === 'tabulation') onTabulationChange('');
-        if (type === 'creationDate') onCreationDateChange(undefined);
-        if (type === 'accountDate') onAccountDateChange(undefined);
-        if (type === 'all') onClear();
+        if (field.type === 'boolean') {
+            return value === 'true' ? 'Sim' : 'Não';
+        }
+
+        return String(value);
     };
 
     const containerClasses = variant === 'inline'
@@ -87,16 +87,14 @@ export function UnifiedFilterBar({
 
     return (
         <div className={containerClasses}>
-            {/* Search Bar Area */}
             <div className={cn("flex items-center gap-3", variant === 'inline' ? "flex-1" : "w-full")}>
                 <Popover open={isPanelOpen} onOpenChange={setIsPanelOpen}>
                     <PopoverTrigger asChild>
                         <div className="relative group flex-1 cursor-text" onClick={() => inputRef.current?.focus()}>
-                            {/* Input Wrapper mimicking Bitrix/Gmail search bar */}
                             <div className={cn(
                                 "flex items-center w-full h-9 px-3 border rounded-md bg-gray-50 dark:bg-zinc-800/50 transition-all shadow-sm",
                                 isPanelOpen
-                                    ? "border-indigo-500 ring-1 ring-indigo-500 bg-white dark:bg-zinc-800"
+                                    ? "border-green-500 ring-1 ring-green-500 bg-white dark:bg-zinc-800"
                                     : "border-gray-200 dark:border-zinc-700 hover:border-gray-300 dark:hover:border-zinc-600"
                             )}>
                                 <Search className="w-4 h-4 text-gray-400 mr-2 shrink-0" />
@@ -104,13 +102,12 @@ export function UnifiedFilterBar({
                                 <input
                                     ref={inputRef}
                                     type="text"
-                                    placeholder="Buscar deals, clientes, CNPJ..."
+                                    placeholder="Pesquisar por nome ou CNPJ..."
                                     className="flex-1 bg-transparent border-none outline-none text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 min-w-[120px]"
                                     value={searchTerm}
                                     onChange={e => onSearchChange(e.target.value)}
                                 />
 
-                                {/* Icons Right */}
                                 <div className="flex items-center gap-1 ml-auto">
                                     {searchTerm && (
                                         <button
@@ -129,74 +126,45 @@ export function UnifiedFilterBar({
                         </div>
                     </PopoverTrigger>
 
-                    <PopoverContent className="w-[calc(100vw-40px)] sm:w-[500px] p-0" align="start" sideOffset={5}>
+                    <PopoverContent className="w-[calc(100vw-40px)] sm:w-[500px] p-0 border-none shadow-2xl" align="start" sideOffset={5}>
                         <FilterPanel
                             users={users}
                             tabulationOptions={tabulationOptions}
-                            responsible={responsible}
-                            onResponsibleChange={onResponsibleChange}
-                            tabulation={tabulation}
-                            onTabulationChange={onTabulationChange}
-                            creationDate={creationDate}
-                            onCreationDateChange={onCreationDateChange}
-                            accountDate={accountDate}
-                            onAccountDateChange={onAccountDateChange}
+                            visibleFields={visibleFields}
+                            activeFilters={activeFilters}
+                            onFilterChange={onFilterChange}
+                            onRemoveField={onRemoveField}
+                            onAddField={onAddField}
+                            onClearAll={onClearAll}
                             onApply={() => setIsPanelOpen(false)}
-                            onClear={() => {
-                                onClear();
-                                // Keep open or close? Usually reset and keep open to re-select
-                            }}
+                            presets={presets}
+                            onSavePreset={onSavePreset}
+                            onDeletePreset={onDeletePreset}
                         />
                     </PopoverContent>
                 </Popover>
             </div>
 
-            {/* Active Filters Chips Row */}
             {hasActiveFilters && (
                 <div className={cn("flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1", variant === 'inline' ? "ml-2" : "")}>
-                    {/* Only show label if NOT inline to save space, or keep it small */}
-                    {variant !== 'inline' && <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1">Filtros:</span>}
-
-                    {/* Date Badges HIDDEN per user request: "visualização sem filtros lá em cima" but logic active.
-                    {creationDate?.from && (
-                        <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800 flex items-center gap-1 px-2 py-1">
-                            <Calendar className="w-3 h-3" />
-                            <span className="hidden sm:inline">Criado:</span> {formatDateRange(creationDate)}
-                            <button onClick={() => handleClearFilter('creationDate')} className="ml-1 hover:text-indigo-900"><X className="w-3 h-3" /></button>
+                    {activeFilters.map(filter => (
+                        <Badge
+                            key={filter.id}
+                            variant="secondary"
+                            className="bg-green-50 text-green-700 border-green-100 dark:bg-green-900/10 dark:text-green-400 dark:border-green-500/20 flex items-center gap-1 px-2 py-0.5 text-[10px]"
+                        >
+                            <span className="font-bold opacity-70 uppercase mr-0.5">{getFieldName(filter.id)}:</span>
+                            {getFilterLabel(filter.id, filter.value)}
+                            <button onClick={() => onFilterChange(filter.id, '')} className="ml-1 hover:text-green-900"><X className="w-2.5 h-2.5" /></button>
                         </Badge>
-                    )}
-
-                    {accountDate?.from && (
-                        <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800 flex items-center gap-1 px-2 py-1">
-                            <Calendar className="w-3 h-3" />
-                            <span className="hidden sm:inline">Conta:</span> {formatDateRange(accountDate)}
-                            <button onClick={() => handleClearFilter('accountDate')} className="ml-1 hover:text-blue-900"><X className="w-3 h-3" /></button>
-                        </Badge>
-                    )} 
-                    */}
-
-                    {responsible && (
-                        <Badge variant="secondary" className="bg-orange-50 text-orange-700 border-orange-100 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800 flex items-center gap-1 px-2 py-1">
-                            <User className="w-3 h-3" />
-                            {getResponsibleName(responsible)}
-                            <button onClick={() => handleClearFilter('responsible')} className="ml-1 hover:text-orange-900"><X className="w-3 h-3" /></button>
-                        </Badge>
-                    )}
-
-                    {tabulation && (
-                        <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800 flex items-center gap-1 px-2 py-1">
-                            <List className="w-3 h-3" />
-                            {tabulation}
-                            <button onClick={() => handleClearFilter('tabulation')} className="ml-1 hover:text-emerald-900"><X className="w-3 h-3" /></button>
-                        </Badge>
-                    )}
+                    ))}
 
                     <button
-                        onClick={() => handleClearFilter('all')}
-                        className="text-xs text-red-500 hover:text-red-700 hover:underline ml-2"
+                        onClick={onClearAll}
+                        className="p-1 text-gray-400 hover:text-red-500 transition-colors"
                         title="Limpar todos"
                     >
-                        <X className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                     </button>
                 </div>
             )}

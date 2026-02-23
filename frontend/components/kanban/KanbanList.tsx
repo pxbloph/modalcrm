@@ -93,23 +93,23 @@ const AVAILABLE_COLUMNS = [
     { id: 'client_city', label: 'Endereço/Cidade', category: 'Cadastro', path: 'client.address' },
 
     // --- Qualificação: Financeiro ---
-    { id: 'qual_fat_mensal', label: 'Fat. Mensal', category: 'Financeiro', path: 'client.qualifications.0.faturamento_mensal', format: formatCurrency },
-    { id: 'qual_fat_maq', label: 'Fat. Máquina', category: 'Financeiro', path: 'client.qualifications.0.faturamento_maquina', format: formatCurrency },
-    { id: 'qual_maq_atual', label: 'Máquina Atual', category: 'Financeiro', path: 'client.qualifications.0.maquininha_atual' },
+    { id: 'qual_fat_mensal', label: 'Fat. Mensal', category: 'Financeiro', path: 'client.faturamento_mensal', format: formatCurrency },
+    { id: 'qual_fat_maq', label: 'Fat. Máquina', category: 'Financeiro', path: 'client.faturamento_maquina', format: formatCurrency },
+    { id: 'qual_maq_atual', label: 'Máquina Atual', category: 'Financeiro', path: 'client.maquininha_atual' },
 
     // --- Qualificação: Conta ---
-    { id: 'qual_cc_banco', label: 'Banco (CC)', category: 'Conta', path: 'client.qualifications.0.cc_tipo_conta' }, // Using cc_tipo_conta as proxy for bank info if needed or map correctly
-    { id: 'qual_cc_saldo', label: 'Saldo (CC)', category: 'Conta', path: 'client.qualifications.0.cc_saldo', format: formatCurrency },
-    { id: 'qual_cc_limite', label: 'Limite Global', category: 'Conta', path: 'client.qualifications.0.cc_limite_disponivel', format: formatCurrency },
+    { id: 'qual_cc_banco', label: 'Banco (CC)', category: 'Conta', path: 'client.cc_tipo_conta' }, // Using cc_tipo_conta as proxy for bank info if needed or map correctly
+    { id: 'qual_cc_saldo', label: 'Saldo (CC)', category: 'Conta', path: 'client.cc_saldo', format: formatCurrency },
+    { id: 'qual_cc_limite', label: 'Limite Global', category: 'Conta', path: 'client.cc_limite_disponivel', format: formatCurrency },
 
     // --- Qualificação: Cartão ---
-    { id: 'qual_card_tipo', label: 'Tipo Cartão', category: 'Cartão', path: 'client.qualifications.0.card_tipo' },
-    { id: 'qual_card_limite', label: 'Limite Cartão', category: 'Cartão', path: 'client.qualifications.0.limit_cartao_aprovado', format: formatCurrency },
-    { id: 'qual_card_fatura', label: 'Fatura Aberta', category: 'Cartão', path: 'client.qualifications.0.card_fatura_aberta_valor', format: formatCurrency },
+    { id: 'qual_card_tipo', label: 'Tipo Cartão', category: 'Cartão', path: 'client.card_tipo' },
+    { id: 'qual_card_limite', label: 'Limite Cartão', category: 'Cartão', path: 'client.limit_cartao_aprovado', format: formatCurrency },
+    { id: 'qual_card_fatura', label: 'Fatura Aberta', category: 'Cartão', path: 'client.card_fatura_aberta_valor', format: formatCurrency },
 
     // --- Gestão ---
-    { id: 'qual_tabulacao', label: 'Tabulação', category: 'Gestão', path: 'client.qualifications.0.tabulacao' },
-    { id: 'qual_agendamento', label: 'Agendamento', category: 'Gestão', path: 'client.qualifications.0.agendamento', format: formatDate },
+    { id: 'qual_tabulacao', label: 'Tabulação', category: 'Gestão', path: 'client.tabulacao' },
+    { id: 'qual_agendamento', label: 'Agendamento', category: 'Gestão', path: 'client.agendamento', format: formatDate },
     { id: 'account_opening_date', label: 'Abertura Conta', category: 'Gestão', path: 'client.account_opening_date', format: formatDate },
 ];
 

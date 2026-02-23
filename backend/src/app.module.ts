@@ -4,7 +4,6 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ClientsModule } from './clients/clients.module';
-import { QualificationsModule } from './qualifications/qualifications.module';
 
 import { FormTemplatesModule } from './form-templates/form-templates.module';
 import { ReportsModule } from './reports/reports.module';
@@ -20,6 +19,8 @@ import { AutomationsModule } from './automations/automations.module';
 import { TagsModule } from './tags/tags.module';
 import { ClientCustomFieldsModule } from './client-custom-fields/client-custom-fields.module';
 import { DashboardsModule } from './dashboards/dashboards.module';
+import { ResponsibilityModule } from './modules/responsibility/responsibility.module';
+import { KanbanFilterPresetsModule } from './kanban-filter-presets/kanban-filter-presets.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
@@ -47,7 +48,6 @@ import { RequestContextMiddleware } from './common/middleware/request-context.mi
         AuthModule,
         UsersModule,
         ClientsModule,
-        QualificationsModule,
         FormTemplatesModule,
         ReportsModule,
         ImportsModule,
@@ -62,6 +62,8 @@ import { RequestContextMiddleware } from './common/middleware/request-context.mi
         TagsModule,
         ClientCustomFieldsModule,
         DashboardsModule,
+        ResponsibilityModule,
+        KanbanFilterPresetsModule,
         ServeStaticModule.forRoot({
             rootPath: join(__dirname, '..', 'uploads'),
             serveRoot: '/api/uploads',

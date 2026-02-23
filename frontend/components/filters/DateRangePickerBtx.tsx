@@ -75,7 +75,17 @@ export function DateRangePickerBtx({ date, onDateChange, label = "Data" }: DateR
 
     // Sync external date
     React.useEffect(() => {
-        setInternalDate(date);
+        if (!date) {
+            setInternalDate(undefined);
+            return;
+        }
+
+        const sanitized = {
+            from: date.from ? (date.from instanceof Date ? date.from : new Date(date.from)) : undefined,
+            to: date.to ? (date.to instanceof Date ? date.to : new Date(date.to)) : undefined
+        };
+
+        setInternalDate(sanitized);
         // Logic to reverse-engineer preset could go here if needed, but keeping it simple for now
     }, [date]);
 
@@ -159,13 +169,18 @@ export function DateRangePickerBtx({ date, onDateChange, label = "Data" }: DateR
 
     const displayText = React.useMemo(() => {
         if (!date?.from) return "Qualquer data";
-        if (date.to && date.from.getTime() === date.to.getTime()) {
-            return format(date.from, "dd/MM/yyyy", { locale: ptBR });
+
+        // Ensure we are working with Date objects (URL params might be strings)
+        const fromDate = date.from instanceof Date ? date.from : new Date(date.from);
+        const toDate = date.to ? (date.to instanceof Date ? date.to : new Date(date.to)) : undefined;
+
+        if (toDate && fromDate.getTime() === toDate.getTime()) {
+            return format(fromDate, "dd/MM/yyyy", { locale: ptBR });
         }
-        if (date.to) {
-            return `${format(date.from, "dd/MM/yyyy", { locale: ptBR })} - ${format(date.to, "dd/MM/yyyy", { locale: ptBR })}`;
+        if (toDate) {
+            return `${format(fromDate, "dd/MM/yyyy", { locale: ptBR })} - ${format(toDate, "dd/MM/yyyy", { locale: ptBR })}`;
         }
-        return format(date.from, "dd/MM/yyyy", { locale: ptBR });
+        return format(fromDate, "dd/MM/yyyy", { locale: ptBR });
     }, [date]);
 
     return (

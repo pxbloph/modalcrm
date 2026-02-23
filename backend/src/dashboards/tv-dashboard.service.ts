@@ -45,22 +45,18 @@ export class TvDashboardService {
             select: {
                 id: true,
                 created_by_id: true,
+                tabulacao: true, // [FIX] Added missing field
                 created_by: {
                     select: { id: true, name: true, surname: true }
-                },
-                qualifications: {
-                    orderBy: { created_at: 'desc' },
-                    take: 1,
-                    select: { tabulacao: true }
                 }
             }
         });
 
         // 3. Filter & Aggregate (In-Memory)
         // Criteria: Tabulation MUST be "Conta aberta" (Exact match based on user request)
+        // [SIMPLIFICATION] Use direct client field
         const validClients = clients.filter(client => {
-            const latestQual = client.qualifications[0];
-            return latestQual?.tabulacao === 'Conta aberta';
+            return client.tabulacao === 'Conta aberta';
         });
 
         const aggregation = new Map<string, { user_name: string; count: number }>();
@@ -128,6 +124,7 @@ export class TvDashboardService {
                     gte: startDate,
                     lte: endDate,
                 },
+                tabulacao: 'Conta aberta', // [FIX] Parity with V1 and Kanban
             },
             _count: { id: true },
         });
