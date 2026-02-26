@@ -7,12 +7,7 @@ export class TvDashboardService {
 
     async getOpenAccountsMetrics(queryDate?: string) {
         // 1. Determine Date Range (Brazil Operational Window)
-        // We need to cover:
-        // A) Manual Dates (stored as 00:00 UTC) -> Start at 00:00 UTC
-        // B) Timestamps late in Brazil night (e.g. 23:59 BRT = 02:59 UTC+1) -> End at 02:59 UTC+1
-
         const now = new Date();
-        // Adjust to Brazil Time (UTC-3) to get "Today" string
         const brazilOffset = 3 * 60 * 60 * 1000;
         const brazilTime = new Date(now.getTime() - brazilOffset);
         let queryDateString = brazilTime.toISOString().split('T')[0];
@@ -24,17 +19,29 @@ export class TvDashboardService {
             }
         }
 
-        // Start: 00:00:00 UTC (Catches "Manual Date" entries 2026-02-02T00:00:00.000Z)
-        const startDate = new Date(`${queryDateString}T00:00:00.000Z`);
+        const startDate = new Date(`${queryDateString}T00:00:00.000-03:00`);
+        const endDate = new Date(`${queryDateString}T23:59:59.999-03:00`);
 
-        // End: 02:59:59 UTC Next Day (Catches late night sales up to 23:59 BRT)
-        // Add 27 hours (24h day + 3h timezone compensation) minus 1ms
-        const endDate = new Date(startDate.getTime() + (27 * 60 * 60 * 1000) - 1);
+        // 2. Fetch Active Operators
+        const activeOperators = await this.prisma.user.findMany({
+            where: {
+                role: 'OPERATOR',
+                is_active: true,
+            },
+            select: { id: true, name: true, surname: true }
+        });
 
-        console.log(`[TV DASHBOARD DEBUG] ServerTime: ${now.toISOString()} | QueryDate: ${queryDateString} | Window: ${startDate.toISOString()} - ${endDate.toISOString()}`);
+        const aggregation = new Map<string, { user_name: string; count: number }>();
 
-        // 2. Query Database (Fetch clients to filter by Qualification in memory)
-        // We switch from groupBy to findMany to ensure we check the LATEST qualification
+        // Initialize all active operators with 0 count
+        for (const op of activeOperators) {
+            aggregation.set(op.id, {
+                user_name: `${op.name} ${op.surname || ''}`.trim(),
+                count: 0
+            });
+        }
+
+        // 3. Query Database (Fetch clients to filter by Qualification in memory)
         const clients = await this.prisma.client.findMany({
             where: {
                 account_opening_date: {
@@ -45,21 +52,18 @@ export class TvDashboardService {
             select: {
                 id: true,
                 created_by_id: true,
-                tabulacao: true, // [FIX] Added missing field
+                tabulacao: true,
                 created_by: {
                     select: { id: true, name: true, surname: true }
                 }
             }
         });
 
-        // 3. Filter & Aggregate (In-Memory)
-        // Criteria: Tabulation MUST be "Conta aberta" (Exact match based on user request)
-        // [SIMPLIFICATION] Use direct client field
+        // 4. Filter & Aggregate (In-Memory)
         const validClients = clients.filter(client => {
             return client.tabulacao === 'Conta aberta';
         });
 
-        const aggregation = new Map<string, { user_name: string; count: number }>();
         let totalOpenAccounts = 0;
 
         for (const client of validClients) {
@@ -81,7 +85,7 @@ export class TvDashboardService {
             aggregation.get(client.created_by_id)!.count++;
         }
 
-        // 4. Assemble Ranking
+        // 5. Assemble Ranking
         const ranking = Array.from(aggregation.entries())
             .map(([userId, data]) => ({
                 user_id: userId,
@@ -104,16 +108,19 @@ export class TvDashboardService {
     async getExpandedMetrics(queryDate?: string) {
         // 1. Determine Date Range
         const now = new Date();
-        let startDate = new Date(now.setHours(0, 0, 0, 0));
-        let endDate = new Date(now.setHours(23, 59, 59, 999));
+        const brazilOffset = 3 * 60 * 60 * 1000;
+        const brazilTime = new Date(now.getTime() - brazilOffset);
+        let queryDateString = brazilTime.toISOString().split('T')[0];
 
         if (queryDate) {
-            const parsedDate = new Date(queryDate);
-            if (!isNaN(parsedDate.getTime())) {
-                startDate = new Date(parsedDate.setHours(0, 0, 0, 0));
-                endDate = new Date(parsedDate.setHours(23, 59, 59, 999));
+            const parsed = new Date(queryDate);
+            if (!isNaN(parsed.getTime())) {
+                queryDateString = parsed.toISOString().split('T')[0];
             }
         }
+
+        const startDate = new Date(`${queryDateString}T00:00:00.000-03:00`);
+        const endDate = new Date(`${queryDateString}T23:59:59.999-03:00`);
 
         // 2. Fetch Base Metrics (Open Accounts)
         // Reuse logic but we need the raw number

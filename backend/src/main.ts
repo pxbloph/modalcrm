@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import compression from 'compression';
 
 async function bootstrap() {
+    process.env.TZ = 'America/Sao_Paulo';
     const app = await NestFactory.create(AppModule);
     app.use(compression());
     app.enableCors();

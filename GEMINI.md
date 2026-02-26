@@ -74,7 +74,6 @@ server {
 - Frontend: porta `3600`
 - Dominio: modal.mbfinance.com.br
 
----
 
 ## Regras de Atuação no Código (Obrigatórias)
 
@@ -91,8 +90,6 @@ server {
 
 O estado atual do código deve ser considerado **a verdade absoluta**.
 
----
-
 ## Banco de Dados (Regras Rígidas)
 
 - **Nunca executar comandos diretamente no banco de dados**.
@@ -101,8 +98,6 @@ O estado atual do código deve ser considerado **a verdade absoluta**.
   - Execução manual via SQL Editor
 - Não simular execuções automáticas.
 - Não aplicar alterações diretas no banco.
-
----
 
 ## Objetivo das Intervenções
 
@@ -120,8 +115,6 @@ O estado atual do código deve ser considerado **a verdade absoluta**.
   - Mesmo comportamento
   - Mesmas regras, independentemente do ponto de acesso.
 
----
-
 ## Regra Final de Operação
 
 Antes de iniciar qualquer implementação, o Antigravity deve:
@@ -131,7 +124,6 @@ Antes de iniciar qualquer implementação, o Antigravity deve:
 
 Somente após essa análise, qualquer edição ou sugestão de mudança deve ser proposta.
 
----
 
 ## Dashboard TV (Performance Diária)
 
@@ -162,9 +154,7 @@ Versão alternativa com métricas de funil simplificadas e identidade visual cus
 - Frontend: `/tv/dashboard`
 - Rota protegida (requer login de usuário com permissão de visualização, geralmente Supervisor/Admin, ou Token futuramente).
 
----
-
-## Padrões de Interface (UI/UX) - Atualizado (02/2026)
+## Padrões de Interface (UI/UX) - Atualizado (20/02/2026)
 
 ### Temas e Cores
 - **Tema Light (Novo)**: 
@@ -190,9 +180,7 @@ Versão alternativa com métricas de funil simplificadas e identidade visual cus
 ### Variáveis Globais (CSS)
 As cores são gerenciadas via variáveis CSS (`--primary`, `--background`, `--sidebar`, `--scroll-track`, etc.) em `app/globals.css`, permitindo fácil manutenção e suporte a temas.
 
----
-
-## Novo Fluxo de Negócios (02/2026)
+## Novo Fluxo de Negócios (20/02/2026)
 
 ### Kanban
 - O botão **"Novo Negócio"** não abre mais modal, redireciona para `/new-client`.
@@ -209,9 +197,7 @@ As cores são gerenciadas via variáveis CSS (`--primary`, `--background`, `--si
 - **Segurança**: O backend valida se o usuário tem role `ADMIN` ou `SUPERVISOR` antes de aceitar o override de `created_by`. Caso contrário, ignora e usa o ID do usuário logado.
 - **Prevenção de Duplicidade**: Implementada flag `skip_auto_deal` no backend para controle granular da criação automática de cards no Kanban.
 
----
-
-## Atualizações Recentes (02/2026) - Performance e Histórico
+## Atualizações Recentes (20/02/2026) - Performance e Histórico
 
 ### Histórico do Negócio (Deal Modal)
 - **Nova Aba "Histórico"**: Adicionada ao modal de detalhes do negócio (`ClientDealModal`).
@@ -232,7 +218,7 @@ As cores são gerenciadas via variáveis CSS (`--primary`, `--background`, `--si
 - **Frontend**: Componentes como `ClientDealModal`, `ClientFilters` e `ClientRegistrationForm` devem usar o endpoint `/clients/tabulations` e realizar o mapeamento dinâmico dos labels.
 - **Limpeza Global**: Nenhuma parte funcional do sistema deve referenciar a tabela legada `qualifications` ou tentar acessar o array `client.qualifications`. Todos os dados de qualificação (faturamento, maquininha, agendamento, etc.) são propriedades diretas do objeto `client`.
 
-### Persistência e Controle de Filtros (Kanban) - 02/2026
+### Persistência e Controle de Filtros (Kanban) - 24/02/2026
 - **Persistência de Preferências**: Implementada a tabela `user_kanban_preferences`. O sistema agora salva e restaura automaticamente por usuário/pipeline:
   - Modo de Visualização (`Board` vs `Lista`).
   - Tamanho da página (`pageSize`).
@@ -244,5 +230,21 @@ As cores são gerenciadas via variáveis CSS (`--primary`, `--background`, `--si
   - Evita requisições excessivas ao backend e recarregamentos indesejados durante a configuração de filtros complexos.
 - **Backend**: Endpoint `GET/PUT /kanban-preferences` gerencia a persistência via Prisma.
 
+## Painel do Supervisor (26/02/2026)
+
+Um painel derivado do Dashboard da TV, porém voltado para exibição do volume de contas abertas por CADA operador em tempo real.
+- **Diferença pro Display da TV**: Em vez de mostrar um Top 10 e esconder os demais, o Painel do Supervisor exibe explicitamente **todos** os operadores ativos (incluindo os zerados) no formato de **Lista Vertical**.
+- **Regras**: Baseado no backend do TV Dashboard, mas injetando os operadores ativos no mapa em memória com valor "0" inicialmente, garantindo a visualização da improdutividade/zerados.
+- **Endpoint**: Utiliza os mesmos endpoints do Dashboard TV listados acima.
+- **URL Frontend**: `/tv/supervisor`
 
 ### NUNCA FAÇA DEPLOY AUTOMATICO!
+
+## Correção de Fuso Horário (26/02/2026)
+
+- **Problema Anterior**: Filtros de data no Kanban (`deals.service.ts`) e Clientes (`clients.service.ts`), assim como a tela da TV (`tv-dashboard.service.ts`), sofriam com divergências nos totais de contas abertas/leads porque parte das consultas empurrava as datas para o fuso UTC ("Z"), causando cortes em vendas que ocorriam à noite no Brasil.
+- **Solução Implementada**:
+  - O NodeJS agora é forçado a rodar em `America/Sao_Paulo` por meio da variável `process.env.TZ = 'America/Sao_Paulo';` inserida no `main.ts`.
+  - Remoção de lógicas compensatórias de 27 horas na TV Dashboard. O dashboard da TV agora pesquisa de `00:00:00.000-03:00` até `23:59:59.999-03:00` do mesmo dia.
+  - Correção na montagem de filtros do prisma em `clients.service.ts` e `deals.service.ts`, convertendo fechamentos forçados em `Z` (UTC) para strings com offset `-03:00`, garantindo captação do tempo exato do Brasil.
+- **Dica Banco de Dados**: Foi orientado executar `ALTER DATABASE [nome] SET timezone TO 'America/Sao_Paulo';` para exibir os timestamps sincronizados na ferramenta local (SQL Editor).

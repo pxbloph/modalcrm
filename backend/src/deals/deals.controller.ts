@@ -55,6 +55,7 @@ export class DealsController {
     @Query('openAccountStartDate') openAccountStartDate?: string,
     @Query('openAccountEndDate') openAccountEndDate?: string,
   ) {
+    console.log('[DEBUG-CONTROLLER] findAll Query:', { pipelineId, responsibleId, clientId, tags, search, tabulation });
     const tagIds = tags ? tags.split(',') : undefined;
     return this.dealsService.findAll(pipelineId, responsibleId, clientId, search, tabulation, startDate, endDate, openAccountStartDate, openAccountEndDate);
   }

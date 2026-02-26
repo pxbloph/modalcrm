@@ -107,6 +107,8 @@ export class DealsService {
   async findAll(pipelineId?: string, responsibleId?: string, clientId?: string, search?: string, tabulation?: string, startDate?: string, endDate?: string, openAccountStartDate?: string, openAccountEndDate?: string) {
     const where = this.buildWhere(pipelineId, responsibleId, clientId, search, tabulation, startDate, endDate, openAccountStartDate, openAccountEndDate);
 
+    console.log('[DEBUG] Deals findAll Where:', JSON.stringify(where, null, 2));
+
     return this.prisma.deal.findMany({
       where,
       select: {
@@ -196,11 +198,11 @@ export class DealsService {
     if (startDate || endDate) {
       const dateFilter: any = {};
       if (startDate) {
-        dateFilter.gte = startDate.length <= 10 ? new Date(`${startDate}T00:00:00.000Z`) : new Date(startDate);
+        dateFilter.gte = startDate.length <= 10 ? new Date(`${startDate}T00:00:00.000-03:00`) : new Date(startDate);
       }
       if (endDate) {
         if (endDate.length <= 10) {
-          dateFilter.lte = new Date(`${endDate}T23:59:59.999Z`);
+          dateFilter.lte = new Date(`${endDate}T23:59:59.999-03:00`);
         } else {
           dateFilter.lte = new Date(endDate);
         }
@@ -211,11 +213,11 @@ export class DealsService {
     if (openAccountStartDate || openAccountEndDate) {
       const dateFilter: any = {};
       if (openAccountStartDate) {
-        dateFilter.gte = openAccountStartDate.length <= 10 ? new Date(`${openAccountStartDate}T00:00:00.000Z`) : new Date(openAccountStartDate);
+        dateFilter.gte = openAccountStartDate.length <= 10 ? new Date(`${openAccountStartDate}T00:00:00.000-03:00`) : new Date(openAccountStartDate);
       }
       if (openAccountEndDate) {
         if (openAccountEndDate.length <= 10) {
-          dateFilter.lte = new Date(`${openAccountEndDate}T23:59:59.999Z`);
+          dateFilter.lte = new Date(`${openAccountEndDate}T23:59:59.999-03:00`);
         } else {
           dateFilter.lte = new Date(openAccountEndDate);
         }
