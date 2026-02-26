@@ -19,8 +19,8 @@ export class TvDashboardService {
             }
         }
 
-        const startDate = new Date(`${queryDateString}T00:00:00.000-03:00`);
-        const endDate = new Date(`${queryDateString}T23:59:59.999-03:00`);
+        const startDate = new Date(`${queryDateString}T00:00:00.000Z`);
+        const endDate = new Date(`${queryDateString}T23:59:59.999Z`);
 
         // 2. Fetch Active Operators
         const activeOperators = await this.prisma.user.findMany({
@@ -48,6 +48,7 @@ export class TvDashboardService {
                     gte: startDate,
                     lte: endDate,
                 },
+                integration_status: 'Cadastro salvo com sucesso!',
             },
             select: {
                 id: true,
@@ -119,8 +120,8 @@ export class TvDashboardService {
             }
         }
 
-        const startDate = new Date(`${queryDateString}T00:00:00.000-03:00`);
-        const endDate = new Date(`${queryDateString}T23:59:59.999-03:00`);
+        const startDate = new Date(`${queryDateString}T00:00:00.000Z`);
+        const endDate = new Date(`${queryDateString}T23:59:59.999Z`);
 
         // 2. Fetch Base Metrics (Open Accounts)
         // Reuse logic but we need the raw number
@@ -132,6 +133,7 @@ export class TvDashboardService {
                     lte: endDate,
                 },
                 tabulacao: 'Conta aberta', // [FIX] Parity with V1 and Kanban
+                integration_status: 'Cadastro salvo com sucesso!',
             },
             _count: { id: true },
         });

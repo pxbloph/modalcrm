@@ -245,10 +245,10 @@ export class ClientsService {
         if (startDate || endDate) {
             const dateFilter: Prisma.DateTimeFilter = {};
             if (startDate) {
-                dateFilter.gte = startDate.length <= 10 ? new Date(`${startDate}T00:00:00.000-03:00`) : new Date(startDate);
+                dateFilter.gte = startDate.length <= 10 ? new Date(`${startDate}T00:00:00.000Z`) : new Date(startDate);
             }
             if (endDate) {
-                dateFilter.lte = endDate.length <= 10 ? new Date(`${endDate}T23:59:59.999-03:00`) : new Date(endDate);
+                dateFilter.lte = endDate.length <= 10 ? new Date(`${endDate}T23:59:59.999Z`) : new Date(endDate);
             }
             andConditions.push({ created_at: dateFilter });
         }
@@ -264,10 +264,10 @@ export class ClientsService {
         if (openAccountStartDate || openAccountEndDate) {
             const dateFilter: Prisma.DateTimeFilter = {};
             if (openAccountStartDate) {
-                dateFilter.gte = openAccountStartDate.length <= 10 ? new Date(`${openAccountStartDate}T00:00:00.000-03:00`) : new Date(openAccountStartDate);
+                dateFilter.gte = openAccountStartDate.length <= 10 ? new Date(`${openAccountStartDate}T00:00:00.000Z`) : new Date(openAccountStartDate);
             }
             if (openAccountEndDate) {
-                dateFilter.lte = openAccountEndDate.length <= 10 ? new Date(`${openAccountEndDate}T23:59:59.999-03:00`) : new Date(openAccountEndDate);
+                dateFilter.lte = openAccountEndDate.length <= 10 ? new Date(`${openAccountEndDate}T23:59:59.999Z`) : new Date(openAccountEndDate);
             }
             andConditions.push({ account_opening_date: dateFilter });
         } else if (hasOpenAccount === 'true' || hasOpenAccount === true) {
