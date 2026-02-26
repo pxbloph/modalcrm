@@ -111,7 +111,7 @@ export default function SupervisorDashboardPage() {
                                         <div className="flex items-center gap-2">
                                             <span className="text-3xl font-black text-orange-500 leading-none">{user.count}</span>
                                             <span className="text-zinc-500 font-medium text-lg leading-tight">
-                                                {user.count === 1 ? 'conta hoje' : 'contas hoje'}
+                                                {user.count === 1 ? 'conta' : 'contas'}
                                             </span>
                                         </div>
                                     </div>
