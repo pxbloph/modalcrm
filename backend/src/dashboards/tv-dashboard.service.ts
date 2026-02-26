@@ -22,10 +22,9 @@ export class TvDashboardService {
         const startDate = new Date(`${queryDateString}T00:00:00.000Z`);
         const endDate = new Date(`${queryDateString}T23:59:59.999Z`);
 
-        // 2. Fetch Active Operators
+        // 2. Fetch Active Users (Operators, Leaders, Supervisors, Admins)
         const activeOperators = await this.prisma.user.findMany({
             where: {
-                role: 'OPERATOR',
                 is_active: true,
             },
             select: { id: true, name: true, surname: true }

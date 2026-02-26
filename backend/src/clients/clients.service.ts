@@ -445,11 +445,21 @@ export class ClientsService {
                 const toInt = (val: any) => val !== undefined && val !== null ? Number(val) : undefined;
                 const toBool = (val: any) => val === true || val === 'true';
 
+                // [FIX] Prevent UTC Timezone Shift on pure dates
+                const parseToMidday = (dateStr: string | undefined | null | Date) => {
+                    if (!dateStr) return undefined;
+                    // If it's already a Date object (rare but possible internally), return it
+                    if (typeof dateStr !== 'string') return dateStr as Date;
+                    // Strip existing time/timezone and force midday in Brazil
+                    const pureDate = new Date(dateStr).toISOString().split('T')[0];
+                    return new Date(`${pureDate}T12:00:00.000-03:00`);
+                };
+
                 updatedClient = await this.prisma.client.update({
                     where: { id },
                     data: {
                         ...cleanClientData,
-                        account_opening_date: account_opening_date ? new Date(account_opening_date) : undefined,
+                        account_opening_date: parseToMidday(account_opening_date),
 
                         // Consolidated Qualification Data
                         faturamento_mensal: toDec(faturamento_mensal),
