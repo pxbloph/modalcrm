@@ -142,8 +142,10 @@ Versão alternativa com métricas de funil simplificadas e identidade visual cus
 ### Regras de Negócio
 - **Métrica Principal**: "Contas Abertas"
 - **Definição Técnica**: 
-  - `account_opening_date` igual a HOJE (Server Time).
-  - O owner do lead (`created_by_id`) recebe o crédito.
+  - `account_opening_date` do associada igual a HOJE (Server Time).
+  - O lead deve ter a `tabulacao` = "Conta aberta".
+  - O lead deve obrigatoriamente ter o `integration_status` = "Cadastro salvo com sucesso!".
+  - O **ponto de conversão vai para o DONO DO NEGÓCIO (`responsible_id` do Deal no Kanban)**, ignorando o puxador do lead original (`created_by_id` do Client). 
   - Atualização automática a cada 60 segundos.
 
 ### Endpoint

@@ -11,6 +11,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         // com a "cara" da hora do Brasil.
         this.$use(async (params, next) => {
             if (['create', 'update', 'createMany', 'updateMany', 'upsert'].includes(params.action)) {
+                this.injectTimestamps(params);
                 this.shiftDatesRecursively(params.args);
             }
             const result = await next(params);
@@ -65,5 +66,76 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
                 this.shiftDatesRecursivelyRead(value);
             }
         }
+    }
+
+    // Injeta as datas manualmente antes do Prisma Engine gerar silenciosamente em UTC puro
+    private injectTimestamps(params: Prisma.MiddlewareParams) {
+        if (!params.args) return;
+
+        const modelFields = this.getTimestampMap()[params.model || ''];
+        if (!modelFields || modelFields.length === 0) return;
+
+        const inject = (obj: any, mode: 'create' | 'update') => {
+            if (!obj || typeof obj !== 'object') return;
+            const now = new Date();
+            for (const field of modelFields) {
+                if (mode === 'create') {
+                    if (obj[field] === undefined) obj[field] = now;
+                } else if (mode === 'update') {
+                    if ((field === 'updated_at' || field === 'last_message_at' || field === 'read_at') && obj[field] === undefined) {
+                        obj[field] = now;
+                    }
+                }
+            }
+        };
+
+        if (params.action === 'create') {
+            inject(params.args.data, 'create');
+        } else if (params.action === 'createMany') {
+            if (Array.isArray(params.args.data)) {
+                params.args.data.forEach((item: any) => inject(item, 'create'));
+            } else {
+                inject(params.args.data, 'create');
+            }
+        } else if (params.action === 'update' || params.action === 'updateMany') {
+            inject(params.args.data, 'update');
+        } else if (params.action === 'upsert') {
+            if (params.args.create) inject(params.args.create, 'create');
+            if (params.args.update) inject(params.args.update, 'update');
+        }
+    }
+
+    private getTimestampMap(): Record<string, string[]> {
+        return {
+            User: ['created_at'],
+            KanbanFilterPreset: ['created_at', 'updated_at'],
+            UserKanbanPreference: ['updated_at'],
+            Client: ['created_at', 'updated_at'],
+            FormTemplate: ['created_at'],
+            ImportJob: ['created_at', 'updated_at'],
+            ImportResult: ['created_at'],
+            Conversation: ['last_message_at', 'created_at', 'updated_at'],
+            Message: ['created_at'],
+            ChatAuditLog: ['created_at'],
+            LeadOwnerTransferAudit: ['created_at'],
+            Pipeline: ['created_at', 'updated_at'],
+            PipelineStage: ['created_at', 'updated_at'],
+            CustomField: ['created_at', 'updated_at'],
+            Deal: ['created_at', 'updated_at', 'stage_entered_at'],
+            DealCustomFieldValue: ['updated_at'],
+            DealHistory: ['created_at'],
+            Automation: ['created_at', 'updated_at'],
+            DealTabulationTrigger: ['created_at'],
+            UserPipelineConfig: ['created_at', 'updated_at'],
+            CustomFieldGroup: ['created_at', 'updated_at'],
+            ClientCustomField: ['created_at', 'updated_at'],
+            ClientCustomFieldValue: ['created_at', 'updated_at'],
+            Announcement: ['created_at', 'updated_at'],
+            AnnouncementRead: ['read_at'],
+            Tabulation: ['created_at', 'updated_at'],
+            Tag: ['created_at', 'updated_at'],
+            DealTag: ['assigned_at'],
+            AuditLog: ['created_at']
+        };
     }
 }

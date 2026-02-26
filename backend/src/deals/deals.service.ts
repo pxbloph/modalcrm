@@ -415,7 +415,18 @@ export class DealsService {
       }
 
       if (dealData.stage_id && dealData.stage_id !== currentDeal.stage_id) {
+        // [BLOCKER] Trava Expandida: Leads sem cadastro salvo no Banco Central só podem habitar Novos Leads ou Inaptos
         const newStage = await tx.pipelineStage.findUnique({ where: { id: dealData.stage_id } });
+        const allowedUnsavedStages = ['Novos Leads', 'Inaptos'];
+
+        if (newStage && !allowedUnsavedStages.includes(newStage.name) && currentDeal.client_id) {
+          const client = await tx.client.findUnique({ where: { id: currentDeal.client_id }, select: { integration_status: true } });
+
+          if (client && client.integration_status !== 'Cadastro salvo com sucesso!') {
+            throw new BadRequestException(`Abertura Bloqueada: Não é possível mover este negócio para "${newStage.name}" porque o cadastro deste cliente ainda não foi efetuado com sucesso (Status atual: "${client.integration_status || 'Aguardando processamento'}"). Só é permitido manter leads sem cadastro nas fases de Novos Leads ou Inaptos.`);
+          }
+        }
+
         await tx.dealHistory.create({
           data: {
             deal_id: id,

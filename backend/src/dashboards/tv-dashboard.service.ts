@@ -41,49 +41,46 @@ export class TvDashboardService {
             });
         }
 
-        // 3. Query Database (Fetch clients to filter by Qualification in memory)
-        const clients = await this.prisma.client.findMany({
+        // 3. Query Database: Fetch Deals directly
+        const validDeals = await this.prisma.deal.findMany({
             where: {
-                account_opening_date: {
-                    gte: startDate,
-                    lte: endDate,
-                },
-                integration_status: 'Cadastro salvo com sucesso!',
+                client: {
+                    account_opening_date: {
+                        gte: startDate,
+                        lte: endDate,
+                    },
+                    tabulacao: 'Conta aberta', // [FIX] Parity with V1 and Kanban
+                    integration_status: 'Cadastro salvo com sucesso!',
+                }
             },
             select: {
-                id: true,
-                created_by_id: true,
-                tabulacao: true,
-                created_by: {
-                    select: { id: true, name: true, surname: true }
+                responsible_id: true,
+                responsible: {
+                    select: { name: true, surname: true }
                 }
             }
         });
 
-        // 4. Filter & Aggregate (In-Memory)
-        const validClients = clients.filter(client => {
-            return client.tabulacao === 'Conta aberta';
-        });
-
+        // 4. Aggregate Points by Responsible User
         let totalOpenAccounts = 0;
 
-        for (const client of validClients) {
-            if (!client.created_by_id) continue;
+        for (const deal of validDeals) {
+            if (!deal.responsible_id) continue;
 
             totalOpenAccounts++;
 
-            if (!aggregation.has(client.created_by_id)) {
-                const userName = client.created_by
-                    ? `${client.created_by.name} ${client.created_by.surname || ''}`.trim()
+            if (!aggregation.has(deal.responsible_id)) {
+                const userName = deal.responsible
+                    ? `${deal.responsible.name} ${deal.responsible.surname || ''}`.trim()
                     : 'Desconhecido';
 
-                aggregation.set(client.created_by_id, {
+                aggregation.set(deal.responsible_id, {
                     user_name: userName,
                     count: 0
                 });
             }
 
-            aggregation.get(client.created_by_id)!.count++;
+            aggregation.get(deal.responsible_id)!.count++;
         }
 
         // 5. Assemble Ranking
@@ -123,20 +120,30 @@ export class TvDashboardService {
         const startDate = new Date(`${queryDateString}T00:00:00.000Z`);
         const endDate = new Date(`${queryDateString}T23:59:59.999Z`);
 
-        // 2. Fetch Base Metrics (Open Accounts)
-        // Reuse logic but we need the raw number
-        const openAccountsGrouped = await this.prisma.client.groupBy({
-            by: ['created_by_id'],
+        // 2. Fetch Base Metrics (Open Accounts based on DEALS)
+        const openDealsGrouped = await this.prisma.deal.groupBy({
+            by: ['responsible_id'],
             where: {
-                account_opening_date: {
-                    gte: startDate,
-                    lte: endDate,
-                },
-                tabulacao: 'Conta aberta', // [FIX] Parity with V1 and Kanban
-                integration_status: 'Cadastro salvo com sucesso!',
+                client: {
+                    account_opening_date: {
+                        gte: startDate,
+                        lte: endDate,
+                    },
+                    tabulacao: 'Conta aberta', // [FIX] Parity with V1 and Kanban
+                    integration_status: 'Cadastro salvo com sucesso!',
+                }
             },
             _count: { id: true },
         });
+
+        let totalOpenAccounts = 0;
+        const responsibleCounts = new Map<string, number>();
+
+        for (const grouped of openDealsGrouped) {
+            if (!grouped.responsible_id) continue;
+            totalOpenAccounts += grouped._count.id;
+            responsibleCounts.set(grouped.responsible_id, grouped._count.id);
+        }
 
         // 3. Fetch New Metrics
         // A) Total Leads Created Today
@@ -161,21 +168,18 @@ export class TvDashboardService {
         });
 
         // 4. Calcular Ranking de Usuários
-        const userIds = openAccountsGrouped.map((m) => m.created_by_id).filter((id) => id);
+        const userIds = Array.from(responsibleCounts.keys());
         const users = await this.prisma.user.findMany({
             where: { id: { in: userIds } },
             select: { id: true, name: true, surname: true },
         });
         const userMap = new Map(users.map((u) => [u.id, `${u.name} ${u.surname || ''}`.trim()]));
 
-        let totalOpenAccounts = 0;
-        const ranking = openAccountsGrouped
-            .map((item) => {
-                const count = item._count.id;
-                totalOpenAccounts += count;
+        const ranking = Array.from(responsibleCounts.entries())
+            .map(([userId, count]) => {
                 return {
-                    user_id: item.created_by_id,
-                    user_name: userMap.get(item.created_by_id) || 'Desconhecido',
+                    user_id: userId,
+                    user_name: userMap.get(userId) || 'Desconhecido',
                     count: count,
                 };
             })

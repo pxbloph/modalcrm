@@ -1,5 +1,5 @@
 
-import { Injectable, ConflictException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, ConflictException, InternalServerErrorException, BadRequestException, HttpException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User, Role, Prisma } from '@prisma/client';
 
@@ -358,6 +358,25 @@ export class ClientsService {
                 }
             }
 
+            // [BLOCKER] Trava da Tabulação Expandida
+            // Leads sem cadastro aprovado só podem receber tabulações restritas
+            if (inputData.tabulacao) {
+                const allowedTabulationsForUnsaved = [
+                    'Outro ECE',
+                    'Recusado pelo banco',
+                    'Sem interesse',
+                    'Telefone Incorreto',
+                    'Já possui conta'
+                ];
+
+                const currentStatus = inputData.integration_status !== undefined ? inputData.integration_status : client.integration_status;
+                const isApproved = currentStatus === 'Cadastro salvo com sucesso!';
+
+                if (!isApproved && !allowedTabulationsForUnsaved.includes(inputData.tabulacao)) {
+                    throw new BadRequestException(`Abertura Bloqueada: Não é possível atribuir a tabulação "${inputData.tabulacao}" porque o cadastro não possui sucesso garantido. Status atual: "${currentStatus || 'Aguardando'}". Para clientes não convertidos, você só pode usar: ${allowedTabulationsForUnsaved.join(', ')}.`);
+                }
+            }
+
             // Separate Client data from Qualification data
             const {
                 // Original Qual Fields
@@ -514,6 +533,9 @@ export class ClientsService {
             }
         } catch (fatalError) {
             console.error('[FATAL UPDATE ERROR]', fatalError);
+            if (fatalError instanceof HttpException) {
+                throw fatalError;
+            }
             throw new InternalServerErrorException('Erro grave ao atualizar cliente. Verifique os logs.');
         }
     }
