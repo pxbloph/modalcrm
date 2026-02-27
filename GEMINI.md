@@ -232,12 +232,14 @@ As cores são gerenciadas via variáveis CSS (`--primary`, `--background`, `--si
   - Evita requisições excessivas ao backend e recarregamentos indesejados durante a configuração de filtros complexos.
 - **Backend**: Endpoint `GET/PUT /kanban-preferences` gerencia a persistência via Prisma.
 
-## Painel do Supervisor (26/02/2026)
+## Painel do Supervisor (26/02/2026 e 27/02/2026)
 
 Um painel derivado do Dashboard da TV, porém voltado para exibição do volume de contas abertas por CADA operador em tempo real.
 - **Diferença pro Display da TV**: Em vez de mostrar um Top 10 e esconder os demais, o Painel do Supervisor exibe explicitamente **todos** os operadores ativos (incluindo os zerados) no formato de **Lista Vertical**.
+- **Visualização Detalhada (Drill-down)**: Em 27/02/2026 foi implementada uma tabela modal acessível ao clicar no card do operador. Esta tabela lista individualmente os dados das clientes abertas daquele operador (Nome, CNPJ, Telefone, Usuário Criador, Usuário Responsável e Data Exata de Abertura).
 - **Regras**: Baseado no backend do TV Dashboard, mas injetando os operadores ativos no mapa em memória com valor "0" inicialmente, garantindo a visualização da improdutividade/zerados.
-- **Endpoint**: Utiliza os mesmos endpoints do Dashboard TV listados acima.
+- **Endpoint**: Utiliza os mesmos endpoints do Dashboard TV listados acima (`GET /dashboards/tv/contas-abertas`).
+- **Data Payload Extra**: O endpoint agora varre a tabela de clients em modo reverso de inner-join e traz arrays completos de `clients` no resposne de `$ranking[x].clients` contendo inclusive o extrato explícito do `created_by` (Criador do Lead) e o responsável pelo card na hora do fechamento.
 - **URL Frontend**: `/tv/supervisor`
 
 ### NUNCA FAÇA DEPLOY AUTOMATICO!

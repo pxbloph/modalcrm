@@ -42,15 +42,47 @@ export class TvDashboardService {
                 responsible_id: true,
                 responsible: {
                     select: { name: true, surname: true }
+                },
+                client: {
+                    select: {
+                        id: true,
+                        name: true,
+                        cnpj: true,
+                        phone: true,
+                        account_opening_date: true,
+                        created_by: {
+                            select: { name: true, surname: true }
+                        }
+                    }
                 }
             }
         });
 
+        // Fetch all active operators to show zeros
+        const activeOperators = await this.prisma.user.findMany({
+            where: {
+                role: 'OPERATOR',
+                is_active: true,
+            },
+            select: { id: true, name: true, surname: true }
+        });
+
         // 3. Aggregate Points by Responsible User
-        const aggregation = new Map<string, { user_name: string; count: number }>();
+        const aggregation = new Map<string, { user_name: string; count: number; clients: any[] }>();
         let totalOpenAccounts = 0;
 
         const forbiddenNames = ['Administrador', 'Pablo Araujo', 'Renan Telles', 'Jennifer Vidal'];
+
+        for (const op of activeOperators) {
+            const fullName = `${op.name} ${op.surname || ''}`.trim();
+            if (!forbiddenNames.includes(fullName)) {
+                aggregation.set(op.id, {
+                    user_name: fullName,
+                    count: 0,
+                    clients: []
+                });
+            }
+        }
 
         for (const deal of validDeals) {
             if (!deal.responsible_id || !deal.responsible) continue;
@@ -66,11 +98,25 @@ export class TvDashboardService {
             if (!aggregation.has(deal.responsible_id)) {
                 aggregation.set(deal.responsible_id, {
                     user_name: fullName,
-                    count: 0
+                    count: 0,
+                    clients: []
                 });
             }
 
-            aggregation.get(deal.responsible_id)!.count++;
+            const agg = aggregation.get(deal.responsible_id)!;
+            agg.count++;
+
+            if (deal.client) {
+                agg.clients.push({
+                    id: deal.client.id,
+                    name: deal.client.name,
+                    cnpj: deal.client.cnpj,
+                    phone: deal.client.phone,
+                    account_opening_date: deal.client.account_opening_date,
+                    created_by_name: deal.client.created_by ? `${deal.client.created_by.name} ${deal.client.created_by.surname || ''}`.trim() : 'Desconhecido',
+                    responsible_name: fullName
+                });
+            }
         }
 
         // 4. Assemble Ranking
@@ -78,7 +124,8 @@ export class TvDashboardService {
             .map(([userId, data]) => ({
                 user_id: userId,
                 user_name: data.user_name,
-                count: data.count
+                count: data.count,
+                clients: data.clients
             }))
             .sort((a, b) => {
                 // Sort by Count DESC, then Name ASC

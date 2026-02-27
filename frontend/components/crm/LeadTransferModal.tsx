@@ -89,7 +89,15 @@ export function LeadTransferModal({ onClose, onSuccess }: LeadTransferModalProps
 
     // Mask Helper (Basic CNPJ)
     const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value.replace(/\D/g, '');
+        let val = e.target.value.replace(/\D/g, '');
+        if (val.length > 14) val = val.substring(0, 14);
+
+        // Apply simple mask 00.000.000/0000-00
+        val = val.replace(/^(\d{2})(\d)/, '$1.$2');
+        val = val.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+        val = val.replace(/\.(\d{3})(\d)/, '.$1/$2');
+        val = val.replace(/(\d{4})(\d)/, '$1-$2');
+
         setCnpj(val);
         // Clear error/result when user types to reset state
         if (error) setError(null);
@@ -125,7 +133,7 @@ export function LeadTransferModal({ onClose, onSuccess }: LeadTransferModalProps
                                 type="text"
                                 value={cnpj}
                                 onChange={handleCnpjChange}
-                                placeholder="Somente números"
+                                placeholder="Ex: 00.000.000/0000-00"
                                 className="w-full px-4 py-2 border border-input bg-background rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none font-mono text-sm text-foreground placeholder:text-muted-foreground"
                             />
                         </div>

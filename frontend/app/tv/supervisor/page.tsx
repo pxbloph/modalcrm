@@ -3,10 +3,21 @@
 import { useEffect, useState } from 'react';
 import { Maximize, Minimize } from 'lucide-react';
 
+interface ClientItem {
+    id: string;
+    name: string;
+    cnpj: string;
+    phone: string;
+    account_opening_date: string;
+    created_by_name: string;
+    responsible_name: string;
+}
+
 interface RankingItem {
     user_id: string;
     user_name: string;
     count: number;
+    clients: ClientItem[];
 }
 
 interface DashboardData {
@@ -20,6 +31,7 @@ export default function SupervisorDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<RankingItem | null>(null);
 
     const fetchData = async () => {
         try {
@@ -104,7 +116,11 @@ export default function SupervisorDashboardPage() {
                         <div className="flex flex-col">
                             {operatorsList.length > 0 ? (
                                 operatorsList.map((user, index) => (
-                                    <div key={user.user_id} className={`flex items-center justify-between p-4 ${index !== operatorsList.length - 1 ? 'border-b border-gray-100' : ''} hover:bg-white/50 transition-colors rounded-lg`}>
+                                    <div
+                                        key={user.user_id}
+                                        className={`flex items-center justify-between p-4 ${index !== operatorsList.length - 1 ? 'border-b border-gray-100' : ''} hover:bg-white/50 transition-colors rounded-lg cursor-pointer hover:shadow-sm`}
+                                        onClick={() => setSelectedUser(user)}
+                                    >
                                         <span className="text-zinc-800 font-semibold text-xl truncate" title={user.user_name}>
                                             {user.user_name}
                                         </span>
@@ -125,6 +141,76 @@ export default function SupervisorDashboardPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Operator Details Modal */}
+            {selectedUser && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 sm:p-8"
+                    onClick={() => setSelectedUser(null)}
+                >
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-7xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50 shrink-0">
+                            <div>
+                                <h3 className="text-3xl font-bold text-zinc-800 flex items-center gap-3">
+                                    <span className="text-orange-500">Contas Abertas:</span> {selectedUser.user_name}
+                                </h3>
+                                <p className="text-zinc-500 mt-1 font-medium text-lg">Total de {selectedUser.count} contas hoje</p>
+                            </div>
+                            <button
+                                onClick={() => setSelectedUser(null)}
+                                className="p-3 bg-white hover:bg-red-50 hover:text-red-500 border border-gray-200 text-gray-500 rounded-full shadow-sm transition-colors"
+                            >
+                                <span className="sr-only">Fechar</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                            </button>
+                        </div>
+
+                        {/* Modal Body Base */}
+                        <div className="flex-1 overflow-y-auto p-0 min-h-0 bg-white">
+                            {selectedUser.clients && selectedUser.clients.length > 0 ? (
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="sticky top-0 bg-white shadow-sm z-10">
+                                        <tr className="bg-gray-100 border-b border-gray-200 text-zinc-600 font-bold uppercase tracking-wider text-sm">
+                                            <th className="p-5 border-r border-gray-200">Razão Social / Nome</th>
+                                            <th className="p-5 border-r border-gray-200 w-40 text-center">CNPJ</th>
+                                            <th className="p-5 border-r border-gray-200 w-36 text-center">Telefone</th>
+                                            <th className="p-5 border-r border-gray-200 w-48 text-center">Criado por</th>
+                                            <th className="p-5 border-r border-gray-200 w-48 text-center">Responsável</th>
+                                            <th className="p-5 w-44 text-center">Data Abertura</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {selectedUser.clients.map((client) => {
+                                            const openDate = new Date(client.account_opening_date);
+                                            return (
+                                                <tr key={client.id} className="hover:bg-orange-50/40 transition-colors group">
+                                                    <td className="p-5 border-r border-gray-100 text-zinc-800 font-semibold text-lg">{client.name}</td>
+                                                    <td className="p-5 border-r border-gray-100 text-zinc-600 font-mono text-sm text-center group-hover:text-zinc-900">{client.cnpj}</td>
+                                                    <td className="p-5 border-r border-gray-100 text-zinc-600 font-medium text-sm text-center">{client.phone}</td>
+                                                    <td className="p-5 border-r border-gray-100 text-zinc-600 font-medium text-sm text-center truncate">{client.created_by_name}</td>
+                                                    <td className="p-5 border-r border-gray-100 text-zinc-600 font-medium text-sm text-center truncate">{client.responsible_name}</td>
+                                                    <td className="p-5 text-zinc-500 text-center font-mono text-sm">
+                                                        {openDate.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center p-20 text-zinc-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 mb-4 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="m15 9-6 6" /><path d="m9 9 6 6" /></svg>
+                                    <p className="text-2xl font-medium">Nenhum detalhe disponível para as contas de {selectedUser.user_name}.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
