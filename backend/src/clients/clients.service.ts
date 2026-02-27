@@ -445,21 +445,28 @@ export class ClientsService {
                 const toInt = (val: any) => val !== undefined && val !== null ? Number(val) : undefined;
                 const toBool = (val: any) => val === true || val === 'true';
 
-                // [FIX] Prevent UTC Timezone Shift on pure dates
-                const parseToMidday = (dateStr: string | undefined | null | Date) => {
+                // [FIX] Prevent UTC Timezone Shift ONLY on pure dates
+                const parseDateSafe = (dateStr: string | undefined | null | Date) => {
                     if (!dateStr) return undefined;
                     // If it's already a Date object (rare but possible internally), return it
                     if (typeof dateStr !== 'string') return dateStr as Date;
-                    // Strip existing time/timezone and force midday in Brazil
-                    const pureDate = new Date(dateStr).toISOString().split('T')[0];
-                    return new Date(`${pureDate}T12:00:00.000-03:00`);
+
+                    // Se for apenas uma data reta (YYYY-MM-DD) ou vier cravado como meia-noite UTC absoluto,
+                    // assumimos que foi o seletor simples de Data que enviou, e aplicamos o meio-dia local.
+                    if (dateStr.length === 10 || dateStr.endsWith('T00:00:00.000Z')) {
+                        const pureDate = dateStr.substring(0, 10);
+                        return new Date(`${pureDate}T12:00:00.000-03:00`);
+                    }
+
+                    // Se houver qualquer outra formatação de hora/minuto embutida, preserva e confia na entrada do User
+                    return new Date(dateStr);
                 };
 
                 updatedClient = await this.prisma.client.update({
                     where: { id },
                     data: {
                         ...cleanClientData,
-                        account_opening_date: parseToMidday(account_opening_date),
+                        account_opening_date: parseDateSafe(account_opening_date),
 
                         // Consolidated Qualification Data
                         faturamento_mensal: toDec(faturamento_mensal),
@@ -961,6 +968,16 @@ export class ClientsService {
             throw new ConflictException('Você já é o responsável por este lead.');
         }
 
+        if (user.role === Role.OPERATOR || user.role === Role.LEADER) {
+            await this.responsibilityService.createRequest({
+                leadId: client.id,
+                toUserId: user.id,
+                reason: reason || 'Transferência manual por CNPJ (Novo Fluxo)'
+            }, user);
+
+            return { success: true, message: 'Solicitação enviada para aprovação.' };
+        }
+
         const oldOwnerId = client.created_by_id;
         const newOwnerId = user.id;
 
@@ -970,6 +987,12 @@ export class ClientsService {
                 where: { id: client.id },
                 data: { created_by_id: newOwnerId },
                 include: { created_by: true }
+            });
+
+            // Sincronizar Kanban (Deals abertos)
+            await tx.deal.updateMany({
+                where: { client_id: client.id, status: 'OPEN' },
+                data: { responsible_id: newOwnerId }
             });
 
             // Audit
@@ -1052,6 +1075,12 @@ export class ClientsService {
             include: { created_by: true }
         });
 
+        // Sincronizar Kanban (Deals abertos)
+        await this.prisma.deal.updateMany({
+            where: { client_id: id, status: 'OPEN' },
+            data: { responsible_id: newOwnerId }
+        });
+
         const auditId = await this.logTransferAudit(
             client.id,
             oldOwnerId,
@@ -1118,6 +1147,12 @@ export class ClientsService {
                     where: { id: client.id },
                     data: { created_by_id: newOwnerId },
                     include: { created_by: true }
+                });
+
+                // Sincronizar Kanban (Deals abertos)
+                await this.prisma.deal.updateMany({
+                    where: { client_id: client.id, status: 'OPEN' },
+                    data: { responsible_id: newOwnerId }
                 });
 
                 const auditId = await this.logTransferAudit(

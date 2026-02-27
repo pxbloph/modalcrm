@@ -68,7 +68,7 @@ export class ResponsibilityService {
             whereClause += ` AND r.status = 'pending'`;
         }
 
-        const requests = await this.prisma.$queryRawUnsafe(`
+        const requests = await this.prisma.$queryRawUnsafe<any[]>(`
             SELECT 
                 r.*,
                 c.name as client_name, c.cnpj as client_cnpj, c.has_open_account,
@@ -77,14 +77,41 @@ export class ResponsibilityService {
                 u_req.name as req_name, u_req.surname as req_surname
             FROM responsibility_change_requests r
             JOIN clients c ON r.lead_id = c.id
-            JOIN users u_from ON r.from_user_id = u_from.id
+            LEFT JOIN users u_from ON r.from_user_id = u_from.id
             JOIN users u_to ON r.to_user_id = u_to.id
             JOIN users u_req ON r.requested_by_user_id = u_req.id
             WHERE ${whereClause}
             ORDER BY c.has_open_account DESC, r.created_at DESC
         `);
 
-        return requests;
+        return requests.map(r => ({
+            id: r.id,
+            lead_id: r.lead_id,
+            reason: r.reason,
+            status: r.status,
+            tabulacao_snapshot: r.tabulacao_snapshot,
+            created_at: r.created_at,
+            lead: {
+                id: r.lead_id,
+                name: r.client_name,
+                cnpj: r.client_cnpj,
+            },
+            from_user: {
+                id: r.from_user_id,
+                name: r.from_name || 'Sistema/Livre',
+                surname: r.from_surname || '',
+            },
+            to_user: {
+                id: r.to_user_id,
+                name: r.to_name,
+                surname: r.to_surname,
+            },
+            requested_by_user: {
+                id: r.requested_by_user_id,
+                name: r.req_name,
+                surname: r.req_surname,
+            }
+        }));
     }
 
     async approve(id: string, user: User) {

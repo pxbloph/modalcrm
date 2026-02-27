@@ -24,6 +24,7 @@ export function LeadTransferModal({ onClose, onSuccess }: LeadTransferModalProps
     const [result, setResult] = useState<TransferLookupResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [processing, setProcessing] = useState(false);
+    const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
     // Initial Search
     const handleSearch = async (e: React.FormEvent) => {
@@ -60,17 +61,27 @@ export function LeadTransferModal({ onClose, onSuccess }: LeadTransferModalProps
         if (!result) return;
 
         setProcessing(true);
+        setSuccessMsg(null);
+        setError(null);
         try {
-            await api.post(`/clients/transfer-by-cnpj`, {
+            const response = await api.post(`/clients/transfer-by-cnpj`, {
                 cnpj: result.cnpj_masked, // sending mask or clean? Controller usually creates clean from it, but let's reuse what we have
                 reason: 'Transferência manual pelo Operador (Botão Flutuante)'
             });
-            toast.success('Lead assumido com sucesso!');
-            onSuccess();
-            onClose();
+            // Display SUCCESS and WAIT
+            setSuccessMsg(response.data?.message || 'Lead assumido com sucesso!');
+            setTimeout(() => {
+                onSuccess();
+                onClose();
+            }, 2500);
         } catch (err: any) {
             console.error('Transfer Error:', err);
-            toast.error(err.response?.data?.message || 'Erro ao transferir lead.');
+
+            if (err.response?.status === 409) {
+                setError(err.response?.data?.message || 'Ação não permitida para este lead.');
+            } else {
+                setError(err.response?.data?.message || 'Erro ao transferir lead.');
+            }
         } finally {
             setProcessing(false);
         }
@@ -169,10 +180,18 @@ export function LeadTransferModal({ onClose, onSuccess }: LeadTransferModalProps
                     )}
 
                     {/* Error State */}
-                    {error && (
+                    {error && !successMsg && (
                         <div className="p-4 bg-destructive/10 text-destructive rounded-lg border border-destructive/20 flex items-center gap-2 animate-in fade-in">
                             <AlertTriangle className="h-5 w-5 shrink-0" />
                             <span className="text-sm font-medium">{error}</span>
+                        </div>
+                    )}
+
+                    {/* Success State */}
+                    {successMsg && (
+                        <div className="p-4 bg-green-50 text-green-700 rounded-lg border border-green-200 flex items-center gap-2 animate-in fade-in mt-4">
+                            <CheckCircle className="h-5 w-5 shrink-0" />
+                            <span className="text-sm font-medium">{successMsg}</span>
                         </div>
                     )}
                 </div>

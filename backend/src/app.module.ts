@@ -24,6 +24,8 @@ import { KanbanFilterPresetsModule } from './kanban-filter-presets/kanban-filter
 import { KanbanPreferencesModule } from './kanban-preferences/kanban-preferences.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
+import { WebhooksModule } from './webhooks/webhooks.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
 
 // Audit System Imports
 import { ClsModule } from 'nestjs-cls';
@@ -66,6 +68,8 @@ import { RequestContextMiddleware } from './common/middleware/request-context.mi
         ResponsibilityModule,
         KanbanFilterPresetsModule,
         KanbanPreferencesModule,
+        WebhooksModule,
+        ApiKeysModule,
         ServeStaticModule.forRoot({
             rootPath: join(__dirname, '..', 'uploads'),
             serveRoot: '/api/uploads',

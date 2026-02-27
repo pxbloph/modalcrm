@@ -31,7 +31,7 @@ export function LeadTransferButton({ userRole }: LeadTransferButtonProps) {
                 <LeadTransferModal
                     onClose={() => setOpen(false)}
                     onSuccess={() => {
-                        window.location.reload();
+                        // Removed window.location.reload() to allow toast to show up
                     }}
                 />
             )}

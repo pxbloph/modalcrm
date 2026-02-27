@@ -105,6 +105,12 @@ export class UsersService {
         });
     }
 
+    async findFirstAdmin(): Promise<User | null> {
+        return this.prisma.user.findFirst({
+            where: { role: 'ADMIN', is_active: true },
+        });
+    }
+
     async findAll(currentUser?: User) {
         const where: Prisma.UserWhereInput = {};
 

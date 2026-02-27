@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { Users, LayoutDashboard, LogOut, PlusCircle, ShieldCheck, Menu, ChevronLeft, ChevronRight, Settings, BarChart, Upload, MessageCircle, Briefcase, UserCheck, Loader2 } from 'lucide-react';
+import { Users, LayoutDashboard, LogOut, PlusCircle, ShieldCheck, Menu, ChevronLeft, ChevronRight, Settings, BarChart, Upload, MessageCircle, Briefcase, UserCheck, Loader2, Key } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -107,6 +107,12 @@ export default function DashboardLayout({
             href: '/admin/approvals',
             icon: UserCheck,
             show: user.role === 'ADMIN' || user.role === 'SUPERVISOR'
+        },
+        {
+            name: 'API',
+            href: '/api-keys',
+            icon: Key,
+            show: user.role === 'ADMIN'
         },
         {
             name: 'Configurações',

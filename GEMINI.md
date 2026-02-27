@@ -249,4 +249,38 @@ Um painel derivado do Dashboard da TV, porém voltado para exibição do volume 
   - O NodeJS agora é forçado a rodar em `America/Sao_Paulo` por meio da variável `process.env.TZ = 'America/Sao_Paulo';` inserida no `main.ts`.
   - Remoção de lógicas compensatórias de 27 horas na TV Dashboard. O dashboard da TV agora pesquisa de `00:00:00.000-03:00` até `23:59:59.999-03:00` do mesmo dia.
   - Correção na montagem de filtros do prisma em `clients.service.ts` e `deals.service.ts`, convertendo fechamentos forçados em `Z` (UTC) para strings com offset `-03:00`, garantindo captação do tempo exato do Brasil.
+  - **Date Parsing (26/02/2026):** Implementado o helper `parseDateSafe` no `clients.service.ts`. Quando o frontend envia uma data com horário exato (`ex: 2026-02-26 17:40`), o sistema preserva a hora inserida pelo operador. Quando o frontend envia dados de um calendário simples em data pura (`YYYY-MM-DD` ou `T00:00:00Z`), o backend intercepta e força o offset para `T12:00:00-03:00` (meio-dia de Brasília) para evitar que o Node/Prisma realize o shift do UTC e salve a entrada como sendo do dia anterior (-3h).
 - **Dica Banco de Dados**: Foi orientado executar `ALTER DATABASE [nome] SET timezone TO 'America/Sao_Paulo';` para exibir os timestamps sincronizados na ferramenta local (SQL Editor).
+
+## Travas Sistêmicas de Integração (26/02/2026)
+
+Para garantir integridade da carteira, os sistemas validam se o contato teve sucesso nos fluxos do Banco Central antes de permitir avanços lógicos:
+
+- **Trava de Fase (Kanban)** (`deals.service.ts`): Negócios onde o cliente não possui `integration_status` de "Cadastro salvo com sucesso!" **não podem** ser movidos para nenhuma fase da esteira fora das zonas de quarentena. As ÚNICAS fases liberadas para clientes sem aprovação bancária completa são: `"Novos Leads"` e `"Inaptos"`. Retorna popups de alerta com o erro específico.
+- **Trava de Tabulação (Minha Carteira)** (`clients.service.ts`): Clientes sem o `integration_status` de sucesso não podem receber tabulações positivas (como `"Conta aberta"`). Eles estão restritos a uma **Whitelist de Descartes**, sendo apenas permitido marcá-los como: `"Outro ECE"`, `"Recusado pelo banco"`, `"Sem interesse"`, `"Telefone Incorreto"` e `"Já possui conta"`.
+
+## Pontuação de Hierarquias na TV Dashboard (26/02/2026)
+- Os painéis da TV e de Supervisor não excluem mais as vendas realizadas por contas diferentes de `OPERATOR`. A listagem ativa agora abrange cargos superiores, permitindo que líderes (LEADER), administradores e supervisores ranqueiem e marquem pontos normalmente desde que a flag `is_active` seja verdadeira.
+
+## Lógica de Transferência de Leads e Kanban (27/02/2026)
+
+Para garantir que a carteira de clientes e o Kanban nunca fiquem dessincronizados, foi reforçado o fluxo de responsabilidade:
+
+- **Trava de Operador (Puxar Lead)**: Operadores e Líderes (`OPERATOR`, `LEADER`) não podem mais usar a função de *Bypass/Takeover* (Puxar Lead) para assumir um cliente instantaneamente. O endpoint `/clients/transfer-by-cnpj` intercepta a tentativa e gera uma Solicitação PENDENTE no painel do Supervisor.
+- **Sincronia Total (Admin/Supervisor)**: Quando um Supervisor aprova a transferência no painel, ou executa operações de transferência em massa na base, o sistema agora garante que a alteração seja feita NO CLIENTE (`created_by_id`) e SIMULTANEAMENTE em TODOS os Deals em aberto no Kanban associados (`responsible_id`). Isso previne cards "órfãos" na esteira com operadores antigos/desligados.
+- **Prevenção de Auto-Puxar**: Adicionado bloqueio `ConflictException 409` impedindo que a criação de solicitações de transferência ocorra se o usuário já for o dono atual do Lead. Este erro é devolvido em tela de forma amigável ao invés de estourar log não tratado.
+
+## Integração Externa e Gerenciamento de Chaves da API (27/02/2026)
+
+Para viabilizar integrações externas (com ferramentas como n8n, ActiveCampaign, etc.) de forma segura, o sistema agora conta com um gerenciamento próprio de Chaves de API (`Api Keys`).
+
+### Backend (Webhooks e Autenticação)
+- **Endpoint de Entrada**: Foi criado o endpoint `POST /webhooks/n8n/clients` responsável por receber payloads de plataformas externas e criar Clientes + Negócios no funil.
+- **Validador de Segurança (`ApiKeyGuard`)**: A rota do webhook não utiliza sessão normal (JWT). Ela exige obrigatoriamente um cabeçalho `x-api-key`. O Guard valida essa string batendo na model `ApiKey` do banco de dados (Prisma).
+- **Gestão de Chaves no BD**: O banco agora possui a tabela vinculada aos usuários (`User` -> `ApiKey`), que registra as chaves, status de atividade (`is_active`) e realiza tracking silencioso de `last_used_at`.
+
+### Frontend (Dashboard de Chaves da API)
+- **Painel de Controle**: Adicionada uma nova rota (`/api-keys`) no painel web protegido.
+- **Regras de Acesso**: **SOMENTE administradores (`ADMIN`)** têm capacidade visual de acessar essa tela pelo Menu Lateral ("API"), gerenciar, visualizar, e gerar novas strings de chaves (com prefixo obrigatório `mbf_`).
+- **Segurança Visual**: Ao gerar uma nova chave, o usuário a visualiza e copia apenas **UMA UNICA VEZ** (em um pop-up de sucesso). Não há como revelar o hash depois de fechado para evitar vazamentos laterais no frontend.
+
