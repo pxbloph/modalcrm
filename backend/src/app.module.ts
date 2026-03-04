@@ -1,5 +1,6 @@
 import { Module, MiddlewareConsumer, RequestMethod, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -39,6 +40,13 @@ import { RequestContextMiddleware } from './common/middleware/request-context.mi
         ConfigModule.forRoot({
             isGlobal: true,
         }),
+
+        // Rate Limiting
+        ThrottlerModule.forRoot([{
+            name: 'webhook',
+            ttl: 60000, // 1 minuto
+            limit: 60,  // máximo 60 requisições por minuto por IP
+        }]),
 
         // Context and Audit
         ClsModule.forRoot({

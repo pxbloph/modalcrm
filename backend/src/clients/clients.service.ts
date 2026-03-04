@@ -296,29 +296,20 @@ export class ClientsService {
 
     async update(id: string, data: Prisma.ClientUpdateInput, user: User) {
         try {
-            console.log(`[UPDATE START] User: ${user.id} Client: ${id}`);
             const client = await this.findOne(id, user);
             if (!client) {
-                console.error(`[UPDATE ERROR] Client ${id} not found or access denied`);
                 throw new InternalServerErrorException('Cliente não encontrado ou acesso negado');
             }
-
-            console.log(`[UPDATE RAW] ID: ${id}`, JSON.stringify(data)); // UNCONDITIONAL DEBUG LOG
 
             // Check for Upsert/Merge Trigger (Lead -> Client promotion)
             const inputData = data as any;
             if (inputData.integration_status === 'Cadastro salvo com sucesso!' && inputData.cnpj) {
-                console.log(`[UPDATE CLIENT] ID: ${id}`, JSON.stringify(data)); // DEBUG LOG
                 const duplicate = await this.prisma.client.findUnique({
                     where: { cnpj: inputData.cnpj }
                 });
 
                 // If a different client with same CNPJ exists, merge into it
                 if (duplicate && duplicate.id !== id) {
-                    console.log(`Merging Lead ${id} into existing Client ${duplicate.id} (CNPJ ${inputData.cnpj}) - Triggered by Success Status`);
-
-                    // 1. [DEPRECATED] Data already on client, no need to move qualifications
-                    console.log(`Merging Lead ${id} into existing Client ${duplicate.id} (CNPJ ${inputData.cnpj})`);
 
                     // 2. Prepare data for generic update on existing client
                     // Remove CNPJ from update to avoid unique constraint if it's identical (it is)
@@ -433,9 +424,6 @@ export class ClientsService {
                     cleanClientData[key] = clientData[key];
                 }
             }
-
-            console.log('[DEBUG] Clean Client Data:', JSON.stringify(cleanClientData));
-            if (account_opening_date) console.log('[DEBUG] Opening Date:', account_opening_date);
 
             // Update Client directly with combined data
             let updatedClient;
@@ -1046,18 +1034,7 @@ export class ClientsService {
             throw new ConflictException('Você já é o responsável por este lead.');
         }
 
-        // [NEW] Operator Request Logic
-        console.log('--- DEBUG TAKEOVER START ---');
-        console.log(`User ID: ${user.id}`);
-        console.log(`User Name: ${user.name}`);
-        console.log(`User Role (Value): '${user.role}'`);
-        console.log(`User Role (Type): ${typeof user.role}`);
-        console.log(`Enum Role.OPERATOR: '${Role.OPERATOR}'`);
-        console.log(`Is Match?: ${user.role === Role.OPERATOR}`);
-        console.log('--- DEBUG TAKEOVER END ---');
-
         if (user.role === Role.OPERATOR || user.role === Role.LEADER) {
-            console.log('>> ENTERING REQUEST FLOW');
             await this.responsibilityService.createRequest({
                 leadId: id,
                 toUserId: user.id,

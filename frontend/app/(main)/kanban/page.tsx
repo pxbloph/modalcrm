@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { DropResult } from "@hello-pangea/dnd";
 import api from "@/lib/api";
 import { Plus, LayoutGrid, List, Zap, Settings2 } from "lucide-react";
@@ -236,6 +236,22 @@ export default function KanbanPage() {
         });
     };
 
+    const fetchMetrics = useCallback(async () => {
+        setMetricsLoading(true);
+        try {
+            const params: any = { ...filterParams };
+            if (selectedPipeline) params.pipelineId = selectedPipeline;
+            if (searchTerm) params.search = searchTerm;
+
+            const res = await api.get('/clients/dashboard-metrics', { params });
+            setMetrics(res.data);
+        } catch (error) {
+            console.error("Erro ao carregar métricas:", error);
+        } finally {
+            setMetricsLoading(false);
+        }
+    }, [filterParams, selectedPipeline, searchTerm]);
+
     // WebSocket Listeners
     useEffect(() => {
         if (!socket || !selectedPipeline) return;
@@ -243,7 +259,6 @@ export default function KanbanPage() {
         socket.emit('kanban:join', selectedPipeline);
 
         const handleDealMoved = (deal: Deal) => {
-            console.log("WS: Deal Moved", deal);
             setDeals(prevDeals => {
                 const newDeals = { ...prevDeals };
                 Object.keys(newDeals).forEach(stageId => {
@@ -260,7 +275,6 @@ export default function KanbanPage() {
         };
 
         const handleDealCreated = (deal: Deal) => {
-            console.log("WS: Deal Created", deal);
             setDeals(prevDeals => {
                 const newDeals = { ...prevDeals };
                 if (newDeals[deal.stage_id]) {
@@ -272,7 +286,6 @@ export default function KanbanPage() {
         };
 
         const handleDealUpdated = (deal: Deal) => {
-            console.log("WS: Deal Updated", deal);
             setDeals(prevDeals => {
                 const newDeals = { ...prevDeals };
                 Object.keys(newDeals).forEach(stageId => {
@@ -297,7 +310,7 @@ export default function KanbanPage() {
             socket.off('kanban:deal_created', handleDealCreated);
             socket.off('kanban:deal_updated', handleDealUpdated);
         };
-    }, [socket, selectedPipeline]);
+    }, [socket, selectedPipeline, fetchMetrics]);
 
     const fetchFiltersData = async () => {
         try {
@@ -323,22 +336,6 @@ export default function KanbanPage() {
         }
     };
 
-    const fetchMetrics = async () => {
-        setMetricsLoading(true);
-        try {
-            const params: any = { ...filterParams };
-            if (selectedPipeline) params.pipelineId = selectedPipeline;
-            if (searchTerm) params.search = searchTerm;
-
-            const res = await api.get('/clients/dashboard-metrics', { params });
-            setMetrics(res.data);
-        } catch (error) {
-            console.error("Erro ao carregar métricas:", error);
-        } finally {
-            setMetricsLoading(false);
-        }
-    };
-
     // Reactive Data Fetch (Update when filters change)
     useEffect(() => {
         if (!selectedPipeline) return;
@@ -348,24 +345,7 @@ export default function KanbanPage() {
             fetchStagesAndDeals(selectedPipeline);
         }, 500);
         return () => clearTimeout(timer);
-    }, [selectedPipeline, searchTerm, filterParams]);
-
-    // Initial Load (already covered by effect above, but fetchPipelines is separate)
-    useEffect(() => {
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-            const parsedUser = JSON.parse(storedUser);
-            setCurrentUser(parsedUser);
-
-            if (parsedUser.role === 'OPERATOR') {
-                window.location.href = '/new-client';
-                return;
-            }
-            fetchPresets(parsedUser.id);
-        }
-        fetchPipelines();
-        fetchFiltersData();
-    }, []);
+    }, [selectedPipeline, searchTerm, filterParams, fetchMetrics]);
 
     const fetchPresets = async (userId: string) => {
         try {

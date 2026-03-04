@@ -4,6 +4,7 @@ import { ApiKeyGuard } from './guards/api-key.guard';
 import { CreateN8nClientDto } from './dto/create-n8n-client.dto';
 import { UsersService } from '../users/users.service';
 import { Role } from '@prisma/client';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('webhooks')
 export class WebhooksController {
@@ -14,22 +15,19 @@ export class WebhooksController {
 
     @Post('n8n/clients')
     @UseGuards(ApiKeyGuard)
+    @Throttle({ webhook: { limit: 200, ttl: 60000 } })
     async createClientFromN8n(@Body() body: CreateN8nClientDto) {
         try {
-            console.log('[WEBHOOK N8N] Recebendo payload:', JSON.stringify(body));
-
             // 1. Determinar quem será o "dono" (created_by) do lead criado pelo n8n
             let ownerId = body.created_by_id;
 
             if (!ownerId) {
-                // Fallback para o primeiro ADMIN se o n8n não enviar ID
-                const admin = await this.usersService.findFirstAdmin(); // Precisamos criar ou adaptar esse método se não existir.
+                const admin = await this.usersService.findFirstAdmin();
 
                 if (!admin) {
                     throw new HttpException('Nenhum usuário ADMIN disponível para assunção do lead do webhook.', HttpStatus.INTERNAL_SERVER_ERROR);
                 }
                 ownerId = admin.id;
-                console.log(`[WEBHOOK N8N] Sem 'created_by_id' fornecido. Usando ADMIN ID: ${ownerId}`);
             }
 
             // Hack para o ClientsService: simular o "user" req.user que chama o serviço normalmente

@@ -103,7 +103,7 @@ export default function TvDashboardPage() {
                         <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full border bg-white/80 border-gray-200 shadow-sm">
                             <div className="w-3 h-3 rounded-full bg-orange-500 animate-pulse" />
                             <p className="text-3xl font-mono font-bold text-zinc-700">
-                                {lastUpdated?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                {lastUpdated?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                             </p>
                         </div>
                         <button

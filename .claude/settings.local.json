@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"c:/Users/phpab/OneDrive/Área de Trabalho/mbforms/frontend/app/\\(dashboard\\)\" -maxdepth 2 -type d)",
+      "Bash(find \"c:/Users/phpab/OneDrive/Área de Trabalho/mbforms/frontend/app/\\(dashboard\\)\" -type f -name \"*.tsx\")",
+      "Bash(ls -la \"c:/Users/phpab/OneDrive/Área de Trabalho/mbforms/frontend/app/\\(dashboard\\)/\")",
+      "Bash(wc -l \"c:/Users/phpab/OneDrive/Área de Trabalho/mbforms/backend/src\"/**/*.ts)",
+      "Bash(find \"c:/Users/phpab/OneDrive/Área de Trabalho/mbforms/frontend/app/\\(main\\)/kanban\" -type f -name \"*.ts\" -o -name \"*.tsx\" -o -name \"*.js\" -o -name \"*.jsx\")",
+      "Bash(ls -la \"c:/Users/phpab/OneDrive/Área de Trabalho/mbforms/frontend/app/\\(main\\)/kanban/\")",
+      "Bash(npm install @nestjs/throttler --save)",
+      "Bash(npm install @nestjs/throttler --save --legacy-peer-deps)",
+      "Bash(find \"/c/Users/phpab/OneDrive/Área de Trabalho/mbforms/frontend/app/\\(main\\)\" -name \"page.tsx\")",
+      "Bash(npm run build)",
+      "Bash(npx tsc --noEmit)"
+    ]
+  }
+}

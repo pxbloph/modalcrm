@@ -15,8 +15,6 @@ export class DealsController {
   @UseGuards(AuthGuard('jwt'))
   @Post()
   create(@Body() createDealDto: CreateDealDto, @Request() req) {
-    console.log('[DEBUG] DealsController.create - User:', req.user);
-    console.log('[DEBUG] DealsController.create - ActorID:', req.user?.id);
     return this.dealsService.create(createDealDto, req.user?.id);
   }
 
@@ -55,7 +53,6 @@ export class DealsController {
     @Query('openAccountStartDate') openAccountStartDate?: string,
     @Query('openAccountEndDate') openAccountEndDate?: string,
   ) {
-    console.log('[DEBUG-CONTROLLER] findAll Query:', { pipelineId, responsibleId, clientId, tags, search, tabulation });
     const tagIds = tags ? tags.split(',') : undefined;
     return this.dealsService.findAll(pipelineId, responsibleId, clientId, search, tabulation, startDate, endDate, openAccountStartDate, openAccountEndDate);
   }

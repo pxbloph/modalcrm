@@ -107,8 +107,6 @@ export class DealsService {
   async findAll(pipelineId?: string, responsibleId?: string, clientId?: string, search?: string, tabulation?: string, startDate?: string, endDate?: string, openAccountStartDate?: string, openAccountEndDate?: string) {
     const where = this.buildWhere(pipelineId, responsibleId, clientId, search, tabulation, startDate, endDate, openAccountStartDate, openAccountEndDate);
 
-    console.log('[DEBUG] Deals findAll Where:', JSON.stringify(where, null, 2));
-
     return this.prisma.deal.findMany({
       where,
       select: {
@@ -292,14 +290,7 @@ export class DealsService {
       if (actorId) {
         const actor = await this.prisma.user.findUnique({ where: { id: actorId } });
 
-        console.log('--- DEBUG DEAL UPDATE (RESPONSIBLE) ---');
-        console.log(`Actor ID: ${actorId}`);
-        console.log(`Actor Role: ${actor?.role}`);
-        console.log(`Target Responsible: ${updateDealDto.responsible_id}`);
-        console.log(`Current Responsible: ${currentDeal.responsible_id}`);
-
         if (actor && (actor.role === Role.OPERATOR || actor.role === Role.LEADER)) {
-          console.log('>> BLOCKING DIRECT UPDATE');
           throw new ForbiddenException('Operadores não podem alterar o responsável diretamente. Use a solicitação de troca.');
         }
       }

@@ -33,6 +33,7 @@
     "@nestjs/platform-socket.io": "^10.0.0",
     "@nestjs/schedule": "^6.1.0",
     "@nestjs/serve-static": "^5.0.4",
+    "@nestjs/throttler": "^6.5.0",
     "@nestjs/websockets": "^10.0.0",
     "@prisma/client": "^5.21.0",
     "@types/multer": "^2.0.0",
