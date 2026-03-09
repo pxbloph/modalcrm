@@ -105,12 +105,21 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
         setSelectedTabulation("");
     }, [currentUser]);
 
-    // Polling Logic
+    // Polling Logic (máx. 60 tentativas = ~2 minutos)
     useEffect(() => {
         let interval: NodeJS.Timeout;
+        let attempts = 0;
+        const MAX_ATTEMPTS = 60;
 
         if (status === 'waiting' && createdClientId) {
             interval = setInterval(async () => {
+                attempts++;
+                if (attempts >= MAX_ATTEMPTS) {
+                    clearInterval(interval);
+                    setIntegrationStatusMessage('Tempo limite de integração atingido. Verifique o cadastro manualmente.');
+                    setStatus('error');
+                    return;
+                }
                 try {
                     const res = await api.get(`/clients/${createdClientId}`);
                     const client = res.data;
@@ -120,7 +129,6 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
                         clearInterval(interval);
                         if (onSuccess) onSuccess(createdClientId);
                     } else if (integStatus && integStatus !== 'Pendente' && integStatus !== 'Cadastrando...') {
-                        // Error or Rejection
                         clearInterval(interval);
                         setIntegrationStatusMessage(integStatus);
                         setStatus('error');

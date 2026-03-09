@@ -150,6 +150,13 @@ export default function KanbanPage() {
         return params;
     }, [activeFilters]);
 
+    // Refs para fetchMetrics usar sempre os valores mais recentes
+    // sem precisar declará-los como deps do useCallback (evita re-registro do WS a cada tecla)
+    const filterParamsRef = useRef(filterParams);
+    const searchTermRef = useRef(searchTerm);
+    useEffect(() => { filterParamsRef.current = filterParams; }, [filterParams]);
+    useEffect(() => { searchTermRef.current = searchTerm; }, [searchTerm]);
+
     // Initial Preferences Load
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
@@ -158,7 +165,7 @@ export default function KanbanPage() {
             setCurrentUser(parsedUser);
 
             if (parsedUser.role === 'OPERATOR') {
-                window.location.href = '/new-client';
+                router.push('/new-client');
                 return;
             }
             fetchPresets(parsedUser.id);
@@ -239,9 +246,9 @@ export default function KanbanPage() {
     const fetchMetrics = useCallback(async () => {
         setMetricsLoading(true);
         try {
-            const params: any = { ...filterParams };
+            const params: any = { ...filterParamsRef.current };
             if (selectedPipeline) params.pipelineId = selectedPipeline;
-            if (searchTerm) params.search = searchTerm;
+            if (searchTermRef.current) params.search = searchTermRef.current;
 
             const res = await api.get('/clients/dashboard-metrics', { params });
             setMetrics(res.data);
@@ -250,7 +257,7 @@ export default function KanbanPage() {
         } finally {
             setMetricsLoading(false);
         }
-    }, [filterParams, selectedPipeline, searchTerm]);
+    }, [selectedPipeline]);
 
     // WebSocket Listeners
     useEffect(() => {
@@ -640,7 +647,13 @@ export default function KanbanPage() {
             </div>
 
             <div className="flex-1 overflow-hidden bg-white">
-                {viewMode === 'board' ? (
+                {!isInitialLoading && stages.length > 0 && Object.values(filteredDeals).every(d => d.length === 0) && (searchTerm || activeFilters.length > 0) ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
+                        <span className="text-4xl">🔍</span>
+                        <p className="text-base font-medium">Nenhum negócio encontrado</p>
+                        <p className="text-sm">Tente ajustar os filtros ou o termo de busca</p>
+                    </div>
+                ) : viewMode === 'board' ? (
                     <KanbanBoard
                         stages={stages}
                         dealsByStage={filteredDeals}

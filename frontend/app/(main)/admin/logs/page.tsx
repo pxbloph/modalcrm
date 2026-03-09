@@ -274,11 +274,13 @@ export default function AuditLogsPage() {
 
                 {/* Pagination */}
                 <div className="flex items-center justify-end p-4 border-t border-border/50 gap-2">
-                    <span className="text-sm text-muted-foreground mr-4">Página {page} de {totalPages}</span>
+                    <span className="text-sm text-muted-foreground mr-4">
+                        {totalPages > 0 ? `Página ${page} de ${totalPages}` : 'Nenhum resultado'}
+                    </span>
                     <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+                    <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
                         <ChevronRight className="h-4 w-4" />
                     </Button>
                 </div>
