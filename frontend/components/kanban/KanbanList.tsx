@@ -14,6 +14,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // --- Interfaces ---
 
@@ -67,7 +68,14 @@ const formatCurrency = (val: any) => {
 const formatDate = (dateString?: string) => {
     if (!dateString) return '-';
     try {
-        return format(parseISO(dateString), "dd/MM/yyyy HH:mm", { locale: ptBR });
+        const date = new Date(dateString);
+        // Explicit São Paulo timezone to avoid browser TZ discrepancy
+        return new Intl.DateTimeFormat('pt-BR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit',
+            timeZone: 'America/Sao_Paulo',
+            hour12: false
+        }).format(date).replace(',', '');
     } catch {
         return dateString;
     }
@@ -458,19 +466,20 @@ export function KanbanList({ stages, dealsByStage, onDealClick, columnOrder, onC
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <select
-                            value={itemsPerPage}
-                            onChange={(e) => {
-                                setItemsPerPage(Number(e.target.value));
+                        <Select value={String(itemsPerPage)} onValueChange={(value) => {
+                                setItemsPerPage(Number(value));
                                 setCurrentPage(1);
-                            }}
-                            className="bg-background border border-border text-foreground text-sm rounded-md focus:ring-ring focus:border-ring block p-1.5 outline-none"
-                        >
-                            <option value={10}>10 por página</option>
-                            <option value={25}>25 por página</option>
-                            <option value={50}>50 por página</option>
-                            <option value={100}>100 por página</option>
-                        </select>
+                            }}>
+                            <SelectTrigger className="bg-background border border-border text-foreground text-sm rounded-md h-9 w-[140px]">
+                                <SelectValue placeholder="Itens" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="10">10 por página</SelectItem>
+                                <SelectItem value="25">25 por página</SelectItem>
+                                <SelectItem value="50">50 por página</SelectItem>
+                                <SelectItem value="100">100 por página</SelectItem>
+                            </SelectContent>
+                        </Select>
 
                         <div className="flex items-center gap-1">
                             <button

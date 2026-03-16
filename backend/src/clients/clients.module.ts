@@ -6,6 +6,7 @@ import { DealsModule } from '../deals/deals.module';
 import { AutomationsModule } from '../automations/automations.module';
 import { TabulationsModule } from '../tabulations/tabulations.module';
 import { ResponsibilityModule } from '../modules/responsibility/responsibility.module';
+import { SecurityModule } from '../security/security.module';
 
 @Module({
     imports: [
@@ -13,6 +14,7 @@ import { ResponsibilityModule } from '../modules/responsibility/responsibility.m
         DealsModule,
         AutomationsModule,
         TabulationsModule,
+        SecurityModule,
         forwardRef(() => ResponsibilityModule)
     ],
     controllers: [ClientsController],

@@ -18,9 +18,25 @@ export default function Home() {
 
         try {
             const user = JSON.parse(storedUser);
+            const leadRegistrationEnabled = user?.system_settings?.lead_registration_enabled !== false;
+            const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
+            const canCreateLead = user?.role === 'ADMIN' || permissions.includes('crm.create_lead');
+
+            const resolveOperatorRoute = () => {
+                switch (user?.initial_page) {
+                    case 'LEAD_PULL':
+                        return '/pull-leads';
+                    case 'KANBAN':
+                        return '/kanban';
+                    case 'NEW_CLIENT':
+                        return leadRegistrationEnabled && canCreateLead ? '/new-client' : '/pull-leads';
+                    default:
+                        return leadRegistrationEnabled && canCreateLead ? '/new-client' : '/pull-leads';
+                }
+            };
 
             if (user.role === 'OPERATOR') {
-                router.push('/new-client');
+                router.push(resolveOperatorRoute());
             } else {
                 router.push('/kanban');
             }

@@ -22,6 +22,7 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar, ChevronDown } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface SmartDateFilterProps {
     label: string;
@@ -245,15 +246,19 @@ export function SmartDateFilter({ label, startDate, endDate, onFilterChange }: S
                 {label}
             </label>
             <div className="space-y-2">
-                <select
+                <Select
                     value={selectedPreset}
-                    onChange={(e) => handlePresetChange(e.target.value as PresetType)}
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors data-[placeholder]:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    onValueChange={(value) => handlePresetChange(value as PresetType)}
                 >
-                    {Object.entries(PRESETS).map(([key, value]) => (
-                        <option key={key} value={key}>{value}</option>
-                    ))}
-                </select>
+                    <SelectTrigger className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm">
+                        <SelectValue placeholder="Qualquer data" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {Object.entries(PRESETS).map(([key, value]) => (
+                            <SelectItem key={key} value={key}>{value}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
 
                 {/* Conditional Inputs */}
                 {(selectedPreset === 'last_n' || selectedPreset === 'next_n') && (

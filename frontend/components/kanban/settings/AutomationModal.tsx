@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, Zap, X } from "lucide-react";
 
 interface AutomationModalProps {
@@ -117,24 +118,26 @@ export function AutomationModal({
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
                                 <Label>Gatilho (Quando...)</Label>
-                                <select
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-950 dark:border-zinc-800 dark:text-gray-100"
-                                    value={trigger}
-                                    onChange={e => setTrigger(e.target.value)}
-                                >
-                                    {TRIGGERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                </select>
+                                <Select value={trigger} onValueChange={setTrigger}>
+                                    <SelectTrigger className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm dark:bg-zinc-950 dark:border-zinc-800 dark:text-gray-100">
+                                        <SelectValue placeholder="Selecione" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {TRIGGERS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="grid gap-2">
                                 <Label>Na Etapa (Onde...)</Label>
-                                <select
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-950 dark:border-zinc-800 dark:text-gray-100"
-                                    value={stageId || "ALL"}
-                                    onChange={e => setStageId(e.target.value)}
-                                >
-                                    <option value="ALL">Todas as Etapas</option>
-                                    {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
+                                <Select value={stageId || "ALL"} onValueChange={setStageId}>
+                                    <SelectTrigger className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm dark:bg-zinc-950 dark:border-zinc-800 dark:text-gray-100">
+                                        <SelectValue placeholder="Todas as Etapas" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ALL">Todas as Etapas</SelectItem>
+                                        {stages.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
                     </div>
@@ -159,55 +162,59 @@ export function AutomationModal({
                                 <div className="flex-1 space-y-3">
                                     <div className="w-full">
                                         <Label className="text-xs text-gray-500 mb-1 block">Tipo de Ação</Label>
-                                        <select
-                                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors dark:bg-zinc-950 dark:border-zinc-800 dark:text-gray-100"
-                                            value={action.type}
-                                            onChange={(e) => updateAction(idx, 'type', e.target.value)}
-                                        >
-                                            {ACTION_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                        </select>
+                                        <Select value={action.type} onValueChange={(value) => updateAction(idx, 'type', value)}>
+                                            <SelectTrigger className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors dark:bg-zinc-950 dark:border-zinc-800 dark:text-gray-100">
+                                                <SelectValue placeholder="Tipo de ação" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {ACTION_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
 
                                     {/* Dynamic Fields based on Type */}
                                     {action.type === 'MOVE_STAGE' && (
                                         <div>
                                             <Label className="text-xs text-gray-500 mb-1 block">Mover para</Label>
-                                            <select
-                                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors dark:bg-zinc-950 dark:border-zinc-800 dark:text-gray-100"
-                                                value={action.target_stage_id || ''}
-                                                onChange={(e) => updateAction(idx, 'target_stage_id', e.target.value)}
-                                            >
-                                                <option value="">Selecione a etapa...</option>
-                                                {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                            </select>
+                                            <Select value={action.target_stage_id || '__none__'} onValueChange={(value) => updateAction(idx, 'target_stage_id', value === '__none__' ? '' : value)}>
+                                                <SelectTrigger className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors dark:bg-zinc-950 dark:border-zinc-800 dark:text-gray-100">
+                                                    <SelectValue placeholder="Selecione a etapa..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="__none__">Selecione a etapa...</SelectItem>
+                                                    {stages.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                     )}
 
                                     {action.type === 'UPDATE_RESPONSIBLE' && (
                                         <div>
                                             <Label className="text-xs text-gray-500 mb-1 block">Novo Responsável</Label>
-                                            <select
-                                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors dark:bg-zinc-950 dark:border-zinc-800 dark:text-gray-100"
-                                                value={action.responsible_id || ''}
-                                                onChange={(e) => updateAction(idx, 'responsible_id', e.target.value)}
-                                            >
-                                                <option value="">Selecione o usuário...</option>
-                                                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                                            </select>
+                                            <Select value={action.responsible_id || '__none__'} onValueChange={(value) => updateAction(idx, 'responsible_id', value === '__none__' ? '' : value)}>
+                                                <SelectTrigger className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors dark:bg-zinc-950 dark:border-zinc-800 dark:text-gray-100">
+                                                    <SelectValue placeholder="Selecione o usuário..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="__none__">Selecione o usuário...</SelectItem>
+                                                    {users.map((u) => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                     )}
 
                                     {(action.type === 'ADD_TAG' || action.type === 'REMOVE_TAG') && (
                                         <div>
                                             <Label className="text-xs text-gray-500 mb-1 block">Tag</Label>
-                                            <select
-                                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors dark:bg-zinc-950 dark:border-zinc-800 dark:text-gray-100"
-                                                value={action.tag_id || ''}
-                                                onChange={(e) => updateAction(idx, 'tag_id', e.target.value)}
-                                            >
-                                                <option value="">Selecione a tag...</option>
-                                                {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                            </select>
+                                            <Select value={action.tag_id || '__none__'} onValueChange={(value) => updateAction(idx, 'tag_id', value === '__none__' ? '' : value)}>
+                                                <SelectTrigger className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors dark:bg-zinc-950 dark:border-zinc-800 dark:text-gray-100">
+                                                    <SelectValue placeholder="Selecione a tag..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="__none__">Selecione a tag...</SelectItem>
+                                                    {tags.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                     )}
 

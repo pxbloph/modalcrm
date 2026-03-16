@@ -1,4 +1,4 @@
-import { Module, MiddlewareConsumer, RequestMethod, NestModule } from '@nestjs/common';
+﻿import { Module, MiddlewareConsumer, RequestMethod, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
@@ -27,6 +27,11 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
+import { SecurityModule } from './security/security.module';
+import { DatabaseSettingsModule } from './database-settings/database-settings.module';
+import { VpsTerminalModule } from './vps-terminal/vps-terminal.module';
+import { SystemNotificationsModule } from './system-notifications/system-notifications.module';
+import { DevNotesModule } from './dev-notes/dev-notes.module';
 
 // Audit System Imports
 import { ClsModule } from 'nestjs-cls';
@@ -78,6 +83,11 @@ import { RequestContextMiddleware } from './common/middleware/request-context.mi
         KanbanPreferencesModule,
         WebhooksModule,
         ApiKeysModule,
+        SecurityModule,
+        DatabaseSettingsModule,
+        VpsTerminalModule,
+        SystemNotificationsModule,
+        DevNotesModule,
         ServeStaticModule.forRoot({
             rootPath: join(__dirname, '..', 'uploads'),
             serveRoot: '/api/uploads',
@@ -98,3 +108,10 @@ export class AppModule implements NestModule {
             .forRoutes('*');
     }
 }
+
+
+
+
+
+
+

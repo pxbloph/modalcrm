@@ -4,6 +4,7 @@ import api from "@/lib/api";
 import { useToast } from "@/components/ui/use-toast";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface AutomationFormProps {
     pipelineId: string;
@@ -137,22 +138,26 @@ export function AutomationForm({ pipelineId, stages, initialData, onClose, onSav
 
                         <div>
                             <Label>Gatilho (Trigger)</Label>
-                            <select
-                                className="w-full mt-1 p-2 border rounded-md dark:bg-zinc-800 dark:border-zinc-700"
-                                value={trigger} onChange={e => setTrigger(e.target.value)}
-                            >
-                                {TRIGGERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                            </select>
+                            <Select value={trigger} onValueChange={setTrigger}>
+                                <SelectTrigger className="w-full mt-1 p-2 border rounded-md dark:bg-zinc-800 dark:border-zinc-700">
+                                    <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {TRIGGERS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div>
                             <Label>Etapa Vinculada</Label>
-                            <select
-                                className="w-full mt-1 p-2 border rounded-md dark:bg-zinc-800 dark:border-zinc-700"
-                                value={stageId || ""} onChange={e => setStageId(e.target.value)}
-                            >
-                                {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
+                            <Select value={stageId || ""} onValueChange={setStageId}>
+                                <SelectTrigger className="w-full mt-1 p-2 border rounded-md dark:bg-zinc-800 dark:border-zinc-700">
+                                    <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {stages.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 
@@ -185,13 +190,14 @@ export function AutomationForm({ pipelineId, stages, initialData, onClose, onSav
                                     <div className="grid gap-3">
                                         <div>
                                             <Label className="text-xs text-gray-500">Tipo de Ação</Label>
-                                            <select
-                                                className="w-full mt-1 p-1.5 text-sm border rounded dark:bg-zinc-800 dark:border-zinc-600"
-                                                value={action.type}
-                                                onChange={e => updateAction(idx, 'type', e.target.value)}
-                                            >
-                                                {ACTION_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                            </select>
+                                            <Select value={action.type} onValueChange={(value) => updateAction(idx, 'type', value)}>
+                                                <SelectTrigger className="w-full mt-1 p-1.5 text-sm border rounded dark:bg-zinc-800 dark:border-zinc-600">
+                                                    <SelectValue placeholder="Tipo de ação" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {ACTION_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
 
                                         {/* Dynamic Fields based on Type */}
@@ -210,14 +216,15 @@ export function AutomationForm({ pipelineId, stages, initialData, onClose, onSav
                                         {action.type === 'MOVE_STAGE' && (
                                             <div>
                                                 <Label className="text-xs">Mover para etapa</Label>
-                                                <select
-                                                    className="w-full mt-1 p-1.5 text-sm border rounded dark:bg-zinc-800 dark:border-zinc-600"
-                                                    value={action.target_stage_id || ""}
-                                                    onChange={e => updateActionConfig(idx, 'target_stage_id', e.target.value)}
-                                                >
-                                                    <option value="">Selecione...</option>
-                                                    {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                                </select>
+                                                <Select value={action.target_stage_id || '__none__'} onValueChange={(value) => updateActionConfig(idx, 'target_stage_id', value === '__none__' ? '' : value)}>
+                                                    <SelectTrigger className="w-full mt-1 p-1.5 text-sm border rounded dark:bg-zinc-800 dark:border-zinc-600">
+                                                        <SelectValue placeholder="Selecione..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="__none__">Selecione...</SelectItem>
+                                                        {stages.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
                                         )}
 

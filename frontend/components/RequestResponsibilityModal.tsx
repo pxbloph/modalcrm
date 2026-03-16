@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Send } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface RequestResponsibilityModalProps {
     leadId: string;
@@ -56,15 +57,16 @@ export function RequestResponsibilityModal({ leadId, currentUser, users, onClose
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Novo Responsável</label>
-                        <select
-                            value={selectedUser}
-                            onChange={(e) => setSelectedUser(e.target.value)}
-                            className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none"
-                        >
-                            {users.map((u: any) => (
-                                <option key={u.id} value={u.id}>{u.name} {u.surname}</option>
-                            ))}
-                        </select>
+                        <Select value={selectedUser} onValueChange={setSelectedUser}>
+                            <SelectTrigger className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none">
+                                <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {users.map((u: any) => (
+                                    <SelectItem key={u.id} value={u.id}>{u.name} {u.surname}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <div>

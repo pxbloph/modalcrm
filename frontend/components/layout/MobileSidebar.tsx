@@ -1,6 +1,5 @@
 'use client';
 
-import { Fragment } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -12,6 +11,7 @@ interface NavigationItem {
     href?: string;
     icon: LucideIcon;
     show: boolean;
+    newTab?: boolean;
     children?: {
         name: string;
         href: string;
@@ -54,7 +54,7 @@ export default function MobileSidebar({ open, setOpen, navigation, onLogout }: M
                 <div className="flex items-center justify-between mb-8">
                     {/* AJUSTE DE TAMANHO DO LOGO MOBILE: Altere w-40 e h-12 */}
                     {/* AJUSTE DE TAMANHO DO LOGO MOBILE: Altere w-40 e h-12 */}
-                    <div className="relative w-48 h -14">
+                    <div className="relative w-48 h-14">
                         <Image
                             src="/logo_Logo_black.svg"
                             alt="Modal CRM"
@@ -122,6 +122,8 @@ export default function MobileSidebar({ open, setOpen, navigation, onLogout }: M
                                         <li key={item.name}>
                                             <Link
                                                 href={item.href!}
+                                                target={item.newTab ? "_blank" : undefined}
+                                                rel={item.newTab ? "noopener noreferrer" : undefined}
                                                 onClick={() => setOpen(false)}
                                                 className={cn(
                                                     isActive

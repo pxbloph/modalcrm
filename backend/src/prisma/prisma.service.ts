@@ -1,14 +1,46 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { PrismaClient, Prisma } from '@prisma/client';
+﻿import { Injectable, OnModuleDestroy, OnModuleInit, Logger } from '@nestjs/common';
+import { Prisma, PrismaClient } from '@prisma/client';
+
+export type DatabaseQueryLog = {
+    id: string;
+    timestamp: string;
+    durationMs: number;
+    query: string;
+    params: string;
+    target?: string;
+};
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+    private readonly logger = new Logger(PrismaService.name);
+    private readonly maxQueryLogs = 5000;
+    private readonly queryLogs: DatabaseQueryLog[] = [];
 
     constructor() {
-        super();
-        // Middleware para interceptar criações/atualizações e subtrair 3 horas das datas 
-        // para que o Prisma (que envia sempre como UTC absoluto) faça o banco armazenar
-        // com a "cara" da hora do Brasil.
+        super({
+            log: [
+                { emit: 'event', level: 'query' },
+                { emit: 'stdout', level: 'error' },
+                { emit: 'stdout', level: 'warn' },
+            ],
+        });
+
+        (this as any).$on('query', (event: Prisma.QueryEvent) => {
+            const log: DatabaseQueryLog = {
+                id: `${event.timestamp.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
+                timestamp: event.timestamp.toISOString(),
+                durationMs: event.duration,
+                query: event.query,
+                params: event.params,
+                target: event.target,
+            };
+
+            this.queryLogs.push(log);
+            if (this.queryLogs.length > this.maxQueryLogs) {
+                this.queryLogs.splice(0, this.queryLogs.length - this.maxQueryLogs);
+            }
+        });
+
         this.$use(async (params, next) => {
             if (['create', 'update', 'createMany', 'updateMany', 'upsert'].includes(params.action)) {
                 this.injectTimestamps(params);
@@ -16,9 +48,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             }
             const result = await next(params);
 
-            // Opcional: Deslocar de volta a leitura (Se o banco devolver o número "cru", 
-            // no JS pode ficar 3 horas diferente do esperado se não voltarmos).
-            // Apenas leitura (find)
             if (['findUnique', 'findFirst', 'findMany'].includes(params.action) && result) {
                 this.shiftDatesRecursivelyRead(result);
             }
@@ -29,23 +58,96 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
     async onModuleInit() {
         await this.$connect();
-        // Opcionalmente forçar a timezone transacionalmente neste pool, 
-        // mas o Prisma client não mantém sessões vivas fixas a menos que via transaction.
     }
 
     async onModuleDestroy() {
         await this.$disconnect();
     }
 
-    // Função para descer a hora antes de enviar pro banco
+    getQueryLogs(limit = 200) {
+        const safeLimit = Math.max(1, Math.min(5000, Number(limit) || 200));
+        return [...this.queryLogs].reverse().slice(0, safeLimit);
+    }
+
+    async getCurrentConnectionInfo() {
+        try {
+            const rows = await this.$queryRawUnsafe<Array<{ database: string; user: string; host: string | null; port: number | null }>>(
+                'select current_database() as database, current_user as "user", inet_server_addr()::text as host, inet_server_port() as port'
+            );
+            return rows[0] || null;
+        } catch {
+            return null;
+        }
+    }
+
+    async testConnection(databaseUrl: string) {
+        const client = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+        try {
+            await client.$connect();
+            const rows = await client.$queryRawUnsafe<Array<{ database: string; user: string; host: string | null; port: number | null }>>(
+                'select current_database() as database, current_user as "user", inet_server_addr()::text as host, inet_server_port() as port'
+            );
+            return rows[0] || null;
+        } finally {
+            await client.$disconnect();
+        }
+    }
+
+    async switchDatabaseUrl(databaseUrl: string) {
+        const previousUrl = process.env.DATABASE_URL;
+        const internal = this as any;
+
+        try {
+            await this.$disconnect();
+
+            process.env.DATABASE_URL = databaseUrl;
+
+            if (internal._engineConfig) {
+                internal._engineConfig = {
+                    ...internal._engineConfig,
+                    datasourceUrl: databaseUrl,
+                };
+            }
+
+            if (internal._engine) {
+                try {
+                    await internal._engine.stop?.();
+                } catch (error) {
+                    this.logger.warn(`Falha ao parar engine antiga: ${String(error)}`);
+                }
+                internal._engine = undefined;
+            }
+
+            await this.$connect();
+            return { applied: true };
+        } catch (error) {
+            if (previousUrl) {
+                process.env.DATABASE_URL = previousUrl;
+                if (internal._engineConfig) {
+                    internal._engineConfig = {
+                        ...internal._engineConfig,
+                        datasourceUrl: previousUrl,
+                    };
+                }
+                try {
+                    await this.$connect();
+                } catch {
+                    // noop
+                }
+            }
+            return {
+                applied: false,
+                error: error instanceof Error ? error.message : 'Falha ao trocar conexão em runtime.',
+            };
+        }
+    }
+
     private shiftDatesRecursively(obj: any) {
         if (!obj || typeof obj !== 'object') return;
 
         for (const key of Object.keys(obj)) {
             const value = obj[key];
             if (value instanceof Date) {
-                // Diminui 3 horas. Quando o Prisma converter para string UTC, ele vai mandar 
-                // para o Postgres algo como '23:00' (que era o real do Brasil) em vez de '02:00'.
                 obj[key] = new Date(value.getTime() - (3 * 60 * 60 * 1000));
             } else if (typeof value === 'object') {
                 this.shiftDatesRecursively(value);
@@ -53,14 +155,12 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         }
     }
 
-    // Função para subir a hora quando o banco cruzar os dados de volta
     private shiftDatesRecursivelyRead(obj: any) {
         if (!obj || typeof obj !== 'object') return;
 
         for (const key of Object.keys(obj)) {
             const value = obj[key];
             if (value instanceof Date) {
-                // Na leitura, ele vai voltar reduzido em 3h, então repomos pra o JS ficar feliz.
                 obj[key] = new Date(value.getTime() + (3 * 60 * 60 * 1000));
             } else if (typeof value === 'object') {
                 this.shiftDatesRecursivelyRead(value);
@@ -68,7 +168,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         }
     }
 
-    // Injeta as datas manualmente antes do Prisma Engine gerar silenciosamente em UTC puro
     private injectTimestamps(params: Prisma.MiddlewareParams) {
         if (!params.args) return;
 
@@ -118,6 +217,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             Message: ['created_at'],
             ChatAuditLog: ['created_at'],
             LeadOwnerTransferAudit: ['created_at'],
+            DeletedLeadArchive: ['deleted_at'],
+            SystemSetting: ['created_at', 'updated_at'],
             Pipeline: ['created_at', 'updated_at'],
             PipelineStage: ['created_at', 'updated_at'],
             CustomField: ['created_at', 'updated_at'],
@@ -135,7 +236,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             Tabulation: ['created_at', 'updated_at'],
             Tag: ['created_at', 'updated_at'],
             DealTag: ['assigned_at'],
-            AuditLog: ['created_at']
+            AuditLog: ['created_at'],
         };
     }
 }
+
+
+

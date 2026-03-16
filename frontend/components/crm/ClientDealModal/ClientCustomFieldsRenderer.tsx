@@ -6,12 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { QualificationRadioGroup } from './QualificationRadioGroup';
 
 export function ClientCustomFieldsRenderer({ clientId, className }: { clientId?: string, className?: string }) {
-    const { register, setValue, watch, formState: { errors } } = useFormContext();
+    const { setValue } = useFormContext();
     const [groups, setGroups] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -163,16 +162,12 @@ function FieldInput({ field }: { field: any }) {
             )}
 
             {field.type === 'SELECT' && (
-                <Select value={value || ''} onValueChange={(val: string) => setValue(fieldName, val)}>
-                    <SelectTrigger className="bg-input/20 border-input text-xs">
-                        <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {field.options_json?.map((opt: string) => (
-                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                <QualificationRadioGroup
+                    name={fieldName}
+                    value={value || ''}
+                    onChange={(val) => setValue(fieldName, val)}
+                    options={(field.options_json || []).map((opt: string) => ({ label: opt, value: opt }))}
+                />
             )}
 
             {field.type === 'MULTI_SELECT' && (

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import api from '@/lib/api';
@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 interface ClientRegistrationFormProps {
@@ -35,6 +36,47 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
     const [selectedTabulation, setSelectedTabulation] = useState<string>("");
     const [fields, setFields] = useState<FormField[]>([]);
     const [formData, setFormData] = useState<any>({});
+    const RECOMMENDED_SYSTEM_FIELDS = ['name', 'cnpj', 'email', 'phone', 'surname'];
+
+    const getSystemFieldValue = (systemField: string) => {
+        const field = fields.find((item) => item.systemField === systemField);
+        if (!field) return '';
+        return String(formData[field.id] ?? '').trim();
+    };
+
+    const cnpjDigits = getSystemFieldValue('cnpj').replace(/\D/g, '');
+    const phoneDigits = getSystemFieldValue('phone').replace(/\D/g, '');
+
+    const qualityReasons: string[] = [];
+    let completionScore = 100;
+
+    const missingRecommendedFields = fields.filter((field) => {
+        if (!field.systemField || !RECOMMENDED_SYSTEM_FIELDS.includes(field.systemField)) return false;
+        const value = String(formData[field.id] ?? '').trim();
+        return value.length === 0;
+    });
+
+    if (missingRecommendedFields.length > 0) {
+        completionScore -= Math.min(30, missingRecommendedFields.length * 6);
+        qualityReasons.push(`Campos recomendados não preenchidos: ${missingRecommendedFields.map((field) => field.label).join(', ')}`);
+    }
+
+    if (phoneDigits.length > 0) {
+        const hasCountryCode = phoneDigits.startsWith('55');
+        const hasDddAndNumber = phoneDigits.length >= 12;
+
+        if (!hasCountryCode || !hasDddAndNumber) {
+            completionScore -= 20;
+            qualityReasons.push('Telefone incompleto: use 55 + DDD + número (ex: 5511999999999).');
+        }
+    }
+
+    if (cnpjDigits.length > 0 && cnpjDigits.length !== 14) {
+        completionScore -= 25;
+        qualityReasons.push('CNPJ inválido para qualidade: o CNPJ deve conter exatamente 14 dígitos.');
+    }
+
+    completionScore = Math.max(0, completionScore);
 
     // Fetch Template & Admin Data
     useEffect(() => {
@@ -197,10 +239,14 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
         });
 
         // Basic Validation
-        if (payload.phone && payload.phone.length < 12) {
-            setError('Telefone deve ter DDI+DDD+Número (ex: 5521999999999)');
-            setSubmitting(false);
-            return;
+        if (payload.phone) {
+            const phoneDigits = String(payload.phone).replace(/\D/g, '');
+            const validPhone = phoneDigits.startsWith('55') && phoneDigits.length >= 12;
+            if (!validPhone) {
+                setError('Telefone inválido. Use 55 + DDD + número (ex: 5511999999999).');
+                setSubmitting(false);
+                return;
+            }
         }
 
         try {
@@ -212,7 +258,7 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
             setStatus('waiting');
         } catch (err: any) {
             console.error(err);
-            setError(err.response?.data?.message || 'Erro ao cadastrar cliente. Verifique se Email, Telefone ou CNPJ já existem.');
+            setError(err.response?.data?.message || 'Erro ao cadastrar cliente. Verifique se e-mail, telefone ou CNPJ já existem.');
             setSubmitting(false);
         }
     };
@@ -274,36 +320,57 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-sm font-medium text-foreground">Qualidade dos dados do lead</p>
+                                <span className="text-sm font-semibold text-foreground">{completionScore}%</span>
+                            </div>
+                            <div className="h-2 w-full rounded-full bg-muted">
+                                <div
+                                    className="h-2 rounded-full bg-amber-500 transition-all duration-300"
+                                    style={{ width: `${completionScore}%` }}
+                                />
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                O cadastro não é bloqueado por campos faltantes. As validações abaixo reduzem a qualidade para orientar o time comercial.
+                            </p>
+                            {qualityReasons.length > 0 && (
+                                <p className="text-xs text-amber-300">
+                                    Motivos da redução: {qualityReasons.join(' | ')}
+                                </p>
+                            )}
+                        </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg border border-border">
                             {isAdminOrSupervisor ? (
                                 <>
                                     <div className="space-y-2">
-                                        <Label className="text-foreground">Responsável *</Label>
-                                        <select
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
-                                            value={selectedResponsible}
-                                            onChange={(e) => setSelectedResponsible(e.target.value)}
-                                            required
-                                        >
-                                            <option value="">Selecione...</option>
-                                            {users.map(u => (
-                                                <option key={u.id} value={u.id}>{u.name} {u.surname}</option>
-                                            ))}
-                                        </select>
+                                        <Label className="text-foreground">Responsável</Label>
+                                        <Select value={selectedResponsible || '__empty__'} onValueChange={(value) => setSelectedResponsible(value === '__empty__' ? '' : value)}>
+                                            <SelectTrigger className="text-foreground">
+                                                <SelectValue placeholder="Selecione..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="__empty__">Selecione...</SelectItem>
+                                                {users.map(u => (
+                                                    <SelectItem key={u.id} value={u.id}>{u.name} {u.surname}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                     <div className="space-y-2">
                                         <Label className="text-foreground">Tabulação (Opcional)</Label>
-                                        <select
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
-                                            value={selectedTabulation}
-                                            onChange={(e) => setSelectedTabulation(e.target.value)}
-                                        >
-                                            <option value="">Selecione...</option>
-                                            {tabulations.map(t => (
-                                                <option key={t} value={t}>{t}</option>
-                                            ))}
-                                        </select>
+                                        <Select value={selectedTabulation || '__empty__'} onValueChange={(value) => setSelectedTabulation(value === '__empty__' ? '' : value)}>
+                                            <SelectTrigger className="text-foreground">
+                                                <SelectValue placeholder="Selecione..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="__empty__">Selecione...</SelectItem>
+                                                {tabulations.map(t => (
+                                                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </>
                             ) : null}
@@ -313,14 +380,14 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
                             <div key={field.id} className={field.type === 'checkbox' ? '' : 'space-y-2'}>
                                 {field.type !== 'checkbox' && (
                                     <Label className="text-foreground">
-                                        {field.label} {field.required && <span className="text-destructive">*</span>}
+                                        {field.label}{field.required && <span className="text-xs text-muted-foreground ml-2">(recomendado)</span>}
                                     </Label>
                                 )}
 
                                 {field.type === 'text' && (
                                     <Input
                                         type="text"
-                                        required={field.required}
+                                        
                                         placeholder={field.placeholder}
                                         value={formData[field.id] || ''}
                                         onChange={e => handleChange(field.id, e.target.value, field)}
@@ -330,7 +397,7 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
                                 {field.type === 'email' && (
                                     <Input
                                         type="email"
-                                        required={field.required}
+                                        
                                         placeholder={field.placeholder}
                                         value={formData[field.id] || ''}
                                         onChange={e => handleChange(field.id, e.target.value, field)}
@@ -340,7 +407,7 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
                                 {field.type === 'number' && (
                                     <Input
                                         type="number"
-                                        required={field.required}
+                                        
                                         placeholder={field.placeholder}
                                         value={formData[field.id] || ''}
                                         onChange={e => handleChange(field.id, e.target.value, field)}
@@ -349,7 +416,7 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
 
                                 {field.type === 'textarea' && (
                                     <textarea
-                                        required={field.required}
+                                        
                                         rows={4}
                                         className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
                                         value={formData[field.id] || ''}
@@ -358,17 +425,20 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
                                 )}
 
                                 {field.type === 'select' && (
-                                    <select
-                                        required={field.required}
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
-                                        value={formData[field.id] || ''}
-                                        onChange={e => handleChange(field.id, e.target.value, field)}
+                                    <Select
+                                        value={formData[field.id] || '__empty__'}
+                                        onValueChange={(value) => handleChange(field.id, value === '__empty__' ? '' : value, field)}
                                     >
-                                        <option value="">Selecione...</option>
-                                        {field.options?.map((opt, idx) => (
-                                            <option key={idx} value={opt.value}>{opt.label}</option>
-                                        ))}
-                                    </select>
+                                        <SelectTrigger className="text-foreground">
+                                            <SelectValue placeholder="Selecione..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__empty__">Selecione...</SelectItem>
+                                            {field.options?.map((opt, idx) => (
+                                                <SelectItem key={idx} value={opt.value}>{opt.label}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 )}
                                 {field.type === 'radio' && (
                                     <div className="flex items-center gap-4">
@@ -377,7 +447,7 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
                                                 <input
                                                     type="radio"
                                                     name={field.id}
-                                                    required={field.required}
+                                                    
                                                     className="form-radio text-primary border-input bg-background focus:ring-primary accent-primary"
                                                     checked={formData[field.id] === opt.value}
                                                     onChange={() => handleChange(field.id, opt.value, field)}
@@ -403,7 +473,7 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
                                 {field.type === 'date' && (
                                     <Input
                                         type="date"
-                                        required={field.required}
+                                        
                                         value={formData[field.id] || ''}
                                         onChange={e => handleChange(field.id, e.target.value, field)}
                                     />
@@ -447,3 +517,7 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
         </div>
     );
 }
+
+
+
+

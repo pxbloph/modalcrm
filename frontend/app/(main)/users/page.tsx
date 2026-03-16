@@ -1,10 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
-import { Loader2, Plus, Users } from 'lucide-react';
-import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import { Plus, Users } from 'lucide-react';
 import UserModal from '@/components/users/UserModal';
 import UserListTable from '@/components/users/UserListTable';
 
@@ -14,13 +12,23 @@ interface User {
     surname?: string;
     email: string;
     role: string;
+    team?: string | null;
     is_active: boolean;
     supervisor: { name: string } | null;
     created_at: string;
+    security_role_id?: string | null;
+    security_role?: { id: string; name: string } | null;
+}
+
+interface CustomRole {
+    id: string;
+    name: string;
+    base_role?: string | null;
 }
 
 export default function UsersPage() {
     const [users, setUsers] = useState<User[]>([]);
+    const [customRoles, setCustomRoles] = useState<CustomRole[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [userToEdit, setUserToEdit] = useState<User | undefined>(undefined);
@@ -28,8 +36,13 @@ export default function UsersPage() {
     const fetchUsers = async () => {
         setLoading(true);
         try {
-            const response = await api.get('/users');
-            setUsers(response.data);
+            const [usersRes, rolesRes] = await Promise.all([
+                api.get('/users'),
+                api.get('/security/roles'),
+            ]);
+
+            setUsers(usersRes.data || []);
+            setCustomRoles(rolesRes.data?.custom_roles || []);
         } catch (error) {
             console.error('Erro ao buscar usuários', error);
         } finally {
@@ -55,9 +68,7 @@ export default function UsersPage() {
         if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
         try {
             await api.delete(`/users/${userId}`);
-            // Optimistic update
             setUsers(users.filter(u => u.id !== userId));
-            // Trigger refetch to be sure or just stick with optimistic
         } catch (err: any) {
             console.error(err);
             alert(err.response?.data?.message || 'Erro ao excluir usuário');
@@ -92,7 +103,9 @@ export default function UsersPage() {
             ) : (
                 <UserListTable
                     users={users}
+                    customRoles={customRoles}
                     loading={loading}
+                    isAdmin={true}
                     onEdit={handleEditClick}
                     onDelete={handleDelete}
                     onRefresh={fetchUsers}
@@ -104,6 +117,7 @@ export default function UsersPage() {
                 onClose={() => setIsModalOpen(false)}
                 onSuccess={handleModalSuccess}
                 userToEdit={userToEdit}
+                customRoles={customRoles}
             />
         </div>
     );

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import api from '@/lib/api';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function EditUserPage() {
     const router = useRouter();
@@ -144,31 +145,32 @@ export default function EditUserPage() {
 
                 <div>
                     <label className="block text-sm font-bold text-gray-900">Função</label>
-                    <select
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 text-gray-900 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                        value={formData.role}
-                        onChange={e => setFormData({ ...formData, role: e.target.value })}
-                    >
-                        <option value="OPERATOR">Operador</option>
-                        <option value="SUPERVISOR">Supervisor</option>
-                        <option value="ADMIN">Administrador</option>
-                    </select>
+                    <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+                        <SelectTrigger className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 text-gray-900 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="OPERATOR">Operador</SelectItem>
+                            <SelectItem value="SUPERVISOR">Supervisor</SelectItem>
+                            <SelectItem value="ADMIN">Administrador</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
 
                 {formData.role === 'OPERATOR' && (
                     <div>
                         <label className="block text-sm font-bold text-gray-900">Supervisor Responsável</label>
-                        <select
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 text-gray-900 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            value={formData.supervisor_id}
-                            onChange={e => setFormData({ ...formData, supervisor_id: e.target.value })}
-                            required
-                        >
-                            <option value="">Selecione um supervisor...</option>
-                            {supervisors.map(sup => (
-                                <option key={sup.id} value={sup.id}>{sup.name}</option>
-                            ))}
-                        </select>
+                        <Select value={formData.supervisor_id || "__none__"} onValueChange={(value) => setFormData({ ...formData, supervisor_id: value === "__none__" ? "" : value })}>
+                            <SelectTrigger className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 text-gray-900 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <SelectValue placeholder="Selecione um supervisor..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">Selecione um supervisor...</SelectItem>
+                                {supervisors.map((sup) => (
+                                    <SelectItem key={sup.id} value={sup.id}>{sup.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 )}
 

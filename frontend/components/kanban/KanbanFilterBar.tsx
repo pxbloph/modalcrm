@@ -1,5 +1,6 @@
 import { Search, Filter, X } from "lucide-react";
 import { useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface User {
     id: string;
@@ -64,27 +65,29 @@ export function KanbanFilterBar({
 
                 {/* Quick Filters */}
                 <div className="flex items-center gap-2">
-                    <select
-                        className={`px-3 py-2 text-sm border rounded-lg outline-none transition-colors cursor-pointer bg-input/50 border-input text-foreground ${filterResponsible ? 'border-primary/50 bg-primary/10 text-primary' : 'hover:border-primary/30'}`}
-                        value={filterResponsible || ''}
-                        onChange={e => setFilterResponsible(e.target.value || null)}
-                    >
-                        <option value="">Responsável</option>
-                        {users.map(u => (
-                            <option key={u.id} value={u.id}>{u.name}</option>
-                        ))}
-                    </select>
+                    <Select value={filterResponsible || '__all__'} onValueChange={(value) => setFilterResponsible(value === '__all__' ? null : value)}>
+                        <SelectTrigger className={`px-3 py-2 text-sm border rounded-lg outline-none transition-colors bg-input/50 border-input text-foreground ${filterResponsible ? 'border-primary/50 bg-primary/10 text-primary' : 'hover:border-primary/30'}`}>
+                            <SelectValue placeholder="Responsável" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all__">Responsável</SelectItem>
+                            {users.map((u) => (
+                                <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
 
-                    <select
-                        className={`px-3 py-2 text-sm border rounded-lg outline-none transition-colors cursor-pointer bg-input/50 border-input text-foreground ${filterTag ? 'border-primary/50 bg-primary/10 text-primary' : 'hover:border-primary/30'}`}
-                        value={filterTag || ''}
-                        onChange={e => setFilterTag(e.target.value || null)}
-                    >
-                        <option value="">Tag</option>
-                        {tags.map(t => (
-                            <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                    </select>
+                    <Select value={filterTag || '__all__'} onValueChange={(value) => setFilterTag(value === '__all__' ? null : value)}>
+                        <SelectTrigger className={`px-3 py-2 text-sm border rounded-lg outline-none transition-colors bg-input/50 border-input text-foreground ${filterTag ? 'border-primary/50 bg-primary/10 text-primary' : 'hover:border-primary/30'}`}>
+                            <SelectValue placeholder="Tag" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all__">Tag</SelectItem>
+                            {tags.map((t) => (
+                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
 
                     {/* Clear Button */}
                     {hasActiveFilters && (

@@ -102,4 +102,16 @@ export class UsersController {
             throw new ForbiddenException(error.message);
         }
     }
+
+    @Patch('batch/bulk-role')
+    async updateRoleBulk(@Body() body: { ids: string[], role: Role, security_role_id?: string | null }, @Request() req) {
+        if (req.user.role !== Role.ADMIN) {
+            throw new ForbiddenException('Apenas administradores podem alterar roles em massa.');
+        }
+        try {
+            return await this.usersService.updateRoleBulk(body.ids, body.role, body.security_role_id ?? null, req.user.id);
+        } catch (error) {
+            throw new ForbiddenException(error.message);
+        }
+    }
 }

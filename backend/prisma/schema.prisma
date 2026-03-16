@@ -26,6 +26,7 @@ model User {
   password_hash String
   role          Role     @default(OPERATOR)
   is_active     Boolean  @default(true)
+  initial_page  String   @default("DEFAULT")
   created_at    DateTime @default(now())
 
   supervisor_id String?
@@ -53,6 +54,7 @@ model User {
   requested_transfers         LeadOwnerTransferAudit[] @relation("TransferRequester")
   legacy_owner_transfers      LeadOwnerTransferAudit[] @relation("TransferOldOwner")
   new_owner_transfers         LeadOwnerTransferAudit[] @relation("TransferNewOwner")
+  deleted_lead_archives       DeletedLeadArchive[]
 
   // Announcement Relations
   authored_announcements Announcement[]
@@ -61,9 +63,17 @@ model User {
   // Audit Relations
   audit_actions          AuditLog[]
   kanban_filter_presets  KanbanFilterPreset[]
-  kanban_preferences     UserKanbanPreference[]
-  
+  kanban_preferences     UserKanbanPreference[]
   api_keys               ApiKey[] @relation("UserApiKeys")
+
+  team                   String?
+
+  security_role_id       String?
+  security_role          SecurityRole? @relation("SecurityRoleAssignments", fields: [security_role_id], references: [id])
+  permissions_override   Json? @default("[]")
+  created_security_roles SecurityRole[] @relation("SecurityRoleCreator")
+  created_dev_notes      DevNote[] @relation("DevNoteCreator")
+  dev_note_daily_views   DevNoteDailyView[]
 
   @@map("users")
 }
@@ -202,8 +212,72 @@ model Client {
   limit_anticipacao_disponivel String? @default("Informação indisponível")
   
   transfer_audits      LeadOwnerTransferAudit[]
-
   @@map("clients")
+}
+
+model DeletedLeadArchive {
+  id                     String   @id @default(uuid())
+  original_lead_id       String
+  name                   String
+  surname                String?
+  cnpj                   String
+  email                  String
+  phone                  String
+  integration_status     String?
+  tabulacao              String?
+  original_owner_id      String?
+  original_owner_name    String?
+  attempted_by_user_id   String
+  attempted_by_user      User     @relation(fields: [attempted_by_user_id], references: [id])
+  archive_reason         String
+  archive_context        String?
+  original_payload       Json?
+  deleted_at             DateTime @default(now())
+  restored_at            DateTime?
+  restored_by_user_id    String?
+  restored_client_id     String?
+
+  @@index([deleted_at])
+  @@index([cnpj])
+  @@index([attempted_by_user_id])
+  @@map("deleted_leads_archive")
+}
+
+model SystemSetting {
+  key         String   @id
+  value_json  Json
+  description String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model DevNote {
+  id                  String   @id @default(uuid())
+  title               String
+  content             String
+  is_active           Boolean  @default(true)
+  show_in_daily_popup Boolean  @default(true)
+  created_by_id       String?
+  created_by          User?    @relation("DevNoteCreator", fields: [created_by_id], references: [id])
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  @@index([is_active, created_at])
+  @@map("dev_notes")
+}
+
+model DevNoteDailyView {
+  id         String   @id @default(uuid())
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  day_key    String
+  created_at DateTime @default(now())
+
+  @@unique([user_id, day_key])
+  @@index([day_key])
+  @@map("dev_note_daily_views")
 }
 
 
@@ -769,6 +843,28 @@ model AuditLogPayload {
   @@map("audit_log_payloads")
 }
 
+
+// --- SECURITY ROLES SYSTEM ---
+
+model SecurityRole {
+  id               String   @id @default(uuid())
+  name             String   @unique
+  description      String?
+  base_role        Role?
+  initial_page     String   @default("DEFAULT")
+  is_system        Boolean  @default(false)
+  permissions_json Json     @default("[]")
+
+  created_by_id    String?
+  created_by       User?    @relation("SecurityRoleCreator", fields: [created_by_id], references: [id])
+
+  users            User[]   @relation("SecurityRoleAssignments")
+
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  @@map("security_roles")
+}
 // --- API KEYS SYSTEM ---
 
 model ApiKey {
@@ -787,4 +883,6 @@ model ApiKey {
   @@index([key])
   @@map("api_keys")
 }
+
+
 

@@ -9,13 +9,14 @@ interface ModalFooterProps {
     onOpenAccount?: () => void;
     saving?: boolean;
     canDelete?: boolean;
+    isBlocked?: boolean;
 }
 
-export function ModalFooter({ onClose, onSave, onDelete, onOpenAccount, saving, canDelete }: ModalFooterProps) {
+export function ModalFooter({ onClose, onSave, onDelete, onOpenAccount, saving, canDelete, isBlocked }: ModalFooterProps) {
     return (
         <div className="px-6 py-4 border-t border-border bg-muted/80 backdrop-blur-sm flex justify-between items-center z-10 sticky bottom-0">
             <div>
-                {canDelete && onDelete && (
+                {canDelete && onDelete && !isBlocked && (
                     <button
                         type="button"
                         onClick={(e) => { e.preventDefault(); onDelete(); }}
@@ -26,7 +27,7 @@ export function ModalFooter({ onClose, onSave, onDelete, onOpenAccount, saving, 
                 )}
             </div>
             <div className="flex gap-4">
-                {onOpenAccount && (
+                {onOpenAccount && !isBlocked && (
                     <button
                         type="button"
                         onClick={(e) => { e.preventDefault(); onOpenAccount(); }}
@@ -42,18 +43,20 @@ export function ModalFooter({ onClose, onSave, onDelete, onOpenAccount, saving, 
                 >
                     Fechar
                 </button>
-                <button
-                    type="button"
-                    onClick={onSave}
-                    disabled={saving}
-                    className={cn(
-                        "px-6 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs shadow-md shadow-primary/20 flex items-center gap-2 transition-all transform active:scale-95 uppercase tracking-wide",
-                        "disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
-                    )}
-                >
-                    {saving ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
-                    {saving ? 'Salvando...' : 'SALVAR'}
-                </button>
+                {!isBlocked && (
+                    <button
+                        type="button"
+                        onClick={onSave}
+                        disabled={saving}
+                        className={cn(
+                            "px-6 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs shadow-md shadow-primary/20 flex items-center gap-2 transition-all transform active:scale-95 uppercase tracking-wide",
+                            "disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
+                        )}
+                    >
+                        {saving ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+                        {saving ? 'Salvando...' : 'SALVAR'}
+                    </button>
+                )}
             </div>
         </div>
     );

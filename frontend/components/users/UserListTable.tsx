@@ -28,8 +28,9 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
-import { Loader2, GripVertical, Trash2, CheckCircle, Settings, RotateCcw, Search, X, Pencil, Ban, Check, UserPlus } from 'lucide-react';
+import { Loader2, GripVertical, Trash2, CheckCircle, Settings, RotateCcw, Search, X, Pencil, Ban, Check, UserPlus, Shield } from 'lucide-react';
 import api from '@/lib/api';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface User {
     id: string;
@@ -37,21 +38,58 @@ interface User {
     surname?: string;
     email: string;
     role: string;
+    team?: string | null;
+    security_role_id?: string | null;
+    security_role?: { id: string; name: string } | null;
     is_active: boolean;
     supervisor: { name: string } | null;
     created_at: string;
 }
 
+interface CustomRole {
+    id: string;
+    name: string;
+    base_role?: string | null;
+}
+
 interface UserListTableProps {
     users: User[];
+    customRoles: CustomRole[];
     loading: boolean;
+    isAdmin?: boolean;
     onEdit: (user: User) => void;
-    onDelete: (userId: string) => Promise<void>; // Single delete
+    onDelete: (userId: string) => Promise<void>;
     onRefresh: () => void;
 }
 
 // --- Constants ---
-const DEFAULT_COLUMN_ORDER = ['select', 'user_info', 'email', 'role', 'is_active', 'supervisor', 'actions'];
+const DEFAULT_COLUMN_ORDER = ['select', 'user_info', 'email', 'role', 'team', 'is_active', 'supervisor', 'actions'];
+
+const TEAM_OPTIONS = [
+    { value: 'none', label: 'Sem equipe' },
+    { value: 'fenix', label: '🐦‍🔥 Fênix' },
+    { value: 'titas', label: '⚔️ Titãs' },
+];
+const SEARCH_FIELD_OPTIONS = [
+    { value: 'user', label: 'Usuário' },
+    { value: 'email', label: 'E-mail' },
+    { value: 'role', label: 'Função' },
+    { value: 'status', label: 'Status' },
+    { value: 'supervisor', label: 'Supervisor' },
+] as const;
+
+const BASE_ROLE_OPTIONS = [
+    { value: 'OPERATOR', label: 'Operador' },
+    { value: 'LEADER', label: 'Líder' },
+    { value: 'SUPERVISOR', label: 'Supervisor' },
+    { value: 'ADMIN', label: 'Administrador' },
+];
+
+const getBaseRoleLabel = (role: string) =>
+    BASE_ROLE_OPTIONS.find((option) => option.value === role)?.label || role;
+
+const getDisplayRoleLabel = (user: User) =>
+    user.security_role?.name?.trim() || getBaseRoleLabel(user.role);
 
 // --- Draggable Header Component (Table) ---
 const DraggableTableHeader = ({ header }: { header: Header<User, unknown> }) => {
@@ -135,16 +173,20 @@ const SortableColumnItem = ({ id, label, isVisible, isFixed, onToggle }: any) =>
 };
 
 
-export default function UserListTable({ users, loading, onEdit, onDelete, onRefresh }: UserListTableProps) {
+export default function UserListTable({ users, customRoles, loading, isAdmin, onEdit, onDelete, onRefresh }: UserListTableProps) {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [actionLoading, setActionLoading] = useState(false);
     const [supervisorModalOpen, setSupervisorModalOpen] = useState(false);
     const [selectedSupervisorId, setSelectedSupervisorId] = useState('');
+    const [roleModalOpen, setRoleModalOpen] = useState(false);
+    const [selectedRoleKey, setSelectedRoleKey] = useState('base:OPERATOR');
 
 
     // Column Config State
     const [columnSelectorOpen, setColumnSelectorOpen] = useState(false);
     const [columnSearch, setColumnSearch] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [searchField, setSearchField] = useState<'user' | 'email' | 'role' | 'status' | 'supervisor'>('user');
 
     // State
     const [columnOrder, setColumnOrder] = useState<string[]>(DEFAULT_COLUMN_ORDER);
@@ -183,10 +225,17 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
 
     // --- Selection Logic ---
     const toggleAll = () => {
-        if (selectedIds.size === users.length && users.length > 0) {
-            setSelectedIds(new Set());
+        const visibleIds = filteredUsers.map((u) => u.id);
+        const visibleSelectedCount = visibleIds.filter((id) => selectedIds.has(id)).length;
+
+        if (visibleSelectedCount === visibleIds.length && visibleIds.length > 0) {
+            const next = new Set(selectedIds);
+            visibleIds.forEach((id) => next.delete(id));
+            setSelectedIds(next);
         } else {
-            setSelectedIds(new Set(users.map(u => u.id)));
+            const next = new Set(selectedIds);
+            visibleIds.forEach((id) => next.add(id));
+            setSelectedIds(next);
         }
     };
 
@@ -237,7 +286,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                         </button>
                         <input
                             type="checkbox"
-                            checked={users.length > 0 && selectedIds.size === users.length}
+                            checked={filteredUsers.length > 0 && filteredUsers.every((u) => selectedIds.has(u.id))}
                             onChange={toggleAll}
                             className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 h-4 w-4 cursor-pointer"
                         />
@@ -292,7 +341,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                             info.getValue() === 'SUPERVISOR' ? "bg-blue-50 text-blue-700 ring-blue-600/20" :
                                 "bg-gray-50 text-gray-600 ring-gray-500/10"
                     )}>
-                        {info.getValue() as string}
+                        {getDisplayRoleLabel(info.row.original)}
                     </span>
                 ),
                 minSize: 120,
@@ -311,6 +360,38 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                     </span>
                 ),
                 minSize: 100,
+            },
+            {
+                id: 'team',
+                header: 'Equipe',
+                cell: ({ row }) => {
+                    const user = row.original;
+                    if (!isAdmin) {
+                        const opt = TEAM_OPTIONS.find(o => o.value === (user.team || 'none'));
+                        return <span className="text-sm text-gray-500">{opt?.label || '-'}</span>;
+                    }
+                    return (
+                        <Select
+                            value={user.team || 'none'}
+                            onValueChange={async (val) => {
+                                try {
+                                    await api.put(`/users/${user.id}`, { team: val === 'none' ? null : val });
+                                    onRefresh();
+                                } catch { /* ignore */ }
+                            }}
+                        >
+                            <SelectTrigger className="h-7 text-xs w-32 border-gray-200">
+                                <SelectValue placeholder="Sem equipe" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {TEAM_OPTIONS.map(o => (
+                                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    );
+                },
+                minSize: 140,
             },
             {
                 id: 'supervisor',
@@ -395,6 +476,11 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
         setSelectedSupervisorId('');
     };
 
+    const handleBulkRoleOpen = () => {
+        setRoleModalOpen(true);
+        setSelectedRoleKey('base:OPERATOR');
+    };
+
     const handleBulkSupervisorSubmit = async () => {
         const count = selectedIds.size;
         if (!selectedSupervisorId && selectedSupervisorId !== null) return;
@@ -421,8 +507,80 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
         }
     };
 
+    const roleOptions = useMemo(() => {
+        const base = BASE_ROLE_OPTIONS.map((role) => ({
+            key: `base:${role.value}`,
+            label: role.label,
+            role: role.value,
+            security_role_id: null as string | null,
+        }));
+
+        const custom = customRoles.map((role) => ({
+            key: `custom:${role.id}`,
+            label: `${role.name} (Personalizada)`,
+            role: role.base_role || 'OPERATOR',
+            security_role_id: role.id,
+        }));
+
+        return [...base, ...custom];
+    }, [customRoles]);
+
+    const handleBulkRoleSubmit = async () => {
+        const selectedRole = roleOptions.find((role) => role.key === selectedRoleKey);
+        if (!selectedRole) {
+            alert('Selecione uma role.');
+            return;
+        }
+
+        setActionLoading(true);
+        try {
+            await api.patch('/users/batch/bulk-role', {
+                ids: Array.from(selectedIds),
+                role: selectedRole.role,
+                security_role_id: selectedRole.security_role_id,
+            });
+            alert(`${selectedIds.size} usuarios atualizados com sucesso.`);
+            setSelectedIds(new Set());
+            setRoleModalOpen(false);
+            if (onRefresh) onRefresh();
+        } catch (error: any) {
+            console.error('Bulk role update failed', error);
+            alert(error.response?.data?.message || 'Erro ao atualizar roles.');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     // Filter supervisors for the modal list
     const supervisorsList = useMemo(() => users.filter(u => u.role === 'SUPERVISOR'), [users]);
+
+    const filteredUsers = useMemo(() => {
+        const term = searchTerm.trim().toLowerCase();
+        if (!term) return users;
+
+        return users.filter((user) => {
+            const fullName = `${user.name || ''} ${user.surname || ''}`.trim().toLowerCase();
+            const email = String(user.email || '').toLowerCase();
+            const role = getDisplayRoleLabel(user).toLowerCase();
+            const status = user.is_active ? 'ativo' : 'inativo';
+            const supervisor = String(user.supervisor?.name || '').toLowerCase();
+
+            switch (searchField) {
+                case 'user':
+                    return fullName.includes(term);
+                case 'email':
+                    return email.includes(term);
+                case 'role':
+                    return role.includes(term);
+                case 'status':
+                    return status.includes(term);
+                case 'supervisor':
+                    return supervisor.includes(term);
+                default:
+                    return false;
+            }
+        });
+    }, [users, searchTerm, searchField]);
 
 
     // --- DnD Sensors (Header) ---
@@ -475,7 +633,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
 
     // Table Instance
     const table = useReactTable({
-        data: users,
+        data: filteredUsers,
         columns,
         getCoreRowModel: getCoreRowModel(),
         columnResizeMode: 'onChange',
@@ -622,6 +780,14 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                             <UserPlus className="h-4 w-4" />
                             Supervisor
                         </button>
+                        <button
+                            onClick={handleBulkRoleOpen}
+                            disabled={actionLoading}
+                            className="flex items-center gap-2 text-sm font-medium text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                            <Shield className="h-4 w-4" />
+                            Role
+                        </button>
 
                         <div className="h-4 w-px bg-gray-300 mx-2" />
                         <button
@@ -643,6 +809,34 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                     </button>
                 </div>
             )}
+
+            <div className="bg-white shadow-sm border border-gray-200 sm:rounded-lg dark:bg-zinc-900 dark:border-zinc-800 p-4">
+                <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-3">
+                    <Select value={searchField} onValueChange={(value) => setSearchField(value as 'user' | 'email' | 'role' | 'status' | 'supervisor')}>
+                        <SelectTrigger className="h-10 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-700 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-100">
+                            <SelectValue placeholder="Campo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {SEARCH_FIELD_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    <div className="relative">
+                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Buscar usuário..."
+                            className="w-full h-10 pl-9 pr-3 rounded-md border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-100"
+                        />
+                    </div>
+                </div>
+            </div>
 
             <div className="bg-white shadow-sm border border-gray-200 sm:rounded-lg dark:bg-zinc-900 dark:border-zinc-800 overflow-hidden">
                 <DndContext
@@ -675,7 +869,7 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                                 ))}
                             </thead>
                             <tbody className="divide-y divide-gray-200 bg-white dark:divide-zinc-800 dark:bg-zinc-900">
-                                {users.length === 0 ? (
+                                {filteredUsers.length === 0 ? (
                                     <tr>
                                         <td
                                             colSpan={columns.length}
@@ -739,17 +933,18 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Supervisor
                                     </label>
-                                    <select
-                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border text-gray-900"
-                                        value={selectedSupervisorId}
-                                        onChange={(e) => setSelectedSupervisorId(e.target.value)}
-                                    >
-                                        <option value="">Selecione...</option>
-                                        <option value="none">-- Nenhum (Remover) --</option>
-                                        {supervisorsList.map(s => (
-                                            <option key={s.id} value={s.id}>{s.name} {s.surname ? s.surname : ''}</option>
-                                        ))}
-                                    </select>
+                                    <Select value={selectedSupervisorId || "__empty__"} onValueChange={(value) => setSelectedSupervisorId(value === "__empty__" ? "" : value)}>
+                                        <SelectTrigger className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border text-gray-900">
+                                            <SelectValue placeholder="Selecione..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__empty__">Selecione...</SelectItem>
+                                            <SelectItem value="none">-- Nenhum (Remover) --</SelectItem>
+                                            {supervisorsList.map((s) => (
+                                                <SelectItem key={s.id} value={s.id}>{s.name} {s.surname ? s.surname : ''}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
 
                                 <div className="flex justify-end gap-3 pt-2">
@@ -773,6 +968,60 @@ export default function UserListTable({ users, loading, onEdit, onDelete, onRefr
                     </>
                 )
             }
+
+            {roleModalOpen && (
+                <>
+                    <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm" onClick={() => setRoleModalOpen(false)} />
+                    <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-full max-w-md bg-white rounded-xl shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900">Atualizar Role em Massa</h3>
+                            <button onClick={() => setRoleModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <p className="text-sm text-gray-500 mb-4">
+                            Selecione a nova role para os <span className="font-medium text-gray-900">{selectedIds.size}</span> usuarios selecionados.
+                        </p>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Role
+                                </label>
+                                <Select value={selectedRoleKey} onValueChange={setSelectedRoleKey}>
+                                    <SelectTrigger className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border text-gray-900">
+                                        <SelectValue placeholder="Selecione..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {roleOptions.map((role) => (
+                                            <SelectItem key={role.key} value={role.key}>{role.label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button
+                                    onClick={() => setRoleModalOpen(false)}
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleBulkRoleSubmit}
+                                    disabled={actionLoading || !selectedRoleKey}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                                    Salvar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 }
+

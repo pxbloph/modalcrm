@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AddFieldModal } from './AddFieldModal';
 import { FILTER_FIELDS, FilterField } from '@/lib/filter-definitions';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface FilterPanelProps {
     users: { id: string, name: string; surname?: string }[];
@@ -64,29 +65,31 @@ export function FilterPanel({
             case 'select':
                 const options = field.id === 'tabulation' ? tabulationOptions : (field.options?.map(o => o.value) || []);
                 return (
-                    <select
-                        className="w-full h-9 px-3 text-sm border rounded-md bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 focus:ring-1 focus:ring-green-500 outline-none appearance-none"
-                        value={value}
-                        onChange={(e) => onFilterChange(field.id, e.target.value)}
-                    >
-                        <option value="">Todas</option>
-                        {options.map((opt, idx) => (
-                            <option key={idx} value={opt}>{opt}</option>
-                        ))}
-                    </select>
+                    <Select value={value || '__all__'} onValueChange={(val) => onFilterChange(field.id, val === '__all__' ? '' : val)}>
+                        <SelectTrigger className="w-full h-9 px-3 text-sm border rounded-md bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700">
+                            <SelectValue placeholder="Todas" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all__">Todas</SelectItem>
+                            {options.map((opt, idx) => (
+                                <SelectItem key={idx} value={opt}>{opt}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 );
             case 'user':
                 return (
-                    <select
-                        className="w-full h-9 px-3 text-sm border rounded-md bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 focus:ring-1 focus:ring-green-500 outline-none appearance-none"
-                        value={value}
-                        onChange={(e) => onFilterChange(field.id, e.target.value)}
-                    >
-                        <option value="">Todos</option>
-                        {users.map(u => (
-                            <option key={u.id} value={u.id}>{u.name} {u.surname || ''}</option>
-                        ))}
-                    </select>
+                    <Select value={value || '__all__'} onValueChange={(val) => onFilterChange(field.id, val === '__all__' ? '' : val)}>
+                        <SelectTrigger className="w-full h-9 px-3 text-sm border rounded-md bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700">
+                            <SelectValue placeholder="Todos" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all__">Todos</SelectItem>
+                            {users.map((u) => (
+                                <SelectItem key={u.id} value={u.id}>{u.name} {u.surname || ''}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 );
             case 'date-range':
                 // Assuming value is { from, to } or string?

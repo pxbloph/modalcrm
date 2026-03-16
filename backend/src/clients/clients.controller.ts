@@ -4,14 +4,43 @@ import { TabulationsService } from '../tabulations/tabulations.service';
 import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 import * as XLSX from 'xlsx';
+import { SecurityService } from '../security/security.service';
 
 @Controller('clients')
 @UseGuards(AuthGuard('jwt'))
 export class ClientsController {
     constructor(
         private readonly clientsService: ClientsService,
-        private readonly tabulationsService: TabulationsService
+        private readonly tabulationsService: TabulationsService,
+        private readonly securityService: SecurityService,
     ) { }
+
+    private async ensureArchiveAccess(req: any) {
+        if (req?.user?.role === 'ADMIN') return;
+        await this.securityService.ensurePermission(
+            req.user.id,
+            'settings.deleted_leads_archive.view',
+            'Sem permissão para visualizar leads excluídos arquivados.',
+        );
+    }
+
+    private async ensureArchiveEditAccess(req: any) {
+        if (req?.user?.role === 'ADMIN') return;
+        await this.securityService.ensurePermission(
+            req.user.id,
+            'settings.deleted_leads_archive.edit',
+            'Sem permissão para editar leads excluídos arquivados.',
+        );
+    }
+
+    private async ensureArchiveRestoreAccess(req: any) {
+        if (req?.user?.role === 'ADMIN') return;
+        await this.securityService.ensurePermission(
+            req.user.id,
+            'settings.deleted_leads_archive.restore',
+            'Sem permissão para devolver leads excluídos para a base.',
+        );
+    }
 
     @Post()
     create(@Body() createClientDto: any, @Request() req) {
@@ -85,6 +114,36 @@ export class ClientsController {
     @Get('notifications')
     async getNotifications(@Request() req) {
         return this.clientsService.checkNotifications(req.user);
+    }
+
+    @Get('deleted-leads-archive')
+    async getDeletedLeadsArchive(@Request() req, @Query() query) {
+        await this.ensureArchiveAccess(req);
+        return this.clientsService.getDeletedLeadsArchive(query);
+    }
+
+    @Get('deleted-leads-archive/:id')
+    async getDeletedLeadArchive(@Param('id') id: string, @Request() req) {
+        await this.ensureArchiveAccess(req);
+        return this.clientsService.getDeletedLeadArchiveById(id);
+    }
+
+    @Put('deleted-leads-archive/:id')
+    async updateDeletedLeadArchive(@Param('id') id: string, @Body() body: any, @Request() req) {
+        await this.ensureArchiveEditAccess(req);
+        return this.clientsService.updateDeletedLeadArchive(id, body);
+    }
+
+    @Post('deleted-leads-archive/:id/restore')
+    async restoreDeletedLeadArchive(@Param('id') id: string, @Request() req) {
+        await this.ensureArchiveRestoreAccess(req);
+        return this.clientsService.restoreDeletedLeadArchive(id, req.user);
+    }
+
+    @Post('deleted-leads-archive/restore-bulk')
+    async restoreDeletedLeadArchiveBulk(@Body('ids') ids: string[], @Request() req) {
+        await this.ensureArchiveRestoreAccess(req);
+        return this.clientsService.restoreDeletedLeadArchiveBulk(ids, req.user);
     }
 
     @Delete('batch/bulk-delete')

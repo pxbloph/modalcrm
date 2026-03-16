@@ -1,10 +1,10 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { Users, LayoutDashboard, LogOut, PlusCircle, ShieldCheck, Menu, ChevronLeft, ChevronRight, Settings, BarChart, Upload, MessageCircle, Briefcase, UserCheck, Loader2, Key } from 'lucide-react';
+import { Users, LayoutDashboard, LogOut, PlusCircle, ShieldCheck, Menu, ChevronLeft, ChevronRight, Settings, BarChart, Upload, MessageCircle, Briefcase, UserCheck, Loader2, Key, Database } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -12,6 +12,7 @@ import MobileSidebar from '@/components/layout/MobileSidebar';
 import { ChatProvider } from '@/components/chat/ChatContext';
 import ChatButton from '@/components/chat/ChatButton';
 import { ModeToggle } from '@/components/mode-toggle';
+import { DevNotesWidget } from '@/components/dev-notes/DevNotesWidget';
 import WalletModal from '@/components/clients/WalletModal';
 import { LeadTransferButton } from '@/components/crm/LeadTransferButton';
 
@@ -30,21 +31,53 @@ export default function DashboardLayout({
     const [isCollapsed, setIsCollapsed] = useState(false);
 
     useEffect(() => {
+        const token = localStorage.getItem('token');
         const storedUser = localStorage.getItem('user');
-        if (!storedUser || storedUser === 'undefined') {
+        let parsedUser: any = null;
+
+        if (!token) {
             router.push('/login');
             return;
         }
-        try {
-            setUser(JSON.parse(storedUser));
-        } catch (error) {
-            console.error('Error parsing user data:', error);
-            localStorage.removeItem('user'); // Clear bad data
-            router.push('/login');
+
+        if (storedUser && storedUser !== 'undefined') {
+            try {
+                parsedUser = JSON.parse(storedUser);
+                setUser(parsedUser);
+            } catch (error) {
+                console.error('Error parsing user data:', error);
+                localStorage.removeItem('user');
+            }
         }
 
-        // Load Sidebar Preference
-        // Default to false if not set
+        api.get('/auth/me')
+            .then((res) => {
+                const authUser = res.data;
+                if (!authUser?.id) {
+                    throw new Error('Invalid auth/me response');
+                }
+
+                const mergedUser = {
+                    ...(parsedUser || {}),
+                    id: authUser.id,
+                    name: authUser.name,
+                    email: authUser.email,
+                    role: authUser.role,
+                    permissions: Array.isArray(authUser.permissions) ? authUser.permissions : [],
+                    initial_page: authUser.initial_page || 'DEFAULT',
+                    system_settings: authUser.system_settings || {},
+                };
+
+                setUser(mergedUser);
+                localStorage.setItem('user', JSON.stringify(mergedUser));
+            })
+            .catch((error) => {
+                console.error('Error validating auth session:', error);
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                router.push('/login');
+            });
+
         const collapsedPref = localStorage.getItem('sidebar-collapsed');
         if (collapsedPref === 'true') {
             setIsCollapsed(true);
@@ -75,20 +108,136 @@ export default function DashboardLayout({
 
     if (!user) return null;
 
+        const userPermissions = Array.isArray(user.permissions) ? user.permissions : [];
+    const permissionsSet = new Set<string>(userPermissions);
+    const hasPermission = (permission: string) => user.role === 'ADMIN' || permissionsSet.has(permission);
+
+    const canAccessTvDashboard =
+        user.role === 'ADMIN' ||
+        user.role === 'SUPERVISOR' ||
+        user.role === 'LEADER' ||
+        hasPermission('reports.view');
+
+    const canAccessTvSupervisor =
+        user.role === 'ADMIN' ||
+        user.role === 'SUPERVISOR';
+
+    const leadRegistrationEnabled = user?.system_settings?.lead_registration_enabled !== false;
+    const canAccessNewClient = hasPermission('crm.create_lead') && leadRegistrationEnabled;
+
+    const settingsChildren = [
+        {
+            name: 'Importar Contas',
+            href: '/imports/open-accounts',
+            icon: Upload,
+            show: hasPermission('imports.open_accounts')
+        },
+        {
+            name: 'Gestão de Usuários',
+            href: '/users',
+            icon: Users,
+            show: hasPermission('users.view')
+        },
+        {
+            name: 'Segurança',
+            href: '/settings/security',
+            icon: ShieldCheck,
+            show: hasPermission('security.manage_roles')
+        },
+        {
+            name: 'Notificações do Sistema',
+            href: '/settings/system-notifications',
+            icon: ShieldCheck,
+            show: user.role === 'ADMIN' || user.role === 'SUPERVISOR' || hasPermission('security.manage_roles')
+        },
+        {
+            name: 'Dev Notes',
+            href: '/settings/dev-notes',
+            icon: ShieldCheck,
+            show: hasPermission('settings.dev_notes.manage')
+        },
+        {
+            name: 'Conexão com Banco',
+            href: '/settings/database',
+            icon: Database,
+            show: hasPermission('infra.database.connection.manage') || hasPermission('infra.database.logs.view')
+        },
+        {
+            name: 'Terminal Linux',
+            href: '/settings/vps-terminal',
+            icon: Database,
+            show: hasPermission('infra.vps.terminal.access')
+        },
+        {
+            name: 'Qualificação',
+            href: '/settings/qualification',
+            icon: Settings,
+            show: user.role === 'ADMIN'
+        },
+        {
+            name: 'Cadastro',
+            href: '/settings/registration',
+            icon: Settings,
+            show: user.role === 'ADMIN'
+        },
+        {
+            name: 'Tabulações',
+            href: '/settings/tabulations',
+            icon: Settings,
+            show: hasPermission('settings.tabulations')
+        },
+        {
+            name: 'Pipelines (Kanban)',
+            href: '/settings/pipelines',
+            icon: LayoutDashboard,
+            show: hasPermission('settings.pipelines')
+        },
+        {
+            name: 'Campos Personalizados',
+            href: '/settings/custom-fields',
+            icon: Settings,
+            show: hasPermission('settings.custom_fields')
+        },
+        {
+            name: 'Leads Excluídos',
+            href: '/settings/deleted-leads',
+            icon: ShieldCheck,
+            show: hasPermission('settings.deleted_leads_archive.view')
+        },
+        {
+            name: 'Logs de Auditoria',
+            href: '/admin/logs',
+            icon: ShieldCheck,
+            show: hasPermission('audit.view')
+        },
+    ];
+
     const navigation = [
         {
             name: 'CRM',
             href: '/kanban',
             icon: LayoutDashboard,
-            show: user.role !== 'OPERATOR'
+            show: hasPermission('crm.view')
         },
-        // Dashboard/Meus Clientes item removed to centralize on CRM
-
         {
             name: 'Relatórios',
             href: '/reports',
-            icon: Users, // Placeholder if BarChart used above, or keep inconsistent for now. Better: Sheet/FileText
-            show: user.role === 'ADMIN' || user.role === 'SUPERVISOR'
+            icon: Users,
+            show: hasPermission('reports.view')
+        },
+        {
+            name: 'Dashboard TV',
+            href: '/tv/dashboard',
+            icon: BarChart,
+            show: canAccessTvDashboard,
+            newTab: true
+        },
+        {
+            name: 'TV Supervisor',
+            href: '/tv/supervisor',
+            icon: BarChart,
+            show: canAccessTvSupervisor,
+            newTab: true
         },
         {
             name: 'Chat',
@@ -100,7 +249,7 @@ export default function DashboardLayout({
             name: 'Novo Cliente',
             href: '/new-client',
             icon: PlusCircle,
-            show: true
+            show: canAccessNewClient
         },
         {
             name: 'Aprovações',
@@ -112,63 +261,13 @@ export default function DashboardLayout({
             name: 'API',
             href: '/api-keys',
             icon: Key,
-            show: user.role === 'ADMIN'
+            show: hasPermission('api_keys.manage')
         },
         {
             name: 'Configurações',
             icon: Settings,
-            show: user.role === 'ADMIN' || user.role === 'SUPERVISOR',
-            children: [
-
-                {
-                    name: 'Importar Contas',
-                    href: '/imports/open-accounts',
-                    icon: Upload,
-                    show: user.role === 'ADMIN' || user.role === 'SUPERVISOR'
-                },
-                {
-                    name: 'Gestão de Usuários',
-                    href: '/users',
-                    icon: Users,
-                    show: user.role === 'ADMIN'
-                },
-                {
-                    name: 'Qualificação',
-                    href: '/settings/qualification',
-                    icon: Settings,
-                    show: user.role === 'ADMIN'
-                },
-                {
-                    name: 'Cadastro',
-                    href: '/settings/registration',
-                    icon: Settings,
-                    show: user.role === 'ADMIN'
-                },
-                {
-                    name: 'Tabulações',
-                    href: '/settings/tabulations',
-                    icon: Settings,
-                    show: user.role === 'ADMIN'
-                },
-                {
-                    name: 'Pipelines (Kanban)',
-                    href: '/settings/pipelines',
-                    icon: LayoutDashboard,
-                    show: user.role === 'ADMIN'
-                },
-                {
-                    name: 'Campos Personalizados',
-                    href: '/settings/custom-fields',
-                    icon: Settings,
-                    show: user.role === 'ADMIN'
-                },
-                {
-                    name: 'Logs de Auditoria',
-                    href: '/admin/logs',
-                    icon: ShieldCheck,
-                    show: user.role === 'ADMIN' || user.role === 'SUPERVISOR'
-                },
-            ]
+            show: settingsChildren.some((child) => child.show),
+            children: settingsChildren
         },
     ];
 
@@ -335,6 +434,8 @@ export default function DashboardLayout({
                                                     <li key={item.name}>
                                                         <Link
                                                             href={item.href!}
+                                                            target={item.newTab ? "_blank" : undefined}
+                                                            rel={item.newTab ? "noopener noreferrer" : undefined}
                                                             title={isCollapsed ? item.name : undefined}
                                                             className={cn(
                                                                 isActive
@@ -361,7 +462,8 @@ export default function DashboardLayout({
 
                                     </li>
                                     <li className="mt-auto">
-                                        <div className="flex w-full items-center justify-center py-2">
+                                        <div className="flex w-full items-center justify-center gap-2 py-2">
+                                            <DevNotesWidget userId={user.id} />
                                             <ModeToggle />
                                         </div>
                                     </li>
@@ -455,6 +557,7 @@ export default function DashboardLayout({
                                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                                     <span className="font-medium">Painel do Operador</span>
                                 </div>
+                                <DevNotesWidget userId={user.id} />
                                 <ModeToggle />
                                 <button
                                     onClick={handleLogout}
@@ -508,3 +611,13 @@ export default function DashboardLayout({
         </ChatProvider >
     );
 }
+
+
+
+
+
+
+
+
+
+

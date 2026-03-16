@@ -11,7 +11,12 @@
       "Bash(npm install @nestjs/throttler --save --legacy-peer-deps)",
       "Bash(find \"/c/Users/phpab/OneDrive/Área de Trabalho/mbforms/frontend/app/\\(main\\)\" -name \"page.tsx\")",
       "Bash(npm run build)",
-      "Bash(npx tsc --noEmit)"
+      "Bash(npx tsc --noEmit)",
+      "Bash(for dir:*)",
+      "Bash(do echo:*)",
+      "Read(//c/DEV/mbforms/backend/src/$dir/**)",
+      "Bash(xargs -I {} basename {})",
+      "Bash(done)"
     ]
   }
 }

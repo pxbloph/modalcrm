@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { Loader2, Plus, Trash2, GripVertical, Network, Zap } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -358,17 +359,18 @@ export default function PipelineDetailSettingsPage({ params }: { params: Promise
                                 </div>
                                 <div className="grid items-center gap-1.5 w-32">
                                     <Label className="text-gray-700 dark:text-gray-200">Tipo</Label>
-                                    <select
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-gray-700 dark:text-gray-100 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                        value={newFieldType}
-                                        onChange={(e) => setNewFieldType(e.target.value)}
-                                    >
-                                        <option value="TEXT">Texto</option>
-                                        <option value="NUMBER">Número</option>
-                                        <option value="DATE">Data</option>
-                                        <option value="BOOLEAN">Sim/Não</option>
-                                        <option value="SELECT">Seleção</option>
-                                    </select>
+                                    <Select value={newFieldType} onValueChange={setNewFieldType}>
+                                        <SelectTrigger className="text-gray-700 dark:text-gray-100">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="TEXT">Texto</SelectItem>
+                                            <SelectItem value="NUMBER">Número</SelectItem>
+                                            <SelectItem value="DATE">Data</SelectItem>
+                                            <SelectItem value="BOOLEAN">Sim/Não</SelectItem>
+                                            <SelectItem value="SELECT">Seleção</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <Button onClick={addField} disabled={!newFieldLabel.trim()}>
                                     <Plus className="w-4 h-4 mr-2" /> Adicionar
@@ -439,3 +441,5 @@ export default function PipelineDetailSettingsPage({ params }: { params: Promise
         </div>
     );
 }
+
+

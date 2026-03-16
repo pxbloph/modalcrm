@@ -9,6 +9,6 @@ async function bootstrap() {
     app.use(compression());
     app.enableCors();
     app.setGlobalPrefix('api');
-    await app.listen(process.env.PORT || 3500);
+    await app.listen(process.env.PORT || 3500, '0.0.0.0');
 }
 bootstrap();

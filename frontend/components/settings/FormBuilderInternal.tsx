@@ -19,6 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, X, Plus, Trash2, Settings } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface FieldOption {
     label: string;
@@ -214,21 +215,25 @@ export default function FormBuilderInternal({
                     <div className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-foreground mb-1">Tipo</label>
-                            <select
-                                className="w-full rounded-md border-input bg-background shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border text-foreground"
+                            <Select
                                 value={editingField.type}
-                                onChange={e => updateField({ ...editingField, type: e.target.value as any })}
+                                onValueChange={(value) => updateField({ ...editingField, type: value as any })}
                             >
-                                <option value="text">Texto Curto</option>
-                                <option value="email">E-mail</option>
-                                <option value="textarea">Texto Longo</option>
-                                <option value="number">Número / Moeda</option>
-                                <option value="select">Lista de Opções (Select)</option>
-                                <option value="radio">Múltipla Escolha (Radio)</option>
-                                <option value="checkbox">Checkbox (Sim/Não)</option>
-                                <option value="date">Data</option>
-                                <option value="datetime-local">Data e Hora</option>
-                            </select>
+                                <SelectTrigger className="w-full rounded-md border-input bg-background shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2 border text-foreground">
+                                    <SelectValue placeholder="Tipo" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="text">Texto Curto</SelectItem>
+                                    <SelectItem value="email">E-mail</SelectItem>
+                                    <SelectItem value="textarea">Texto Longo</SelectItem>
+                                    <SelectItem value="number">Número / Moeda</SelectItem>
+                                    <SelectItem value="select">Lista de Opções (Select)</SelectItem>
+                                    <SelectItem value="radio">Múltipla Escolha (Radio)</SelectItem>
+                                    <SelectItem value="checkbox">Checkbox (Sim/Não)</SelectItem>
+                                    <SelectItem value="date">Data</SelectItem>
+                                    <SelectItem value="datetime-local">Data e Hora</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div>

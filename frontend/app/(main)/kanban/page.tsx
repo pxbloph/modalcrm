@@ -16,6 +16,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { isWithinInterval, parseISO, startOfDay, endOfDay, subDays, format } from "date-fns";
 import { MetricsCards, DashboardMetrics } from "@/components/dashboard/MetricsCards";
 import { useKanbanFilters } from "@/hooks/useKanbanFilters";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Pipeline {
     id: string;
@@ -34,6 +35,9 @@ interface Deal {
     value?: number;
     stage_id: string;
     created_at: string;
+    stage_entered_at?: string;
+    sla_due_date?: string | null;
+    is_overdue?: boolean;
     client?: {
         name: string;
         surname?: string;
@@ -44,6 +48,7 @@ interface Deal {
         faturamento_mensal?: number;
     };
     responsible?: { id: string, name: string; surname?: string };
+    stage?: { sla_minutes?: number };
     tags?: { tag: { id: string, name: string, color: string } }[];
 }
 
@@ -56,6 +61,8 @@ export default function KanbanPage() {
     const [stages, setStages] = useState<Stage[]>([]);
     const [deals, setDeals] = useState<Record<string, Deal[]>>({});
     const [stageCounts, setStageCounts] = useState<Record<string, number>>({});
+    const [stalledByStage, setStalledByStage] = useState<Record<string, { stalled: number; total: number; sla_minutes: number }>>({});
+    const [showOnlyStalled, setShowOnlyStalled] = useState(false);
     const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isAutomationEditorOpen, setIsAutomationEditorOpen] = useState(false);
@@ -100,6 +107,11 @@ export default function KanbanPage() {
 
     // Elevated Column State for KanbanList/Export logic
     const [columnOrder, setColumnOrder] = useState<string[]>([]);
+
+    const totalStalledCount = useMemo(
+        () => Object.values(stalledByStage).reduce((sum, item) => sum + Number(item?.stalled || 0), 0),
+        [stalledByStage],
+    );
     useEffect(() => {
         const saved = localStorage.getItem('crm-list-config-v2');
         if (saved) {
@@ -120,6 +132,9 @@ export default function KanbanPage() {
         localStorage.setItem('crm-list-config-v2', JSON.stringify({ order: newOrder }));
     };
     const [draftSearchTerm, setDraftSearchTerm] = useState("");
+
+    const INITIAL_STAGE_PAGE_SIZE = 80;
+    const [loadingMoreByStage, setLoadingMoreByStage] = useState<Record<string, boolean>>({});
 
     // SYNC DRAFT WITH ACTIVE (Only when preferences load or on mount)
     useEffect(() => {
@@ -193,10 +208,11 @@ export default function KanbanPage() {
                     setVisibleFields(prefs.visible_fields);
                 }
 
-                if (prefs.filters_config && Object.keys(prefs.filters_config).length > 0) {
-                    const filters = Object.entries(prefs.filters_config).map(([id, value]) => ({ id, value }));
-                    setActiveFilters(filters);
-                }
+                                // Do not auto-apply persisted filters on load.
+                // Kanban must open clean (without default filters).
+                setActiveFilters([]);
+                setSearchTerm('');
+                setDraftSearchTerm('');
             }
         } catch (error) {
             console.error("Erro ao carregar preferências:", error);
@@ -352,7 +368,7 @@ export default function KanbanPage() {
             fetchStagesAndDeals(selectedPipeline);
         }, 500);
         return () => clearTimeout(timer);
-    }, [selectedPipeline, searchTerm, filterParams, fetchMetrics]);
+    }, [selectedPipeline, searchTerm, filterParams, fetchMetrics, viewMode]);
 
     const fetchPresets = async (userId: string) => {
         try {
@@ -382,6 +398,27 @@ export default function KanbanPage() {
             setPresets(prev => prev.filter(p => p.id !== id));
             toast({ title: "Filtro removido" });
         } catch (error) { toast({ title: "Erro ao remover filtro", variant: "destructive" }); }
+    };
+
+    const normalizeDealSla = (deal: Deal): Deal => {
+        const now = Date.now();
+        const dueAt = deal.sla_due_date ? new Date(deal.sla_due_date).getTime() : null;
+        const stageSlaMinutes = Number(deal.stage?.sla_minutes || 0);
+        const enteredAt = deal.stage_entered_at
+            ? new Date(deal.stage_entered_at).getTime()
+            : new Date(deal.created_at).getTime();
+
+        let overdue = Boolean(deal.is_overdue);
+        if (dueAt) {
+            overdue = dueAt < now;
+        } else if (stageSlaMinutes > 0) {
+            overdue = (now - enteredAt) > (stageSlaMinutes * 60 * 1000);
+        }
+
+        return {
+            ...deal,
+            is_overdue: overdue,
+        };
     };
 
     const fetchCardConfig = async (pipelineId: string, userId: string) => {
@@ -421,27 +458,54 @@ export default function KanbanPage() {
     // ... (keep fetchStagesAndDeals and others) ...
     const fetchStagesAndDeals = async (pipelineId: string) => {
         try {
-            const params: any = { pipeline_id: pipelineId, ...filterParams };
-            if (searchTerm) params.search = searchTerm;
+            const baseParams: any = { pipeline_id: pipelineId, ...filterParams };
+            if (searchTerm) baseParams.search = searchTerm;
 
-            const [stagesRes, dealsRes, countsRes] = await Promise.all([
+            const [stagesRes, countsRes, stalledRes] = await Promise.all([
                 api.get(`/stages?pipeline_id=${pipelineId}`),
-                api.get(`/deals`, { params }),
-                api.get(`/deals/counts-by-stage`, { params }) // Backend handles count filters now
+                api.get(`/deals/counts-by-stage`, { params: baseParams }),
+                api.get(`/deals/stalled-by-stage`, { params: baseParams }),
             ]);
 
             setStages(stagesRes.data);
             setStageCounts(countsRes.data);
+            setStalledByStage(stalledRes.data || {});
 
+            if (viewMode === 'list') {
+                const dealsRes = await api.get(`/deals`, { params: baseParams });
+                const dealsByStage: Record<string, Deal[]> = {};
+                stagesRes.data.forEach((stage: Stage) => {
+                    dealsByStage[stage.id] = [];
+                });
+                dealsRes.data.forEach((rawDeal: Deal) => {
+                    const deal = normalizeDealSla(rawDeal);
+                    if (dealsByStage[deal.stage_id]) {
+                        dealsByStage[deal.stage_id].push(deal);
+                    }
+                });
+                setDeals(dealsByStage);
+                return;
+            }
+
+            const stageRequests = stagesRes.data.map((stage: Stage) =>
+                api.get(`/deals`, {
+                    params: {
+                        ...baseParams,
+                        stage_id: stage.id,
+                        skip: 0,
+                        take: INITIAL_STAGE_PAGE_SIZE,
+                    },
+                })
+            );
+
+            const stageResponses = await Promise.all(stageRequests);
             const dealsByStage: Record<string, Deal[]> = {};
-            stagesRes.data.forEach((stage: Stage) => {
-                dealsByStage[stage.id] = [];
+
+            stagesRes.data.forEach((stage: Stage, index: number) => {
+                const stageChunk = stageResponses[index].data || [];
+                dealsByStage[stage.id] = stageChunk.filter((deal: Deal) => deal.stage_id === stage.id);
             });
-            dealsRes.data.forEach((deal: Deal) => {
-                if (dealsByStage[deal.stage_id]) {
-                    dealsByStage[deal.stage_id].push(deal);
-                }
-            });
+
             setDeals(dealsByStage);
 
         } catch (error) {
@@ -449,6 +513,40 @@ export default function KanbanPage() {
         }
     };
 
+    const loadMoreDealsByStage = async (stageId: string) => {
+        if (!selectedPipeline) return;
+        if (loadingMoreByStage[stageId]) return;
+
+        const currentlyLoaded = (deals[stageId] || []).length;
+        const totalForStage = stageCounts[stageId] || 0;
+        if (currentlyLoaded >= totalForStage) return;
+
+        setLoadingMoreByStage(prev => ({ ...prev, [stageId]: true }));
+
+        try {
+            const params: any = {
+                pipeline_id: selectedPipeline,
+                stage_id: stageId,
+                skip: currentlyLoaded,
+                take: INITIAL_STAGE_PAGE_SIZE,
+                ...filterParams,
+            };
+
+            if (searchTerm) params.search = searchTerm;
+
+            const res = await api.get('/deals', { params });
+            const nextChunk = (res.data || []).map((deal: Deal) => normalizeDealSla(deal)).filter((deal: Deal) => deal.stage_id === stageId);
+
+            setDeals(prev => ({
+                ...prev,
+                [stageId]: [...(prev[stageId] || []), ...nextChunk],
+            }));
+        } catch (error) {
+            console.error('Erro ao carregar mais deals da coluna:', error);
+        } finally {
+            setLoadingMoreByStage(prev => ({ ...prev, [stageId]: false }));
+        }
+    };
     const { toast } = useToast();
 
     const onDragEnd = async (result: DropResult) => {
@@ -518,11 +616,12 @@ export default function KanbanPage() {
         const filteredDealsByStage: Record<string, Deal[]> = {};
         stages.forEach(stage => {
             const stageDeals = deals[stage.id] || [];
-            // FE filtering is minimal now as backend handles most params
-            filteredDealsByStage[stage.id] = stageDeals;
+            filteredDealsByStage[stage.id] = showOnlyStalled
+                ? stageDeals.filter((deal) => Boolean(deal.is_overdue))
+                : stageDeals;
         });
         return filteredDealsByStage;
-    }, [deals, stages]);
+    }, [deals, stages, showOnlyStalled]);
 
     return (
         <div className="flex flex-col bg-background h-[calc(100vh-64px)]">
@@ -556,15 +655,16 @@ export default function KanbanPage() {
                             </button>
                         </div>
 
-                        <select
-                            className="h-9 border-0 bg-transparent text-sm font-semibold text-foreground outline-none focus:ring-0 cursor-pointer min-w-[150px] max-w-[200px]"
-                            value={selectedPipeline || ""}
-                            onChange={(e) => setSelectedPipeline(e.target.value)}
-                        >
-                            {pipelines.map(p => (
-                                <option key={p.id} value={p.id} className="bg-card text-foreground">{p.name}</option>
-                            ))}
-                        </select>
+                        <Select value={selectedPipeline || ""} onValueChange={setSelectedPipeline}>
+                            <SelectTrigger className="h-9 min-w-[150px] max-w-[220px] border-0 bg-transparent text-sm font-semibold text-foreground">
+                                <SelectValue placeholder="Selecione o funil" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {pipelines.map((p) => (
+                                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
 
                         <button
                             onClick={() => setIsConfigModalOpen(true)}
@@ -573,6 +673,17 @@ export default function KanbanPage() {
                         >
                             <Settings2 size={16} />
                         </button>
+
+                        {showOnlyStalled && (
+                            <button
+                                type="button"
+                                onClick={() => setShowOnlyStalled(false)}
+                                className="h-7 px-2 rounded border border-red-500/40 bg-red-500/10 text-red-500 text-xs font-medium"
+                                title="Remover filtro de parados"
+                            >
+                                Somente parados ({totalStalledCount})
+                            </button>
+                        )}
                     </div>
 
                     {/* CENTER: Filtros In-line */}
@@ -647,7 +758,7 @@ export default function KanbanPage() {
             </div>
 
             <div className="flex-1 overflow-hidden bg-white">
-                {!isInitialLoading && stages.length > 0 && Object.values(filteredDeals).every(d => d.length === 0) && (searchTerm || activeFilters.length > 0) ? (
+                {!isInitialLoading && stages.length > 0 && Object.values(filteredDeals).every(d => d.length === 0) && (searchTerm || activeFilters.length > 0 || showOnlyStalled) ? (
                     <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
                         <span className="text-4xl">🔍</span>
                         <p className="text-base font-medium">Nenhum negócio encontrado</p>
@@ -658,11 +769,17 @@ export default function KanbanPage() {
                         stages={stages}
                         dealsByStage={filteredDeals}
                         totalCounts={stageCounts}
+                        stalledByStage={stalledByStage}
+                        onStalledClick={() => setShowOnlyStalled((prev) => !prev)}
+                        stalledFilterActive={showOnlyStalled}
                         onDragEnd={onDragEnd}
                         onDealClick={setSelectedDealId}
                         cardConfig={cardConfig}
                         users={users}
                         onResponsibleChange={handleResponsibleChange}
+                        loadingMoreByStage={loadingMoreByStage}
+                        onLoadMore={loadMoreDealsByStage}
+                        isOperator={currentUser?.role === 'OPERATOR'}
                     />
                 ) : (
                     <KanbanList
@@ -716,3 +833,12 @@ export default function KanbanPage() {
         </div>
     );
 }
+
+
+
+
+
+
+
+
+

@@ -1,7 +1,13 @@
 import axios from 'axios';
 
+const resolvedBaseUrl =
+    process.env.NEXT_PUBLIC_API_URL ||
+    (typeof window !== 'undefined'
+        ? `http://${window.location.hostname}:3500/api`
+        : 'http://localhost:3500/api');
+
 const api = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3500/api', // Use localhost for local dev
+    baseURL: resolvedBaseUrl,
 });
 
 // Add a request interceptor to include the auth token

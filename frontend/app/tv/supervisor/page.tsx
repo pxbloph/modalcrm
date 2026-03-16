@@ -1,7 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
-import { Maximize, Minimize } from 'lucide-react';
+import { Maximize, Minimize, Search, X } from 'lucide-react';
+import api from '@/lib/api';
 
 interface ClientItem {
     id: string;
@@ -16,9 +17,15 @@ interface ClientItem {
 interface RankingItem {
     user_id: string;
     user_name: string;
+    team: string | null;
     count: number;
     clients: ClientItem[];
 }
+
+const TEAM_BADGE: Record<string, string> = {
+    fenix: '🐦‍🔥 Fênix',
+    titas: '⚔️ Titãs',
+};
 
 interface DashboardData {
     total_open_accounts: number;
@@ -32,12 +39,30 @@ export default function SupervisorDashboardPage() {
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<RankingItem | null>(null);
+    const [nameFilter, setNameFilter] = useState('');
+    const [teamFilter, setTeamFilter] = useState('');
+    const [now, setNow] = useState(new Date());
 
+    
+    useEffect(() => {
+        const raw = localStorage.getItem('user');
+        if (!raw || raw === 'undefined') {
+            window.location.href = '/login';
+            return;
+        }
+
+        try {
+            const parsed = JSON.parse(raw);
+            if (!['ADMIN', 'SUPERVISOR'].includes(parsed?.role)) {
+                window.location.href = '/';
+            }
+        } catch {
+            window.location.href = '/login';
+        }
+    }, []);
     const fetchData = async () => {
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3500'}/dashboards/tv/contas-abertas`);
-            if (!response.ok) throw new Error('Failed to fetch data');
-            const jsonData = await response.json();
+            const { data: jsonData } = await api.get('/dashboards/tv/contas-abertas');
             setData(jsonData);
             setLastUpdated(new Date());
         } catch (error) {
@@ -51,6 +76,11 @@ export default function SupervisorDashboardPage() {
         fetchData();
         const interval = setInterval(fetchData, 60000); // Refresh every 60s
         return () => clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
+        const tick = setInterval(() => setNow(new Date()), 1000);
+        return () => clearInterval(tick);
     }, []);
 
     const toggleFullscreen = () => {
@@ -73,7 +103,11 @@ export default function SupervisorDashboardPage() {
         );
     }
 
-    const operatorsList = data?.ranking || [];
+    const operatorsList = (data?.ranking || []).filter((user) => {
+        const matchesName = nameFilter === '' || user.user_name.toLowerCase().includes(nameFilter.toLowerCase());
+        const matchesTeam = teamFilter === '' || user.team === teamFilter;
+        return matchesName && matchesTeam;
+    });
 
     return (
         <div className="flex h-screen w-screen bg-gray-50 text-zinc-900 p-8 flex-col font-sans selection:bg-orange-500/30 overflow-hidden">
@@ -97,7 +131,7 @@ export default function SupervisorDashboardPage() {
                         <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full border bg-white/80 border-gray-200 shadow-sm">
                             <div className="w-3 h-3 rounded-full bg-orange-500 animate-pulse" />
                             <p className="text-xl font-mono font-bold text-zinc-700">
-                                {lastUpdated?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                {now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                             </p>
                         </div>
                         <button
@@ -110,6 +144,42 @@ export default function SupervisorDashboardPage() {
                     </div>
                 </header>
 
+                {/* Filters */}
+                <div className="flex items-center gap-3 mb-4 shrink-0">
+                    <div className="relative flex-1 max-w-sm">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
+                        <input
+                            type="text"
+                            placeholder="Filtrar por nome..."
+                            value={nameFilter}
+                            onChange={(e) => setNameFilter(e.target.value)}
+                            className="w-full pl-9 pr-8 py-2 text-sm rounded-xl border border-gray-200 bg-white/80 text-zinc-800 placeholder-zinc-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent"
+                        />
+                        {nameFilter && (
+                            <button onClick={() => setNameFilter('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600">
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setTeamFilter('')}
+                            className={`px-4 py-2 text-sm font-semibold rounded-xl border shadow-sm transition-colors ${teamFilter === '' ? 'bg-orange-500 text-white border-orange-500' : 'bg-white/80 text-zinc-600 border-gray-200 hover:bg-gray-50'}`}
+                        >
+                            Todos
+                        </button>
+                        {Object.entries(TEAM_BADGE).map(([key, label]) => (
+                            <button
+                                key={key}
+                                onClick={() => setTeamFilter(teamFilter === key ? '' : key)}
+                                className={`px-4 py-2 text-sm font-semibold rounded-xl border shadow-sm transition-colors whitespace-nowrap ${teamFilter === key ? 'bg-orange-500 text-white border-orange-500' : 'bg-white/80 text-zinc-600 border-gray-200 hover:bg-gray-50'}`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
                 {/* Main Content List */}
                 <div className="flex-1 overflow-hidden flex flex-col bg-white/60 backdrop-blur-md rounded-2xl shadow-xl border border-white/40 ring-1 ring-black/5">
                     <div className="overflow-y-auto flex-1 p-8 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400">
@@ -121,9 +191,16 @@ export default function SupervisorDashboardPage() {
                                         className={`flex items-center justify-between p-4 ${index !== operatorsList.length - 1 ? 'border-b border-gray-100' : ''} hover:bg-white/50 transition-colors rounded-lg cursor-pointer hover:shadow-sm`}
                                         onClick={() => setSelectedUser(user)}
                                     >
-                                        <span className="text-zinc-800 font-semibold text-xl truncate" title={user.user_name}>
-                                            {user.user_name}
-                                        </span>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-zinc-800 font-semibold text-xl truncate" title={user.user_name}>
+                                                {user.user_name}
+                                            </span>
+                                            {user.team && TEAM_BADGE[user.team] && (
+                                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200 whitespace-nowrap">
+                                                    {TEAM_BADGE[user.team]}
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex items-center gap-2">
                                             <span className="text-3xl font-black text-orange-500 leading-none">{user.count}</span>
                                             <span className="text-zinc-500 font-medium text-lg leading-tight">
@@ -134,7 +211,9 @@ export default function SupervisorDashboardPage() {
                                 ))
                             ) : (
                                 <div className="flex flex-col items-center justify-center h-48 text-zinc-400">
-                                    <p className="text-2xl font-medium">Nenhuma conta aberta hoje ainda.</p>
+                                    <p className="text-2xl font-medium">
+                                        {nameFilter || teamFilter ? 'Nenhum operador encontrado para os filtros aplicados.' : 'Nenhuma conta aberta hoje ainda.'}
+                                    </p>
                                 </div>
                             )}
                         </div>
@@ -214,3 +293,5 @@ export default function SupervisorDashboardPage() {
         </div>
     );
 }
+
+

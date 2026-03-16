@@ -3,6 +3,7 @@ import { Draggable } from "@hello-pangea/dnd";
 import { User, DollarSign, Calendar, Tag as TagIcon, Phone, Mail, FileText, AlertCircle } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Tag {
     id: string;
@@ -26,6 +27,7 @@ interface Deal {
         // [SIMPLIFICATION] Direct fields
         tabulacao?: string;
         faturamento_mensal?: number;
+        integration_status?: string;
     };
     responsible?: { id: string, name: string, surname?: string };
     tags?: { tag: Tag }[];
@@ -39,9 +41,10 @@ interface DealCardProps {
     stageColor?: string;
     users?: any[];
     onResponsibleChange?: (dealId: string, userId: string) => void;
+    isOperator?: boolean;
 }
 
-export function DealCardComponent({ deal, index, onClick, cardConfig, stageColor, users, onResponsibleChange }: DealCardProps) {
+export function DealCardComponent({ deal, index, onClick, cardConfig, stageColor, users, onResponsibleChange, isOperator }: DealCardProps) {
     // Default config if none provided (Basic layout)
     // USER REQUEST: Only Title, Responsible, CNPJ, Tabulation.
     const activeConfig = cardConfig && cardConfig.length > 0 ? cardConfig.filter(c => c.visible) : [
@@ -90,23 +93,28 @@ export function DealCardComponent({ deal, index, onClick, cardConfig, stageColor
                                 {deal.responsible?.name ? deal.responsible.name.substring(0, 2).toUpperCase() : '?'}
                             </div>
 
-                            <select
-                                className="bg-transparent text-[10px] text-muted-foreground hover:text-foreground font-medium border-none outline-none cursor-pointer w-full p-0 h-auto truncate focus:ring-0 focus:bg-accent/50 rounded appearance-none"
-                                value={deal.responsible?.id || ""}
-                                onChange={(e) => {
-                                    e.stopPropagation();
-                                    onResponsibleChange(deal.id, e.target.value);
+                            <Select
+                                value={deal.responsible?.id || '__none__'}
+                                onValueChange={(value) => {
+                                    if (value === '__none__') return;
+                                    onResponsibleChange(deal.id, value);
                                 }}
-                                onClick={(e) => e.stopPropagation()}
-                                title="Alterar Responsável"
                             >
-                                <option value="" disabled>Selecionar...</option>
-                                {users.map((u: any) => (
-                                    <option key={u.id} value={u.id}>
-                                        {u.name} {u.surname && u.surname}
-                                    </option>
-                                ))}
-                            </select>
+                                <SelectTrigger
+                                    className="h-6 border-none bg-transparent p-0 text-[10px] text-muted-foreground hover:text-foreground shadow-none focus:ring-0"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <SelectValue placeholder="Selecionar..." />
+                                </SelectTrigger>
+                                <SelectContent onClick={(e) => e.stopPropagation()}>
+                                    <SelectItem value="__none__" disabled>Selecionar...</SelectItem>
+                                    {users.map((u: any) => (
+                                        <SelectItem key={u.id} value={u.id}>
+                                            {u.name} {u.surname && u.surname}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                     );
                 }
@@ -220,6 +228,13 @@ export function DealCardComponent({ deal, index, onClick, cardConfig, stageColor
                         borderLeftColor: stageColor || undefined
                     }}
                 >
+                    {isOperator && deal.client?.integration_status !== 'Cadastro salvo com sucesso!' && (
+                        <div className="absolute inset-0 z-10 rounded-md flex flex-col items-center justify-center gap-1.5 bg-destructive/90 text-white text-center px-3 cursor-pointer">
+                            <AlertCircle size={26} />
+                            <span className="text-xs font-bold leading-tight tracking-wide uppercase">Lead não apto</span>
+                            <span className="text-[10px] opacity-80 leading-tight">Cadastro não integrado ao banco</span>
+                        </div>
+                    )}
                     <div className="font-semibold text-card-foreground mb-2 leading-tight text-xs">
                         {deal.title}
                     </div>
@@ -244,3 +259,6 @@ export const DealCard = React.memo(DealCardComponent, (prev, next) => {
         prev.cardConfig === next.cardConfig
     );
 });
+
+
+

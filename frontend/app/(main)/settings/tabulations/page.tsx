@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { Loader2, Save, Trash2, Plus, Info } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface PipelineStage {
     id: string;
@@ -139,18 +140,22 @@ export default function TabulationsSettingsPage() {
                                     />
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <select
-                                        className="block w-full pl-3 pr-10 py-2 text-base border-input bg-background focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-foreground"
-                                        value={tab.target_stage_id || ''}
-                                        onChange={(e) => handleUpdate(tab.id, { target_stage_id: e.target.value || null })}
+                                    <Select
+                                        value={tab.target_stage_id || '__none__'}
+                                        onValueChange={(value) => handleUpdate(tab.id, { target_stage_id: value === '__none__' ? null : value })}
                                     >
-                                        <option value="">-- Sem movimento --</option>
-                                        {defaultPipeline?.stages?.map(stage => (
-                                            <option key={stage.id} value={stage.id}>
-                                                {stage.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        <SelectTrigger className="w-full text-foreground">
+                                            <SelectValue placeholder="-- Sem movimento --" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">-- Sem movimento --</SelectItem>
+                                            {defaultPipeline?.stages?.map(stage => (
+                                                <SelectItem key={stage.id} value={stage.id}>
+                                                    {stage.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-center">
                                     <button
@@ -204,3 +209,5 @@ export default function TabulationsSettingsPage() {
         </div>
     );
 }
+
+

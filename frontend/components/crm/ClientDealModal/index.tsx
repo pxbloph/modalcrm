@@ -7,7 +7,7 @@ import { ModalHeader } from "./ModalHeader";
 import { ModalFooter } from "./ModalFooter";
 import { ClientForm } from "./ClientForm";
 import { clientDealFormSchema, ClientDealFormValues } from "./schemas";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import {
     Div2_ClientData,
     Div3_Responsible,
@@ -211,11 +211,11 @@ export function ClientDealModal({
 
         let maqAtual = getVal('maquininha_atual') || "";
         if (typeof maqAtual === 'string' && maqAtual.includes(',')) {
-            maqAtual = maqAtual.split(',').map((s: string) => s.trim());
-        } else if (typeof maqAtual === 'string' && maqAtual) {
-            maqAtual = [maqAtual];
+            maqAtual = maqAtual.split(',').map((s: string) => s.trim()).filter(Boolean)[0] || "";
+        } else if (Array.isArray(maqAtual)) {
+            maqAtual = maqAtual[0] || "";
         } else if (!maqAtual) {
-            maqAtual = [];
+            maqAtual = "";
         }
 
         const formValues: any = {
@@ -414,6 +414,10 @@ export function ClientDealModal({
     const currentClientId = loadedData?.client?.id || loadedData?.id || initialClientId || initialData?.client?.id;
     const effectiveDealId = dealId || loadedData?.deals?.[0]?.id;
 
+    // [BLOCKER] Operadores não podem editar leads não integrados
+    const integrationStatus = loadedData?.client?.integration_status || loadedData?.integration_status;
+    const isBlockedForOperator = currentUser?.role === 'OPERATOR' && integrationStatus !== 'Cadastro salvo com sucesso!';
+
     return (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-[2px] flex items-center justify-center z-[100] p-4 font-sans">
             <div className="bg-card w-full max-w-5xl max-h-[95vh] rounded-xl shadow-2xl flex flex-col overflow-hidden border border-border animate-in fade-in zoom-in-95 duration-200">
@@ -450,22 +454,42 @@ export function ClientDealModal({
                         {/* CONTENT AREA */}
                         <div className="flex-1 overflow-y-auto p-6 bg-card/50">
                             {activeTab === "data" ? (
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                                    <div className="flex flex-col gap-6">
-                                        <Div2_ClientData>
-                                            <ClientForm />
-                                        </Div2_ClientData>
-                                        <Div3_Responsible
-                                            users={users}
-                                            currentUser={currentUser}
-                                            onRequestResponsibility={() => setShowRequestModal(true)}
-                                            control={methods.control}
-                                        />
-                                        <Div4_Tabulation options={tabulationOptions} />
-                                    </div>
-                                    <div className="flex flex-col gap-6">
-                                        <Div5_Qualification machineOptions={machineOptions} />
-                                        <Div6_CustomGroups clientId={currentClientId} />
+                                <div className="flex flex-col gap-4">
+                                    <div className="relative">
+                                        {isBlockedForOperator && (
+                                            <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/70 backdrop-blur-sm rounded-xl">
+                                                <div className="bg-destructive text-white rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-4 max-w-sm w-full mx-4 text-center border border-destructive/60">
+                                                    <div className="bg-white/20 rounded-full p-4">
+                                                        <AlertCircle size={40} strokeWidth={1.5} />
+                                                    </div>
+                                                    <div className="flex flex-col gap-2">
+                                                        <span className="text-2xl font-black uppercase tracking-widest">Lead Não Apto</span>
+                                                        <span className="text-sm font-medium opacity-90 leading-snug">
+                                                            Este cadastro ainda não foi integrado ao banco de dados.
+                                                        </span>
+                                                        <span className="text-xs opacity-70 mt-1">Somente visualização — edição bloqueada para Operadores.</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                                            <div className="flex flex-col gap-6">
+                                                <Div2_ClientData>
+                                                    <ClientForm isBlocked={isBlockedForOperator} />
+                                                </Div2_ClientData>
+                                                <Div3_Responsible
+                                                    users={users}
+                                                    currentUser={currentUser}
+                                                    onRequestResponsibility={() => setShowRequestModal(true)}
+                                                    control={methods.control}
+                                                />
+                                                <Div4_Tabulation options={tabulationOptions} isBlocked={isBlockedForOperator} />
+                                            </div>
+                                            <div className="flex flex-col gap-6">
+                                                <Div5_Qualification machineOptions={machineOptions} isBlocked={isBlockedForOperator} />
+                                                <Div6_CustomGroups clientId={currentClientId} isBlocked={isBlockedForOperator} />
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             ) : (
@@ -495,6 +519,7 @@ export function ClientDealModal({
                                 onDelete={handleDelete}
                                 onOpenAccount={handleOpenAccount}
                                 canDelete={true}
+                                isBlocked={isBlockedForOperator}
                             />
                         )}
                         {activeTab === "history" && (

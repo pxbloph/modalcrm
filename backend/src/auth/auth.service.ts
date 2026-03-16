@@ -1,8 +1,9 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+﻿import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { AuditService } from '../modules/audit/audit.service';
+import { SecurityService } from '../security/security.service';
 
 @Injectable()
 export class AuthService {
@@ -10,7 +11,24 @@ export class AuthService {
         private usersService: UsersService,
         private jwtService: JwtService,
         private auditService: AuditService,
+        private securityService: SecurityService,
     ) { }
+
+    private async buildAuthUser(user: any) {
+        const permissions = await this.securityService.getEffectivePermissionsByUserId(user.id);
+        const systemSettings = await this.securityService.getPublicSystemSettings();
+        const initialPage = await this.securityService.getResolvedInitialPageByUserId(user.id);
+
+        return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            permissions,
+            initial_page: initialPage,
+            system_settings: systemSettings,
+        };
+    }
 
     async validateUser(email: string, pass: string): Promise<any> {
         const user = await this.usersService.findOne(email);
@@ -48,15 +66,21 @@ export class AuthService {
         });
 
         const payload = { email: user.email, sub: user.id, role: user.role };
+        const authUser = await this.buildAuthUser(user);
+
         return {
             access_token: this.jwtService.sign(payload),
-            user: {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-            },
+            user: authUser,
         };
+    }
+
+    async getProfile(userId: string) {
+        const user = await this.usersService.findById(userId);
+        if (!user) {
+            throw new UnauthorizedException('Usuário não encontrado.');
+        }
+
+        return this.buildAuthUser(user);
     }
 
     async register(data: any) {

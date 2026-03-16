@@ -1,4 +1,4 @@
-
+﻿
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User, Prisma } from '@prisma/client';
@@ -36,11 +36,19 @@ export class UsersService {
             password_hash: hashedPassword,
             role: data.role,
             is_active: data.is_active !== undefined ? data.is_active : true,
+            initial_page: data.initial_page || 'DEFAULT',
+            permissions_override: Array.isArray(data.permissions_override) ? data.permissions_override : undefined,
         };
 
         if (data.supervisor_id) {
             createData.supervisor = {
                 connect: { id: data.supervisor_id }
+            };
+        }
+
+        if (data.security_role_id) {
+            createData.security_role = {
+                connect: { id: data.security_role_id }
             };
         }
 
@@ -57,6 +65,9 @@ export class UsersService {
             email: data.email,
             role: data.role,
             is_active: data.is_active,
+            initial_page: data.initial_page !== undefined ? data.initial_page : undefined,
+            permissions_override: data.permissions_override !== undefined ? data.permissions_override : undefined,
+            team: data.team !== undefined ? (data.team || null) : undefined,
         };
 
         if (data.password) {
@@ -71,6 +82,14 @@ export class UsersService {
             updateData.supervisor = {
                 disconnect: true
             };
+        }
+
+        if (data.security_role_id !== undefined) {
+            if (data.security_role_id === null || data.security_role_id === '') {
+                updateData.security_role = { disconnect: true };
+            } else {
+                updateData.security_role = { connect: { id: data.security_role_id } };
+            }
         }
 
         return this.prisma.user.update({
@@ -139,6 +158,9 @@ export class UsersService {
             include: {
                 supervisor: {
                     select: { name: true }
+                },
+                security_role: {
+                    select: { id: true, name: true }
                 }
             }
         });
@@ -229,6 +251,60 @@ export class UsersService {
         });
     }
 
+    async updateRoleBulk(ids: string[], role: Prisma.UserUncheckedUpdateManyInput['role'], securityRoleId: string | null, requestUserId: string) {
+        if (!ids.length) {
+            throw new Error('Nenhum usuário informado para atualização em massa.');
+        }
+
+        if (ids.includes(requestUserId) && role !== 'ADMIN') {
+            throw new Error('Você não pode remover sua própria role de administrador em massa.');
+        }
+
+        const adminsInSelection = await this.prisma.user.count({
+            where: {
+                id: { in: ids },
+                role: 'ADMIN',
+            },
+        });
+
+        if (adminsInSelection > 0 && role !== 'ADMIN') {
+            const remainingAdmins = await this.prisma.user.count({
+                where: {
+                    role: 'ADMIN',
+                    id: { notIn: ids },
+                    is_active: true,
+                },
+            });
+
+            if (remainingAdmins < 1) {
+                throw new Error('Nao e possivel remover a role de todos os administradores. Deve restar pelo menos um administrador ativo.');
+            }
+        }
+
+        if (securityRoleId) {
+            const customRole = await (this.prisma as any).securityRole.findUnique({ where: { id: securityRoleId } });
+            if (!customRole) {
+                throw new Error('Role personalizada nao encontrada.');
+            }
+        }
+
+        await this.prisma.$transaction(
+            ids.map((id) =>
+                this.prisma.user.update({
+                    where: { id },
+                    data: {
+                        role: role as any,
+                        security_role: securityRoleId
+                            ? { connect: { id: securityRoleId } }
+                            : { disconnect: true },
+                    },
+                }),
+            ),
+        );
+
+        return { updated: ids.length };
+    }
+
     async findChatAssociates(currentUser: any) {
         if (currentUser.role === 'OPERATOR') {
             // Operator sees Supervisors and Admins
@@ -252,4 +328,7 @@ export class UsersService {
         });
     }
 }
+
+
+
 

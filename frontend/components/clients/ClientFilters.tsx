@@ -119,32 +119,34 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
                     {/* Status Filter */}
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground">Status</label>
-                        <select
-                            value={status}
-                            onChange={(e) => setStatus(e.target.value)}
-                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors data-[placeholder]:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <option value="">Todos</option>
-                            <option value="Pendente">Pendente</option>
-                            <option value="Cadastrando...">Cadastrando...</option>
-                            <option value="Cadastro salvo com sucesso!">Cadastrado</option>
-                            <option value="Erro">Erro de Integração</option>
-                        </select>
+                        <Select value={status || '__all__'} onValueChange={(value) => setStatus(value === '__all__' ? '' : value)}>
+                            <SelectTrigger className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm">
+                                <SelectValue placeholder="Todos" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__all__">Todos</SelectItem>
+                                <SelectItem value="Pendente">Pendente</SelectItem>
+                                <SelectItem value="Cadastrando...">Cadastrando...</SelectItem>
+                                <SelectItem value="Cadastro salvo com sucesso!">Cadastrado</SelectItem>
+                                <SelectItem value="Erro">Erro de Integração</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     {/* Tabulation Filter */}
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground">Tabulação</label>
-                        <select
-                            value={tabulation}
-                            onChange={(e) => setTabulation(e.target.value)}
-                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors data-[placeholder]:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <option value="">Todas</option>
-                            {tabulationOptions.map((opt, idx) => (
-                                <option key={idx} value={opt}>{opt}</option>
-                            ))}
-                        </select>
+                        <Select value={tabulation || '__all__'} onValueChange={(value) => setTabulation(value === '__all__' ? '' : value)}>
+                            <SelectTrigger className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm">
+                                <SelectValue placeholder="Todas" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__all__">Todas</SelectItem>
+                                {tabulationOptions.map((opt, idx) => (
+                                    <SelectItem key={idx} value={opt}>{opt}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     {/* Created At Smart Filter */}
@@ -177,16 +179,17 @@ export function ClientFilters({ userRole, onFilterChange }: ClientFiltersProps) 
                     {(userRole === 'ADMIN' || userRole === 'SUPERVISOR') && (
                         <div className="space-y-1">
                             <label className="text-xs font-medium text-muted-foreground">Responsável</label>
-                            <select
-                                value={responsibleId}
-                                onChange={(e) => setResponsibleId(e.target.value)}
-                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors data-[placeholder]:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                <option value="">Todos</option>
-                                {users.map(u => (
-                                    <option key={u.id} value={u.id}>{u.name} {u.surname || ''}</option>
-                                ))}
-                            </select>
+                            <Select value={responsibleId || '__all__'} onValueChange={(value) => setResponsibleId(value === '__all__' ? '' : value)}>
+                                <SelectTrigger className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm">
+                                    <SelectValue placeholder="Todos" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__all__">Todos</SelectItem>
+                                    {users.map((u) => (
+                                        <SelectItem key={u.id} value={u.id}>{u.name} {u.surname || ''}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                     )}
 

@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { useFormContext } from "react-hook-form";
 import { CheckCircle, FileText } from "lucide-react";
 import { ModalInput, ModalSelect } from "./ModalUI";
+import { QualificationRadioGroup } from "./QualificationRadioGroup";
 import { ClientDealFormValues } from "./schemas";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +12,7 @@ interface QualificationFormProps {
 }
 
 export function QualificationForm({ tabulationOptions, users = [] }: QualificationFormProps) {
-    const { register, watch, formState: { errors }, setValue } = useFormContext<ClientDealFormValues>();
+    const { register, watch, setValue } = useFormContext<ClientDealFormValues>();
 
     // Watch tabulação para mostrar data condicional
     const tabulacao = watch("qualification.tabulacao");
@@ -27,32 +28,32 @@ export function QualificationForm({ tabulationOptions, users = [] }: Qualificati
 
             {/* Seletor de Responsável (Independente) */}
             <div className="bg-muted/30 rounded-lg p-4 border border-border">
+                
                 <ModalSelect
                     label="Responsável pelo Negócio"
                     className="bg-background border-input text-foreground focus:ring-primary h-9 text-sm"
-                    {...register("deal.user_id")}
-                >
-                    <option value="">Sem responsável</option>
-                    {users.map((u: any) => (
-                        <option key={u.id} value={u.id}>{u.name} {u.surname}</option>
-                    ))}
-                </ModalSelect>
+                    value={watch('deal.user_id') || '__empty__'}
+                    onValueChange={(value) => setValue('deal.user_id', value === '__empty__' ? '' : value, { shouldDirty: true })}
+                    options={[
+                        { label: 'Sem responsável', value: '__empty__' },
+                        ...users.map((u: any) => ({ label: [u.name, u.surname].filter(Boolean).join(' '), value: u.id }))
+                    ]}
+                />
             </div>
 
             {/* Painel de Destaque (Tabulação Apenas) */}
             <div className="bg-status-waiting/10 rounded-lg p-4 border border-status-waiting/20 relative transition-all">
                 <div className="absolute top-4 right-4 text-status-waiting opacity-50"><FileText size={20} /></div>
 
-                <ModalSelect
-                    label="Tabulação / Status do Lead"
-                    className="bg-transparent border-none p-0 text-lg font-bold text-foreground focus:ring-0 focus:bg-transparent"
-                    {...register("qualification.tabulacao")}
-                >
-                    <option value="">Selecione...</option>
-                    {tabulationOptions.map(opt => (
-                        <option key={opt} value={opt} className="text-foreground bg-popover">{opt}</option>
-                    ))}
-                </ModalSelect>
+                <label className="block text-[12px] font-bold text-muted-foreground uppercase tracking-wide mb-2 pl-0.5">
+                    Tabulação / Status do Lead
+                </label>
+                <QualificationRadioGroup
+                    name="qualification.tabulacao"
+                    value={watch('qualification.tabulacao') || ''}
+                    onChange={(value) => setValue('qualification.tabulacao', value, { shouldDirty: true })}
+                    options={tabulationOptions.map((opt) => ({ label: opt, value: opt }))}
+                />
 
                 {showAccountDate && (
                     <div className="mt-3 pt-3 border-t border-status-waiting/20 animate-in slide-in-from-top-2 fade-in duration-300">
@@ -85,15 +86,22 @@ export function QualificationForm({ tabulationOptions, users = [] }: Qualificati
                     label="Maquininha Atual"
                     {...register("qualification.maquininha_atual")}
                 />
-                <ModalSelect
-                    label="Produto de Interesse"
-                    {...register("qualification.produto_interesse")}
-                >
-                    <option value="">—</option>
-                    <option value="Conta PJ">Conta PJ</option>
-                    <option value="Cartão de Crédito">Cartão de Crédito</option>
-                    <option value="Antecipação">Antecipação</option>
-                </ModalSelect>
+
+                <div className="flex flex-col gap-1.5">
+                    <label className="block text-[12px] font-bold text-muted-foreground uppercase tracking-wide pl-0.5">
+                        Produto de Interesse
+                    </label>
+                    <QualificationRadioGroup
+                        name="qualification.produto_interesse"
+                        value={watch('qualification.produto_interesse') || ''}
+                        onChange={(value) => setValue('qualification.produto_interesse', value, { shouldDirty: true })}
+                        options={[
+                            { label: 'Conta PJ', value: 'Conta PJ' },
+                            { label: 'Cartão de Crédito', value: 'Cartão de Crédito' },
+                            { label: 'Antecipação', value: 'Antecipação' },
+                        ]}
+                    />
+                </div>
             </div>
 
             {/* Checkboxes Estilizados */}

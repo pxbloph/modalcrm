@@ -1,12 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+export interface TeamSummary {
+    key: 'fenix' | 'titas' | 'nao_mapeado';
+    name: string;
+    leadership: string;
+    total_open_accounts: number;
+    share_percent: number;
+}
+
 @Injectable()
 export class TvDashboardService {
     constructor(private prisma: PrismaService) { }
 
-    async getOpenAccountsMetrics(queryDate?: string) {
-        // 1. Determine Date Range (Brazil Operational Window)
+    private readonly teamMeta = {
+        fenix: { name: 'Equipe F\u00eanix', leadership: 'Luana' },
+        titas: { name: 'Equipe Tit\u00e3s', leadership: 'Henrique' },
+    } as const;
+
+    private resolveDateRange(queryDate?: string) {
         const now = new Date();
         const brazilOffset = 3 * 60 * 60 * 1000;
         const brazilTime = new Date(now.getTime() - brazilOffset);
@@ -22,7 +34,47 @@ export class TvDashboardService {
         const startDate = new Date(`${queryDateString}T00:00:00.000Z`);
         const endDate = new Date(`${queryDateString}T23:59:59.999Z`);
 
-        // 2. Fetch Deals directly for Open Accounts metrics
+        return { startDate, endDate };
+    }
+
+    private buildResponsibleFilter(currentUser?: { id: string; role: string }) {
+        const base: any = {
+            is_active: true,
+            role: { not: 'ADMIN' },
+        };
+
+        if (currentUser?.role === 'SUPERVISOR') {
+            base.supervisor_id = currentUser.id;
+        }
+
+        return base;
+    }
+
+    private buildTeamSummary(responsibleCountsByTeam: Map<string, number>, totalOpenAccounts: number): TeamSummary[] {
+        const teamTotals = new Map<TeamSummary['key'], TeamSummary>([
+            ['fenix', { key: 'fenix', name: 'Equipe F\u00eanix', leadership: 'Luana', total_open_accounts: 0, share_percent: 0 }],
+            ['titas', { key: 'titas', name: 'Equipe Tit\u00e3s', leadership: 'Henrique', total_open_accounts: 0, share_percent: 0 }],
+            ['nao_mapeado', { key: 'nao_mapeado', name: 'N\u00e3o mapeado', leadership: 'Sem lideran\u00e7a definida', total_open_accounts: 0, share_percent: 0 }],
+        ]);
+
+        for (const [teamKey, count] of responsibleCountsByTeam.entries()) {
+            const key = (teamKey === 'fenix' || teamKey === 'titas') ? teamKey : 'nao_mapeado';
+            const currentTeam = teamTotals.get(key)!;
+            currentTeam.total_open_accounts += count;
+        }
+
+        return Array.from(teamTotals.values()).map((team) => ({
+            ...team,
+            share_percent: totalOpenAccounts > 0
+                ? Number(((team.total_open_accounts / totalOpenAccounts) * 100).toFixed(1))
+                : 0,
+        }));
+    }
+
+    async getOpenAccountsMetrics(queryDate?: string, currentUser?: { id: string; role: string }) {
+        const { startDate, endDate } = this.resolveDateRange(queryDate);
+        const responsibleFilter = this.buildResponsibleFilter(currentUser);
+
         const validDeals = await this.prisma.deal.findMany({
             where: {
                 client: {
@@ -33,15 +85,12 @@ export class TvDashboardService {
                     tabulacao: 'Conta aberta',
                     integration_status: 'Cadastro salvo com sucesso!',
                 },
-                responsible: {
-                    is_active: true, // Apenas usuários ativos
-                    role: { not: 'ADMIN' } // Perfis administrativos não apareçam
-                }
+                responsible: responsibleFilter,
             },
             select: {
                 responsible_id: true,
                 responsible: {
-                    select: { name: true, surname: true }
+                    select: { name: true, surname: true, team: true }
                 },
                 client: {
                     select: {
@@ -58,17 +107,17 @@ export class TvDashboardService {
             }
         });
 
-        // Fetch all active operators to show zeros
         const activeOperators = await this.prisma.user.findMany({
             where: {
                 role: 'OPERATOR',
                 is_active: true,
+                ...(currentUser?.role === 'SUPERVISOR' ? { supervisor_id: currentUser.id } : {}),
             },
-            select: { id: true, name: true, surname: true }
+            select: { id: true, name: true, surname: true, team: true }
         });
 
-        // 3. Aggregate Points by Responsible User
-        const aggregation = new Map<string, { user_name: string; count: number; clients: any[] }>();
+        const aggregation = new Map<string, { user_name: string; team: string | null; count: number; clients: any[] }>();
+        const responsibleCountsByTeam = new Map<string, number>();
         let totalOpenAccounts = 0;
 
         const forbiddenNames = ['Administrador', 'Pablo Araujo', 'Renan Telles', 'Jennifer Vidal'];
@@ -78,6 +127,7 @@ export class TvDashboardService {
             if (!forbiddenNames.includes(fullName)) {
                 aggregation.set(op.id, {
                     user_name: fullName,
+                    team: (op as any).team || null,
                     count: 0,
                     clients: []
                 });
@@ -98,6 +148,7 @@ export class TvDashboardService {
             if (!aggregation.has(deal.responsible_id)) {
                 aggregation.set(deal.responsible_id, {
                     user_name: fullName,
+                    team: (deal.responsible as any).team || null,
                     count: 0,
                     clients: []
                 });
@@ -105,6 +156,8 @@ export class TvDashboardService {
 
             const agg = aggregation.get(deal.responsible_id)!;
             agg.count++;
+            const teamKey = (deal.responsible as any).team || 'nao_mapeado';
+            responsibleCountsByTeam.set(teamKey, (responsibleCountsByTeam.get(teamKey) || 0) + 1);
 
             if (deal.client) {
                 agg.clients.push({
@@ -119,45 +172,34 @@ export class TvDashboardService {
             }
         }
 
-        // 4. Assemble Ranking
         const ranking = Array.from(aggregation.entries())
             .map(([userId, data]) => ({
                 user_id: userId,
                 user_name: data.user_name,
+                team: data.team,
                 count: data.count,
                 clients: data.clients
             }))
             .sort((a, b) => {
-                // Sort by Count DESC, then Name ASC
                 if (b.count !== a.count) return b.count - a.count;
                 return a.user_name.localeCompare(b.user_name);
             });
+
+        const team_summary = this.buildTeamSummary(responsibleCountsByTeam, totalOpenAccounts);
 
         return {
             date: startDate.toISOString().split('T')[0],
             total_open_accounts: totalOpenAccounts,
             ranking,
+            team_summary,
             updated_at: new Date().toISOString(),
         };
     }
-    async getExpandedMetrics(queryDate?: string) {
-        // 1. Determine Date Range
-        const now = new Date();
-        const brazilOffset = 3 * 60 * 60 * 1000;
-        const brazilTime = new Date(now.getTime() - brazilOffset);
-        let queryDateString = brazilTime.toISOString().split('T')[0];
 
-        if (queryDate) {
-            const parsed = new Date(queryDate);
-            if (!isNaN(parsed.getTime())) {
-                queryDateString = parsed.toISOString().split('T')[0];
-            }
-        }
+    async getExpandedMetrics(queryDate?: string, currentUser?: { id: string; role: string }) {
+        const { startDate, endDate } = this.resolveDateRange(queryDate);
+        const responsibleFilter = this.buildResponsibleFilter(currentUser);
 
-        const startDate = new Date(`${queryDateString}T00:00:00.000Z`);
-        const endDate = new Date(`${queryDateString}T23:59:59.999Z`);
-
-        // 2. Fetch Base Metrics (Open Accounts based on DEALS)
         const openDealsGrouped = await this.prisma.deal.groupBy({
             by: ['responsible_id'],
             where: {
@@ -169,15 +211,11 @@ export class TvDashboardService {
                     tabulacao: 'Conta aberta',
                     integration_status: 'Cadastro salvo com sucesso!',
                 },
-                responsible: {
-                    is_active: true,
-                    role: { not: 'ADMIN' },
-                }
+                responsible: responsibleFilter,
             },
             _count: { id: true },
         });
 
-        // 3. Fetch user names and filter specific profiles
         const userIds = openDealsGrouped.map(g => g.responsible_id).filter(Boolean) as string[];
 
         const users = await this.prisma.user.findMany({
@@ -200,15 +238,12 @@ export class TvDashboardService {
 
         for (const grouped of openDealsGrouped) {
             if (!grouped.responsible_id) continue;
-            // Only count if user was not filtered out
             if (userMap.has(grouped.responsible_id)) {
                 totalOpenAccounts += grouped._count.id;
                 responsibleCounts.set(grouped.responsible_id, grouped._count.id);
             }
         }
 
-        // 4. Fetch New Metrics
-        // A) Total Leads Created Today
         const totalLeadsCreated = await this.prisma.client.count({
             where: {
                 created_at: {
@@ -218,7 +253,6 @@ export class TvDashboardService {
             }
         });
 
-        // B) Qualificações (Proxy: is_qualified = true AND updated_at = hoje)
         const totalQualifiedClients = await this.prisma.client.count({
             where: {
                 is_qualified: true,
@@ -229,13 +263,12 @@ export class TvDashboardService {
             }
         });
 
-        // 5. Calcular Ranking de Usuários
         const ranking = Array.from(responsibleCounts.entries())
             .map(([userId, count]) => {
                 return {
                     user_id: userId,
                     user_name: userMap.get(userId) || 'Desconhecido',
-                    count: count,
+                    count,
                 };
             })
             .sort((a, b) => {
@@ -243,7 +276,6 @@ export class TvDashboardService {
                 return a.user_name.localeCompare(b.user_name);
             });
 
-        // 6. Calculate Conversion Rate
         const conversionRate = totalLeadsCreated > 0
             ? ((totalOpenAccounts / totalLeadsCreated) * 100).toFixed(1)
             : '0.0';

@@ -1,5 +1,4 @@
-
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -19,9 +18,17 @@ export default function LoginPage() {
         setLoading(true);
         setError('');
 
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+
         try {
             const response = await api.post('/auth/login', { email, password });
-            const { access_token, user } = response.data;
+            const { access_token, user, message } = response.data || {};
+
+            if (!access_token || !user) {
+                setError(message || 'Credenciais inválidas. Tente novamente.');
+                return;
+            }
 
             localStorage.setItem('token', access_token);
             localStorage.setItem('user', JSON.stringify(user));
@@ -29,7 +36,11 @@ export default function LoginPage() {
             router.push('/');
         } catch (err: any) {
             console.error(err);
-            setError('Credenciais inválidas. Tente novamente.');
+            if (!err?.response) {
+                setError('Não foi possível conectar ao servidor (porta 3500).');
+            } else {
+                setError(err.response?.data?.message || 'Credenciais inválidas. Tente novamente.');
+            }
         } finally {
             setLoading(false);
         }
@@ -40,7 +51,6 @@ export default function LoginPage() {
             <div className="w-full max-w-md space-y-8 rounded-xl bg-white p-10 shadow-lg border border-gray-100">
                 <div>
                     <div className="flex justify-center mb-6">
-                        {/* AJUSTE DE TAMANHO DO LOGO LOGIN: Altere w-64 e h-20 */}
                         <div className="relative w-64 h-24">
                             <Image
                                 src="/logo_Logo_black.svg"
@@ -106,9 +116,6 @@ export default function LoginPage() {
                             disabled={loading}
                             className="group relative flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-70 disabled:cursor-not-allowed transition-all"
                         >
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-
-                            </span>
                             {loading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Entrar'}
                         </button>
                     </div>
@@ -117,3 +124,4 @@ export default function LoginPage() {
         </div>
     );
 }
+

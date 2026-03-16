@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Filter, X, Download } from 'lucide-react';
 import api from '@/lib/api';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ReportsFilterProps {
     onFilterChange: (filters: any) => void;
@@ -98,29 +99,30 @@ export default function ReportsFilter({ onFilterChange, onExport, userRole }: Re
                 </div>
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1 dark:text-gray-300">Operador</label>
-                    <select
-                        value={operatorId}
-                        onChange={(e) => setOperatorId(e.target.value)}
-                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-100"
-                    >
-                        <option value="">Todos</option>
-                        {operators.map(op => (
-                            <option key={op.id} value={op.id}>{op.name}</option>
-                        ))}
-                    </select>
+                    <Select value={operatorId || "__all__"} onValueChange={setOperatorId}>
+                        <SelectTrigger className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-800 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-100">
+                            <SelectValue placeholder="Todos" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all__">Todos</SelectItem>
+                            {operators.map((op) => (
+                                <SelectItem key={op.id} value={op.id}>{op.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1 dark:text-gray-300">Status</label>
-                    <select
-                        value={status}
-                        onChange={(e) => setStatus(e.target.value)}
-                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-100"
-                    >
-                        <option value="">Todos</option>
-                        <option value="Cadastrando...">Cadastrando...</option>
-                        <option value="Cadastro salvo com sucesso!">Sucesso</option>
-                        {/* Add more status options as needed */}
-                    </select>
+                    <Select value={status || "__all__"} onValueChange={setStatus}>
+                        <SelectTrigger className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-800 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-100">
+                            <SelectValue placeholder="Todos" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all__">Todos</SelectItem>
+                            <SelectItem value="Cadastrando...">Cadastrando...</SelectItem>
+                            <SelectItem value="Cadastro salvo com sucesso!">Sucesso</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
                 <div className="flex items-end">
                     <button

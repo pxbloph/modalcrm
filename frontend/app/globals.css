@@ -165,3 +165,114 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #98A0A9;
 }
+
+/* Native Select Motion */
+select {
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease, color 180ms ease, transform 140ms ease;
+}
+
+select:hover:not(:disabled) {
+  border-color: var(--ring);
+}
+
+select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(38, 255, 56, 0.22);
+  transform: translateY(-1px);
+}
+
+select:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+
+@keyframes select-dropdown-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes select-dropdown-up {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+.select-content-motion[data-state="open"][data-side="bottom"] {
+  transform-origin: top center;
+  animation: select-dropdown-down 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.select-content-motion[data-state="closed"][data-side="bottom"] {
+  transform-origin: top center;
+  animation: select-dropdown-up 220ms ease-in;
+}
+
+
+@keyframes popover-dropdown-down {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes popover-dropdown-up {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+.popover-content-motion[data-state="open"][data-side="bottom"] {
+  transform-origin: top center;
+  animation: popover-dropdown-down 340ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.popover-content-motion[data-state="closed"][data-side="bottom"] {
+  transform-origin: top center;
+  animation: popover-dropdown-up 220ms ease-in;
+}
+
+/* TV Dashboard — glow sweep */
+@keyframes glow-sweep {
+  0%   { left: -60%; }
+  100% { left: 160%; }
+}
+
+.text-glow-sweep {
+  color: #f97316;
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+}
+
+.text-glow-sweep::after {
+  content: '';
+  position: absolute;
+  top: -10%;
+  left: -60%;
+  width: 50%;
+  height: 120%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.75) 50%, transparent 100%);
+  mix-blend-mode: screen;
+  animation: glow-sweep 3s linear infinite;
+  pointer-events: none;
+}

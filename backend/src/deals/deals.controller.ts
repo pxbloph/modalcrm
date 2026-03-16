@@ -31,7 +31,7 @@ export class DealsController {
     @Query('client_id') clientId?: string,
     @Query('tags') tags?: string,
     @Query('search') search?: string,
-    @Query('tabulation') tabulation?: string, // [NEW]
+    @Query('tabulation') tabulation?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('openAccountStartDate') openAccountStartDate?: string,
@@ -40,21 +40,64 @@ export class DealsController {
     return this.dealsService.countByStage(pipelineId, responsibleId, clientId, search, tabulation, startDate, endDate, openAccountStartDate, openAccountEndDate);
   }
 
-  @Get()
-  findAll(
+  @Get('stalled-by-stage')
+  stalledByStage(
     @Query('pipeline_id') pipelineId?: string,
     @Query('responsible_id') responsibleId?: string,
     @Query('client_id') clientId?: string,
-    @Query('tags') tags?: string,
     @Query('search') search?: string,
-    @Query('tabulation') tabulation?: string, // [NEW]
+    @Query('tabulation') tabulation?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('openAccountStartDate') openAccountStartDate?: string,
     @Query('openAccountEndDate') openAccountEndDate?: string,
   ) {
-    const tagIds = tags ? tags.split(',') : undefined;
-    return this.dealsService.findAll(pipelineId, responsibleId, clientId, search, tabulation, startDate, endDate, openAccountStartDate, openAccountEndDate);
+    return this.dealsService.getStalledByStage(
+      pipelineId,
+      responsibleId,
+      clientId,
+      search,
+      tabulation,
+      startDate,
+      endDate,
+      openAccountStartDate,
+      openAccountEndDate,
+    );
+  }
+
+  @Get()
+  findAll(
+    @Query('pipeline_id') pipelineId?: string,
+    @Query('responsible_id') responsibleId?: string,
+    @Query('client_id') clientId?: string,
+    @Query('stage_id') stageId?: string,
+    @Query('tags') tags?: string,
+    @Query('search') search?: string,
+    @Query('tabulation') tabulation?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('openAccountStartDate') openAccountStartDate?: string,
+    @Query('openAccountEndDate') openAccountEndDate?: string,
+    @Query('skip') skip?: string,
+    @Query('take') take?: string,
+  ) {
+    const parsedSkip = skip !== undefined ? Math.max(0, Number(skip) || 0) : undefined;
+    const parsedTake = take !== undefined ? Math.max(1, Math.min(200, Number(take) || 0)) : undefined;
+
+    return this.dealsService.findAll(
+      pipelineId,
+      responsibleId,
+      clientId,
+      search,
+      tabulation,
+      startDate,
+      endDate,
+      openAccountStartDate,
+      openAccountEndDate,
+      stageId,
+      parsedSkip,
+      parsedTake,
+    );
   }
 
   @Get(':id')
@@ -72,7 +115,7 @@ export class DealsController {
   @Patch(':id/tabulation')
   async updateTabulation(@Param('id') id: string, @Body() body: { tabulacao: string }, @Request() req) {
     if (req.user.role !== 'ADMIN' && req.user.role !== 'SUPERVISOR') {
-      throw new ForbiddenException('Apenas Supervisores podem alterar tabulação manualmente.');
+      throw new ForbiddenException('Apenas Supervisores podem alterar tabulacao manualmente.');
     }
 
     const deal = await this.dealsService.findOne(id);
@@ -80,10 +123,8 @@ export class DealsController {
 
     const oldTabulation = (deal.client as any)?.tabulacao || 'Aguardando contato';
 
-    // Update Client directly
-    const result = await this.clientsService.update(deal.client_id, { tabulacao: body.tabulacao } as any, req.user);
+    await this.clientsService.update(deal.client_id, { tabulacao: body.tabulacao } as any, req.user);
 
-    // Filter History: Log the change
     await this.dealsService.addHistory(id, 'TABULATION_UPDATE', {
       old: oldTabulation,
       new: body.tabulacao,
@@ -107,3 +148,4 @@ export class DealsController {
     return this.dealsService.remove(id);
   }
 }
+

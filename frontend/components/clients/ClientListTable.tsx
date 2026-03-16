@@ -32,6 +32,7 @@ import { Loader2, GripVertical, Trash2, CheckCircle, Settings, RotateCcw, Search
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { ImportModal } from './ImportModal';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Client {
     id: string;
@@ -387,7 +388,7 @@ export default function ClientListTable({
                 accessorFn: (row) => row.agendamento,
                 cell: (info) => {
                     const val = info.getValue() as string;
-                    return val ? new Date(val).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-';
+                    return val ? new Date(val).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }) : '-';
                 },
                 minSize: 150,
             },
@@ -800,16 +801,17 @@ export default function ClientListTable({
                                 )}
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm text-muted-foreground">Linhas por página:</span>
-                                    <select
-                                        value={limit}
-                                        onChange={(e) => onLimitChange(Number(e.target.value))}
-                                        className="h-8 w-16 rounded-md border-input bg-background text-sm text-foreground focus:ring-primary focus:border-primary"
-                                    >
-                                        <option value={10}>10</option>
-                                        <option value={20}>20</option>
-                                        <option value={50}>50</option>
-                                        <option value={100}>100</option>
-                                    </select>
+                                    <Select value={String(limit)} onValueChange={(value) => onLimitChange(Number(value))}>
+                                        <SelectTrigger className="h-8 w-20 rounded-md border-input bg-background text-sm text-foreground">
+                                            <SelectValue placeholder="10" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="10">10</SelectItem>
+                                            <SelectItem value="20">20</SelectItem>
+                                            <SelectItem value="50">50</SelectItem>
+                                            <SelectItem value="100">100</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
                                     <button

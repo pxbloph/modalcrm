@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { Loader2, CheckCircle, ArrowLeft } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { FormField } from '@/components/settings/FormBuilderInternal';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { QualificationRadioGroup } from '@/components/crm/ClientDealModal/QualificationRadioGroup';
 
 interface Client {
     id: string;
@@ -31,6 +32,17 @@ export default function QualifyPage() {
     // Dynamic Form State
     const [fields, setFields] = useState<FormField[]>([]);
     const [formData, setFormData] = useState<Record<string, any>>({});
+
+    const normalizeField = (field: FormField): FormField => {
+        if (field.type !== 'select') {
+            return field;
+        }
+
+        return {
+            ...field,
+            type: 'radio',
+        };
+    };
 
     useEffect(() => {
         const loadData = async () => {
@@ -60,7 +72,7 @@ export default function QualifyPage() {
                 let finalFields: FormField[] = [];
 
                 if (templateRes.data && templateRes.data.fields) {
-                    finalFields = templateRes.data.fields;
+                    finalFields = templateRes.data.fields.map((field: FormField) => normalizeField(field));
                 } else {
                     // Fallback to default fields
                     finalFields = [
@@ -80,9 +92,9 @@ export default function QualifyPage() {
                 // FORCE UPDATE Tabulação Options and Inject Agendamento
                 finalFields = finalFields.map(f => {
                     if (f.systemField === 'tabulacao') {
-                        return { ...f, options: correctTabulacaoOptions, required: true };
+                        return normalizeField({ ...f, options: correctTabulacaoOptions, required: true });
                     }
-                    return f;
+                    return normalizeField(f);
                 });
 
                 // Ensure Agendamento field exists logic
@@ -122,7 +134,27 @@ export default function QualifyPage() {
                     }
                 }
 
+                const initialFormData: Record<string, unknown> = {};
+
+                finalFields.forEach((field) => {
+                    if (field.systemField === 'client_name') {
+                        initialFormData[field.id] = clientRes.data?.name || '';
+                    }
+
+                    if (field.systemField === 'tabulacao' && clientRes.data?.tabulacao) {
+                        initialFormData[field.id] = clientRes.data.tabulacao;
+                    }
+
+                    if (field.systemField === 'maquininha_atual') {
+                        const saved = clientRes.data?.maquininha_atual;
+                        initialFormData[field.id] = saved
+                            ? saved.split(', ').map((v: string) => v.trim()).filter(Boolean)
+                            : ['Nenhuma'];
+                    }
+                });
+
                 setFields(finalFields);
+                setFormData(initialFormData);
 
             } catch (err) {
                 console.error(err);
@@ -134,19 +166,26 @@ export default function QualifyPage() {
         loadData();
     }, [params?.id]);
 
-    const formatCurrency = (value: string) => {
-        if (!value) return '';
-        const digits = value.replace(/\D/g, '');
-        const number = parseInt(digits) / 100;
-        if (isNaN(number)) return '';
-        return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const parseCurrencyToNumber = (value: unknown) => {
+        if (typeof value === 'number') return value;
+        if (typeof value !== 'string' || !value) return 0;
+
+        const normalized = value.replace(/[^\d,]/g, '').replace(',', '.');
+        const parsed = parseFloat(normalized);
+        return Number.isNaN(parsed) ? 0 : parsed;
     };
+
+    const getNumberRangeOptions = () => [
+        { label: '0 a 10 mil', value: '0' },
+        { label: '11 a 20 mil', value: '11000' },
+        { label: '21 a 50 mil', value: '21000' },
+        { label: '51 a 100 mil', value: '51000' },
+        { label: 'Acima de 100 mil', value: '100001' },
+    ];
 
     const handleChange = (fieldId: string, value: any, type: string) => {
         if (type === 'number') {
-            // Apply currency mask to all number fields in this form
-            const formatted = formatCurrency(String(value));
-            setFormData(prev => ({ ...prev, [fieldId]: formatted }));
+            setFormData(prev => ({ ...prev, [fieldId]: Number(value) || 0 }));
         } else {
             setFormData(prev => ({ ...prev, [fieldId]: value }));
         }
@@ -175,15 +214,20 @@ export default function QualifyPage() {
 
                 // System Field Mapping (Flatten specific fields for creating relations/columns)
                 if (field.systemField) {
-                    if (field.type === 'number') {
-                        // Parse currency back to float
-                        if (value && typeof value === 'string') {
-                            payload[field.systemField] = parseFloat(value.replace(/[^\d,]/g, '').replace(',', '.'));
-                        } else {
-                            payload[field.systemField] = value;
-                        }
+                    if (field.systemField === 'maquininha_atual') {
+                        const arr = Array.isArray(value) ? value : ['Nenhuma'];
+                        payload[field.systemField] = arr.join(', ');
+                    } else if (field.type === 'number') {
+                        payload[field.systemField] = parseCurrencyToNumber(value);
                     } else if (field.type === 'radio') {
-                        payload[field.systemField] = value === 'true'; // Convert string "true" to boolean
+                        // Só converte para boolean se as opções do campo são true/false
+                        const isBooleanField = field.options?.every(o => o.value === 'true' || o.value === 'false');
+                        payload[field.systemField] = isBooleanField ? value === 'true' : value;
+                    } else if (field.type === 'datetime-local' && value) {
+                        // Append São Paulo offset to avoid UTC misinterpretation
+                        // "2026-03-12T14:30" → "2026-03-12T14:30:00-03:00"
+                        const normalized = value.length === 16 ? `${value}:00-03:00` : value;
+                        payload[field.systemField] = normalized;
                     } else {
                         payload[field.systemField] = value;
                     }
@@ -278,44 +322,66 @@ export default function QualifyPage() {
                                     )}
 
                                     {field.type === 'number' && (
-                                        <Input
-                                            type="text" // Using text to handle currency masking easily
-                                            required={field.required}
-                                            placeholder={field.placeholder}
-                                            value={formData[field.id] || ''}
-                                            onChange={e => handleChange(field.id, e.target.value, 'number')}
-                                        />
+                                        <div className="rounded-lg border border-border bg-muted/20 p-3">
+                                            <QualificationRadioGroup
+                                                name={field.id}
+                                                value={String(formData[field.id] ?? '')}
+                                                onChange={(value) => handleChange(field.id, value, 'number')}
+                                                options={getNumberRangeOptions()}
+                                                required={field.required}
+                                            />
+                                        </div>
                                     )}
 
-                                    {field.type === 'select' && (
-                                        <select
-                                            required={field.required}
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
-                                            value={formData[field.id] || ''}
-                                            onChange={e => handleChange(field.id, e.target.value, 'select')}
-                                        >
-                                            <option value="">Selecione...</option>
-                                            {field.options?.map((opt, idx) => (
-                                                <option key={idx} value={opt.value}>{opt.label}</option>
-                                            ))}
-                                        </select>
+                                    {(field.type === 'select' || field.type === 'radio') && field.systemField === 'maquininha_atual' && (
+                                        <div className="rounded-lg border border-border bg-muted/20 p-3">
+                                            <div className="flex flex-wrap gap-2">
+                                                {(field.options ?? []).map((opt) => {
+                                                    const current: string[] = Array.isArray(formData[field.id]) ? formData[field.id] : ['Nenhuma'];
+                                                    const isSelected = current.includes(opt.value);
+                                                    return (
+                                                        <button
+                                                            key={opt.value}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const prev: string[] = Array.isArray(formData[field.id]) ? formData[field.id] : ['Nenhuma'];
+                                                                if (opt.value === 'Nenhuma') {
+                                                                    handleChange(field.id, ['Nenhuma'], 'multiselect');
+                                                                } else {
+                                                                    const withoutNenhuma = prev.filter(v => v !== 'Nenhuma' && v !== opt.value);
+                                                                    if (isSelected) {
+                                                                        const next = withoutNenhuma.length > 0 ? withoutNenhuma : ['Nenhuma'];
+                                                                        handleChange(field.id, next, 'multiselect');
+                                                                    } else {
+                                                                        handleChange(field.id, [...withoutNenhuma, opt.value], 'multiselect');
+                                                                    }
+                                                                }
+                                                            }}
+                                                            className={cn(
+                                                                'inline-flex items-center px-3 py-1.5 rounded-full border',
+                                                                'text-xs font-semibold select-none transition-all duration-150',
+                                                                isSelected
+                                                                    ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                                                                    : 'bg-input/20 text-muted-foreground border-input hover:border-primary/50 hover:text-foreground hover:bg-muted/50 cursor-pointer'
+                                                            )}
+                                                        >
+                                                            {opt.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
                                     )}
 
-                                    {field.type === 'radio' && (
-                                        <div className="flex items-center gap-4">
-                                            {field.options?.map((opt, idx) => (
-                                                <label key={idx} className="inline-flex items-center">
-                                                    <input
-                                                        type="radio"
-                                                        name={field.id}
-                                                        required={field.required}
-                                                        className="form-radio text-primary border-input bg-background focus:ring-primary accent-primary"
-                                                        checked={formData[field.id] === opt.value}
-                                                        onChange={() => handleChange(field.id, opt.value, 'radio')}
-                                                    />
-                                                    <span className="ml-2 text-foreground">{opt.label}</span>
-                                                </label>
-                                            ))}
+                                    {(field.type === 'select' || field.type === 'radio') && field.systemField !== 'maquininha_atual' && (
+                                        <div className="rounded-lg border border-border bg-muted/20 p-3">
+                                            <QualificationRadioGroup
+                                                name={field.id}
+                                                value={formData[field.id] || ''}
+                                                onChange={(value) => handleChange(field.id, value, field.type)}
+                                                options={field.options ?? []}
+                                                required={field.required}
+                                            />
                                         </div>
                                     )}
 
@@ -370,3 +436,6 @@ export default function QualifyPage() {
         </div>
     );
 }
+
+
+

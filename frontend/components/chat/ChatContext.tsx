@@ -1,5 +1,4 @@
-
-'use client';
+﻿'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
@@ -13,24 +12,35 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
+function resolveSocketUrl(): string | undefined {
+    const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+    if (configuredApiUrl) {
+        // API URL usually ends with /api, but Socket.IO runs at server root (/socket.io)
+        return configuredApiUrl.replace(/\/api\/?$/, '');
+    }
+
+    if (typeof window !== 'undefined') {
+        // Local fallback when env is missing
+        return `http://${window.location.hostname}:3500`;
+    }
+
+    return undefined;
+}
+
 export function ChatProvider({ children }: { children: ReactNode }) {
     const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
 
     useEffect(() => {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-
-        // Determine Socket URL:
-        // - In Development (localhost): Connect primarily to port 3500 (Backend)
-        // - In Production (Server): Use relative path (undefined) to let Nginx proxy handle it via /socket.io/
-        const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-        const socketUrl = isDevelopment ? 'http://localhost:3500' : undefined;
+        const socketUrl = resolveSocketUrl();
 
         const socketInstance = io(socketUrl, {
             auth: {
                 token: token ? `Bearer ${token}` : '',
             },
-            autoConnect: false, // Wait for token check or manual connect
+            autoConnect: false,
         });
 
         if (token) {

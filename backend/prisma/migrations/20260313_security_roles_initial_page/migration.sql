@@ -1,0 +1,2 @@
+ALTER TABLE "security_roles"
+ADD COLUMN IF NOT EXISTS "initial_page" TEXT NOT NULL DEFAULT 'DEFAULT';

@@ -1,5 +1,5 @@
 
-import { Injectable, ConflictException, InternalServerErrorException, BadRequestException, HttpException } from '@nestjs/common';
+import { Injectable, ConflictException, InternalServerErrorException, BadRequestException, HttpException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User, Role, Prisma } from '@prisma/client';
 
@@ -299,6 +299,11 @@ export class ClientsService {
             const client = await this.findOne(id, user);
             if (!client) {
                 throw new InternalServerErrorException('Cliente não encontrado ou acesso negado');
+            }
+
+            // [BLOCKER] Operadores não podem editar leads não integrados
+            if (user?.role === Role.OPERATOR && (client as any).integration_status !== 'Cadastro salvo com sucesso!') {
+                throw new ForbiddenException('Lead não integrado: operadores não podem editar este cadastro.');
             }
 
             // Check for Upsert/Merge Trigger (Lead -> Client promotion)
@@ -851,6 +856,160 @@ export class ClientsService {
 
     // --- TAKEOVER FUNCTIONALITY ---
 
+    private getOwnerDisplayName(owner?: { name?: string; surname?: string } | null) {
+        if (!owner?.name) return 'Sem responsável';
+        return `${owner.name} ${owner.surname || ''}`.trim();
+    }
+
+    private isLeadEligibleForOperatorPull(client: any) {
+        const cleanCnpj = String(client?.cnpj || '').replace(/\D/g, '');
+        const hasMinimumData =
+            Boolean(String(client?.name || '').trim()) &&
+            Boolean(String(client?.email || '').trim()) &&
+            Boolean(String(client?.phone || '').trim()) &&
+            cleanCnpj.length === 14;
+
+        const integrated = client?.integration_status === 'Cadastro salvo com sucesso!';
+
+        return {
+            eligible: integrated && hasMinimumData,
+            reason: integrated
+                ? 'Lead sem dados mínimos obrigatórios para operação.'
+                : `Lead não apto para seguir. Status atual: ${client?.integration_status || 'não informado'}.`,
+        };
+    }
+
+    private async findActiveLeadByCnpj(cnpj: string) {
+        const cleanCnpj = cnpj.replace(/\D/g, '');
+        if (!cleanCnpj) throw new ConflictException('CNPJ inválido');
+
+        return this.prisma.client.findFirst({
+            where: {
+                OR: [{ cnpj }, { cnpj: cleanCnpj }],
+            },
+            include: {
+                created_by: true,
+            },
+        });
+    }
+
+    private isDaviAbrao(user?: { name?: string; surname?: string; email?: string } | null) {
+        if (!user) return false;
+        const fullName = `${user.name || ''} ${user.surname || ''}`.trim().toLowerCase();
+        const email = String(user.email || '').trim().toLowerCase();
+        return fullName === 'davi abraão' || fullName === 'davi abraao' || email === 'davi.abraao@mbfinance.com.br';
+    }
+
+    private async pickRandomOperatorForDaviLead() {
+        const operators = await this.prisma.user.findMany({
+            where: {
+                role: Role.OPERATOR,
+                is_active: true,
+            },
+            select: {
+                id: true,
+                name: true,
+                surname: true,
+                email: true,
+                role: true,
+            },
+        });
+
+        const eligibleOperators = operators.filter((operator) => !this.isDaviAbrao(operator));
+        if (eligibleOperators.length === 0) {
+            throw new ConflictException('Não há operadores ativos disponíveis para redistribuir o lead do Davi Abraão.');
+        }
+
+        const selectedIndex = Math.floor(Math.random() * eligibleOperators.length);
+        return eligibleOperators[selectedIndex];
+    }
+
+    private async archiveAndDeleteInaptLead(client: any, attemptedBy: User, archiveReason: string) {
+        await this.prisma.$transaction(async (tx) => {
+            await (tx as any).deletedLeadArchive.create({
+                data: {
+                    original_lead_id: client.id,
+                    name: client.name,
+                    surname: client.surname,
+                    cnpj: client.cnpj,
+                    email: client.email,
+                    phone: client.phone,
+                    integration_status: client.integration_status,
+                    tabulacao: client.tabulacao,
+                    original_owner_id: client.created_by_id,
+                    original_owner_name: this.getOwnerDisplayName(client.created_by),
+                    attempted_by_user_id: attemptedBy.id,
+                    archive_reason: archiveReason,
+                    archive_context: 'operator_pull_by_cnpj',
+                    original_payload: JSON.parse(JSON.stringify(client)),
+                },
+            });
+
+            await (tx as any).$executeRawUnsafe(
+                'DELETE FROM "responsibility_change_requests" WHERE "lead_id" = $1',
+                client.id,
+            );
+
+            await (tx as any).leadOwnerTransferAudit.deleteMany({
+                where: { lead_id: client.id },
+            });
+
+            await tx.clientCustomFieldValue.deleteMany({
+                where: { client_id: client.id },
+            });
+
+            await tx.deal.deleteMany({
+                where: { client_id: client.id },
+            });
+
+            await tx.client.delete({
+                where: { id: client.id },
+            });
+        });
+    }
+
+    private async executeLeadTransfer(client: any, newOwner: any, requestedBy: User, reason?: string, mode = 'operator_transfer_cnpj') {
+        const oldOwnerId = client.created_by_id;
+
+        const updatedClient = await this.prisma.$transaction(async (tx) => {
+            const updated = await tx.client.update({
+                where: { id: client.id },
+                data: { created_by_id: newOwner.id },
+                include: { created_by: true },
+            });
+
+            await tx.deal.updateMany({
+                where: { client_id: client.id, status: 'OPEN' },
+                data: { responsible_id: newOwner.id },
+            });
+
+            await (tx as any).leadOwnerTransferAudit.create({
+                data: {
+                    lead_id: client.id,
+                    old_owner_id: oldOwnerId,
+                    new_owner_id: newOwner.id,
+                    requested_by_user_id: requestedBy.id,
+                    mode,
+                    reason: reason || 'Transferência manual por CNPJ',
+                },
+            });
+
+            return updated;
+        });
+
+        this.notifyN8N({
+            client: updatedClient,
+            oldOwner: client.created_by,
+            newOwner: updatedClient.created_by,
+            requestedBy,
+            mode,
+            reason,
+            auditId: 'tx-audit',
+        });
+
+        return updatedClient;
+    }
+
     async lookupByCnpj(cnpj: string, user: User) {
         const cleanCnpj = cnpj.replace(/\D/g, '');
 
@@ -907,109 +1066,89 @@ export class ClientsService {
         };
     }
 
-    // NEW: Explicit lookup for Transfer (No constraints)
     async lookupForTransfer(cnpj: string, user: User) {
-        const cleanCnpj = cnpj.replace(/\D/g, '');
-        if (!cleanCnpj) throw new ConflictException('CNPJ inválido');
-
-        const client = await this.prisma.client.findFirst({
-            where: {
-                OR: [{ cnpj: cnpj }, { cnpj: cleanCnpj }]
-            },
-            include: {
-                created_by: true
-            }
-        });
+        const client = await this.findActiveLeadByCnpj(cnpj);
 
         console.log(`[LOOKUP TRANSFER] User ${user.email} searching CNPJ ${cnpj}. Found: ${!!client}`);
 
         if (!client) {
-            // Return null or throw? Throwing 404 is better for frontend handling
-            return null; // Controller handles 404 or we return structured response
+            return null;
         }
+
+        const eligibility = this.isLeadEligibleForOperatorPull(client);
+        const ownerIsDavi = this.isDaviAbrao(client.created_by);
 
         return {
             lead_id: client.id,
             company_name: client.name,
             cnpj_masked: client.cnpj,
-            owner_name: client.created_by ? `${client.created_by.name} ${client.created_by.surname || ''}`.trim() : 'Sem responsável',
+            owner_name: this.getOwnerDisplayName(client.created_by),
             owner_id: client.created_by?.id,
-            pipeline_stage: client.tabulacao || 'Sem tabulação',
-            can_transfer: true // Always true per new rule
+            pipeline_stage: client.tabulacao || 'Sem tabulacao',
+            can_transfer: eligibility.eligible,
+            is_eligible: eligibility.eligible,
+            deny_reason: eligibility.eligible ? null : eligibility.reason,
+            integration_status: client.integration_status,
+            transfer_target_mode: ownerIsDavi ? 'random_operator' : 'requester',
+            transfer_target_hint: ownerIsDavi
+                ? 'Este lead esta com Davi Abraao e sera redistribuido aleatoriamente para um operador ativo.'
+                : 'Se o lead estiver apto, a responsabilidade sera assumida no momento da confirmacao.',
         };
     }
 
-    // NEW: Transfer By CNPJ (No constraints)
     async transferByCnpj(cnpj: string, user: User, reason?: string) {
-        const cleanCnpj = cnpj.replace(/\D/g, '');
+        const client = await this.findActiveLeadByCnpj(cnpj);
+        if (!client) throw new ConflictException('Lead nao encontrado.');
 
-        const client = await this.prisma.client.findFirst({
-            where: {
-                OR: [{ cnpj: cnpj }, { cnpj: cleanCnpj }]
-            },
-            include: { created_by: true }
-        });
+        const eligibility = this.isLeadEligibleForOperatorPull(client);
+        if (!eligibility.eligible) {
+            await this.archiveAndDeleteInaptLead(
+                client,
+                user,
+                `${eligibility.reason} Lead excluido do fluxo operacional durante tentativa de puxar por CNPJ.`,
+            );
 
-        if (!client) throw new ConflictException('Lead não encontrado.');
+            throw new ConflictException(
+                'Lead nao apto para seguir. O registro foi removido do fluxo operacional e arquivado para consulta administrativa.',
+            );
+        }
 
         if (client.created_by_id === user.id) {
-            throw new ConflictException('Você já é o responsável por este lead.');
+            throw new ConflictException('Voce ja e o responsavel por este lead.');
         }
 
-        if (user.role === Role.OPERATOR || user.role === Role.LEADER) {
-            await this.responsibilityService.createRequest({
-                leadId: client.id,
-                toUserId: user.id,
-                reason: reason || 'Transferência manual por CNPJ (Novo Fluxo)'
-            }, user);
+        const ownerIsDavi = this.isDaviAbrao(client.created_by);
+        if (ownerIsDavi) {
+            const randomOperator = await this.pickRandomOperatorForDaviLead();
+            const updatedClient = await this.executeLeadTransfer(
+                client,
+                randomOperator,
+                user,
+                reason || 'Redistribuicao automatica de lead originalmente alocado ao Davi Abraao',
+                'operator_transfer_cnpj_randomized',
+            );
 
-            return { success: true, message: 'Solicitação enviada para aprovação.' };
+            return {
+                success: true,
+                lead_id: client.id,
+                message: `Lead redistribuido automaticamente para ${this.getOwnerDisplayName(updatedClient.created_by)}.`,
+                assigned_to: {
+                    id: updatedClient.created_by.id,
+                    name: this.getOwnerDisplayName(updatedClient.created_by),
+                },
+                randomized: true,
+            };
         }
 
-        const oldOwnerId = client.created_by_id;
-        const newOwnerId = user.id;
+        await this.executeLeadTransfer(
+            client,
+            user,
+            user,
+            reason || 'Transferencia manual por CNPJ (Novo Fluxo)',
+            'operator_transfer_cnpj',
+        );
 
-        // Transaction
-        const updatedClient = await this.prisma.$transaction(async (tx) => {
-            const updated = await tx.client.update({
-                where: { id: client.id },
-                data: { created_by_id: newOwnerId },
-                include: { created_by: true }
-            });
-
-            // Sincronizar Kanban (Deals abertos)
-            await tx.deal.updateMany({
-                where: { client_id: client.id, status: 'OPEN' },
-                data: { responsible_id: newOwnerId }
-            });
-
-            // Audit
-            await (tx as any).leadOwnerTransferAudit.create({
-                data: {
-                    lead_id: client.id,
-                    old_owner_id: oldOwnerId,
-                    new_owner_id: newOwnerId,
-                    requested_by_user_id: user.id,
-                    mode: 'operator_transfer_cnpj',
-                    reason: reason || 'Transferência manual por CNPJ (Novo Fluxo)'
-                }
-            });
-
-            return updated;
-        });
-
-        // N8N Notification (Fire and forget)
-        this.notifyN8N({
-            client: updatedClient,
-            oldOwner: client.created_by,
-            newOwner: updatedClient.created_by,
-            requestedBy: user,
-            mode: 'operator_transfer_cnpj',
-            reason,
-            auditId: 'tx-audit' // simplified since inside tx we didn't return ID, acceptable
-        });
-
-        return { success: true, message: 'Responsabilidade assumida com sucesso.' };
+        return { success: true, lead_id: client.id, message: 'Responsabilidade assumida com sucesso.' };
     }
 
     async takeover(id: string, user: User, reason?: string) {
@@ -1253,4 +1392,191 @@ export class ClientsService {
             console.error("[SYNC] Erro ao sincronizar tabulação -> kanban:", e);
         }
     }
+    async getDeletedLeadsArchive(query: any = {}) {
+        const take = Math.min(Number(query.limit) || 100, 500);
+        const search = String(query.search || '').trim();
+
+        const where: any = {};
+        if (search) {
+            where.OR = [
+                { name: { contains: search, mode: 'insensitive' } },
+                { surname: { contains: search, mode: 'insensitive' } },
+                { cnpj: { contains: search } },
+                { email: { contains: search, mode: 'insensitive' } },
+                { original_owner_name: { contains: search, mode: 'insensitive' } },
+            ];
+        }
+
+        if (query.status === 'restored') {
+            where.restored_at = { not: null };
+        } else if (query.status === 'pending') {
+            where.restored_at = null;
+        }
+
+        return (this.prisma as any).deletedLeadArchive.findMany({
+            where,
+            include: {
+                attempted_by_user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        surname: true,
+                        email: true,
+                    },
+                },
+            },
+            orderBy: { deleted_at: 'desc' },
+            take,
+        });
+    }
+
+    async getDeletedLeadArchiveById(id: string) {
+        const item = await (this.prisma as any).deletedLeadArchive.findUnique({
+            where: { id },
+            include: {
+                attempted_by_user: {
+                    select: { id: true, name: true, surname: true, email: true },
+                },
+            },
+        });
+
+        if (!item) {
+            throw new ConflictException('Lead arquivado não encontrado.');
+        }
+
+        return item;
+    }
+
+    async updateDeletedLeadArchive(id: string, data: any) {
+        await this.getDeletedLeadArchiveById(id);
+
+        const allowedFields = [
+            'name',
+            'surname',
+            'cnpj',
+            'email',
+            'phone',
+            'integration_status',
+            'tabulacao',
+            'archive_reason',
+        ];
+
+        const updateData: Record<string, any> = {};
+        for (const key of allowedFields) {
+            if (data[key] !== undefined) {
+                updateData[key] = data[key];
+            }
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            throw new BadRequestException('Nenhum campo válido foi informado para edição.');
+        }
+
+        return (this.prisma as any).deletedLeadArchive.update({
+            where: { id },
+            data: updateData,
+        });
+    }
+
+    private async restoreDeletedLeadArchiveInternal(archiveId: string, user: User) {
+        const archive = await this.getDeletedLeadArchiveById(archiveId);
+        if (archive.restored_at) {
+            throw new ConflictException('Este lead arquivado já foi devolvido para a base.');
+        }
+
+        const existingClient = await this.prisma.client.findUnique({
+            where: { cnpj: archive.cnpj },
+        });
+
+        if (existingClient) {
+            throw new ConflictException('Já existe um lead ativo com este CNPJ na base.');
+        }
+
+        const preferredOwnerId = archive.original_owner_id || user.id;
+        const owner = await this.prisma.user.findUnique({
+            where: { id: preferredOwnerId },
+        });
+
+        const fallbackOwner = owner?.is_active ? owner : await this.prisma.user.findFirst({
+            where: { is_active: true, role: { in: [Role.ADMIN, Role.SUPERVISOR, Role.LEADER, Role.OPERATOR] } },
+            orderBy: { created_at: 'asc' },
+        });
+
+        if (!fallbackOwner) {
+            throw new ConflictException('Nenhum usuário ativo disponível para restaurar o lead.');
+        }
+
+        const payload = archive.original_payload && typeof archive.original_payload === 'object'
+            ? archive.original_payload
+            : {};
+
+        const restoredClient = await this.prisma.client.create({
+            data: {
+                name: archive.name,
+                surname: archive.surname || '',
+                cnpj: archive.cnpj,
+                email: archive.email,
+                phone: archive.phone,
+                integration_status: archive.integration_status || 'Cadastro salvo com sucesso!',
+                tabulacao: archive.tabulacao || payload?.tabulacao || 'Aguardando contato',
+                answers: payload?.answers || {},
+                is_qualified: Boolean(payload?.is_qualified),
+                has_open_account: Boolean(payload?.has_open_account),
+                created_by: { connect: { id: fallbackOwner.id } },
+            } as any,
+        });
+
+        await this.createDefaultDeal(restoredClient, fallbackOwner.id);
+
+        await (this.prisma as any).deletedLeadArchive.update({
+            where: { id: archive.id },
+            data: {
+                restored_at: new Date(),
+                restored_by_user_id: user.id,
+                restored_client_id: restoredClient.id,
+            },
+        });
+
+        return {
+            archive_id: archive.id,
+            restored_client_id: restoredClient.id,
+            restored_client_name: restoredClient.name,
+        };
+    }
+
+    async restoreDeletedLeadArchive(id: string, user: User) {
+        const restored = await this.restoreDeletedLeadArchiveInternal(id, user);
+        return {
+            success: true,
+            ...restored,
+            message: 'Lead devolvido para a base com sucesso.',
+        };
+    }
+
+    async restoreDeletedLeadArchiveBulk(ids: string[], user: User) {
+        if (!Array.isArray(ids) || ids.length === 0) {
+            throw new BadRequestException('Informe ao menos um lead arquivado para devolução.');
+        }
+
+        const results = {
+            total: ids.length,
+            success: 0,
+            failed: 0,
+            items: [] as any[],
+        };
+
+        for (const id of ids) {
+            try {
+                const restored = await this.restoreDeletedLeadArchiveInternal(id, user);
+                results.success++;
+                results.items.push({ id, status: 'success', ...restored });
+            } catch (error: any) {
+                results.failed++;
+                results.items.push({ id, status: 'error', reason: error?.message || 'Erro ao devolver lead.' });
+            }
+        }
+
+        return results;
+    }
+
 }
