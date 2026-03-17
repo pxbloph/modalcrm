@@ -132,6 +132,11 @@ export default function KanbanPage() {
         localStorage.setItem('crm-list-config-v2', JSON.stringify({ order: newOrder }));
     };
     const [draftSearchTerm, setDraftSearchTerm] = useState("");
+    const leadRegistrationEnabled = currentUser?.system_settings?.lead_registration_enabled !== false;
+    const canCreateLead =
+        currentUser?.role === 'ADMIN' ||
+        (Array.isArray(currentUser?.permissions) && currentUser.permissions.includes('crm.create_lead'));
+    const canAccessNewClient = Boolean(leadRegistrationEnabled && canCreateLead);
 
     const INITIAL_STAGE_PAGE_SIZE = 80;
     const [loadingMoreByStage, setLoadingMoreByStage] = useState<Record<string, boolean>>({});
@@ -180,11 +185,33 @@ export default function KanbanPage() {
             setCurrentUser(parsedUser);
 
             if (parsedUser.role === 'OPERATOR') {
-                router.push('/new-client');
+                const canOperatorCreateLead =
+                    parsedUser?.role === 'ADMIN' ||
+                    (Array.isArray(parsedUser?.permissions) && parsedUser.permissions.includes('crm.create_lead'));
+                const operatorLeadRegistrationEnabled = parsedUser?.system_settings?.lead_registration_enabled !== false;
+                router.push(canOperatorCreateLead && operatorLeadRegistrationEnabled ? '/new-client' : '/pull-leads');
                 return;
             }
             fetchPresets(parsedUser.id);
         }
+
+        api.get('/auth/me')
+            .then((res) => {
+                if (res.data?.id) {
+                    const refreshedUser = {
+                        ...(storedUser ? JSON.parse(storedUser) : {}),
+                        ...res.data,
+                        permissions: Array.isArray(res.data?.permissions) ? res.data.permissions : [],
+                        system_settings: res.data?.system_settings || {},
+                    };
+                    setCurrentUser(refreshedUser);
+                    localStorage.setItem('user', JSON.stringify(refreshedUser));
+                }
+            })
+            .catch((error) => {
+                console.error('Erro ao atualizar permissões do usuário no Kanban:', error);
+            });
+
         fetchPipelines();
         fetchFiltersData();
     }, []);
@@ -747,12 +774,14 @@ export default function KanbanPage() {
                             />
                         )}
 
+                        {canAccessNewClient && (
                         <button
                             onClick={() => router.push('/new-client')}
                             className="h-9 px-4 text-sm font-medium bg-primary text-primary-foreground border border-transparent rounded-md flex items-center gap-2 hover:bg-primary/90 transition shadow-sm"
                         >
                             <Plus size={16} /> <span className="hidden lg:inline">Novo Negócio</span>
                         </button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -833,6 +862,7 @@ export default function KanbanPage() {
         </div>
     );
 }
+
 
 
 

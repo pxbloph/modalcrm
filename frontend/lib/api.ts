@@ -1,13 +1,8 @@
 import axios from 'axios';
-
-const resolvedBaseUrl =
-    process.env.NEXT_PUBLIC_API_URL ||
-    (typeof window !== 'undefined'
-        ? `http://${window.location.hostname}:3500/api`
-        : 'http://localhost:3500/api');
+import { resolveApiBaseUrl } from './backend-url';
 
 const api = axios.create({
-    baseURL: resolvedBaseUrl,
+    baseURL: resolveApiBaseUrl(),
 });
 
 // Add a request interceptor to include the auth token

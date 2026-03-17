@@ -17,7 +17,6 @@ type TransferLookupResult = {
     is_eligible?: boolean;
     deny_reason?: string | null;
     integration_status?: string;
-    transfer_target_mode?: 'requester' | 'random_operator';
     transfer_target_hint?: string;
 };
 
@@ -72,12 +71,10 @@ export default function PullLeadsPage() {
 
             setSuccessMsg(response.data?.message || 'Ação concluída com sucesso.');
 
-            if (!response.data?.randomized) {
-                const leadId = response.data?.lead_id || result.lead_id;
-                setTimeout(() => {
-                    router.push(`/clients/${leadId}/qualify`);
-                }, 1500);
-            }
+            const leadId = response.data?.lead_id || result.lead_id;
+            setTimeout(() => {
+                router.push(`/clients/${leadId}/qualify`);
+            }, 1500);
         } catch (err: any) {
             console.error('Transfer Error:', err);
             setError(err.response?.data?.message || 'Erro ao processar lead.');

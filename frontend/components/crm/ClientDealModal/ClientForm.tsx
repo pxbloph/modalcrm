@@ -1,11 +1,15 @@
 import React from "react";
 import { useFormContext } from "react-hook-form";
-import { User, Shield } from "lucide-react";
 import { ModalInput } from "./ModalUI";
 import { ClientDealFormValues } from "./schemas";
-import { cn } from "@/lib/utils";
 
-export function ClientForm({ isBlocked }: { isBlocked?: boolean }) {
+export function ClientForm({
+    isBlocked,
+    canEditIntegrationStatus = false,
+}: {
+    isBlocked?: boolean;
+    canEditIntegrationStatus?: boolean;
+}) {
     const { register, formState: { errors } } = useFormContext<ClientDealFormValues>();
 
     return (
@@ -42,6 +46,13 @@ export function ClientForm({ isBlocked }: { isBlocked?: boolean }) {
                     disabled={isBlocked}
                     {...register("client.email")}
                     error={errors.client?.email?.message}
+                />
+
+                <ModalInput
+                    label="Status de Integração"
+                    placeholder="Status da integração"
+                    disabled={isBlocked || !canEditIntegrationStatus}
+                    {...register("client.integration_status")}
                 />
             </div>
         </div>

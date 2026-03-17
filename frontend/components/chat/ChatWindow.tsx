@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import ChatHeader from './ChatHeader';
 import { useChat } from './ChatContext';
 import api from '@/lib/api';
+import { resolveApiBaseUrl } from '@/lib/backend-url';
 import { X, Send, Paperclip, Smile, File, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
@@ -199,7 +200,7 @@ export default function ChatWindow({ conversationId, currentUser, otherUserName,
             // Send message with link
             // Using markdown for link/image
             const isImage = file.type.startsWith('image/');
-            const fileUrl = `${process.env.NEXT_PUBLIC_API_URL}${res.data.path}`;
+            const fileUrl = `${resolveApiBaseUrl()}${res.data.path}`;
             const msgBody = isImage
                 ? `![${file.name}](${fileUrl})`
                 : `[📎 ${file.name}](${fileUrl})`;

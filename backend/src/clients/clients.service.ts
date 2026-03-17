@@ -9,6 +9,7 @@ import { TabulationsService } from '../tabulations/tabulations.service';
 import { ResponsibilityService } from '../modules/responsibility/responsibility.service';
 import { forwardRef, Inject } from '@nestjs/common';
 import axios from 'axios';
+import { SecurityService } from '../security/security.service';
 
 
 @Injectable()
@@ -18,6 +19,7 @@ export class ClientsService {
         private dealsService: DealsService,
         private automationsService: AutomationsService,
         private tabulationsService: TabulationsService,
+        private securityService: SecurityService,
         @Inject(forwardRef(() => ResponsibilityService))
         private responsibilityService: ResponsibilityService
     ) { }
@@ -308,6 +310,18 @@ export class ClientsService {
 
             // Check for Upsert/Merge Trigger (Lead -> Client promotion)
             const inputData = data as any;
+            if (
+                inputData.integration_status !== undefined &&
+                inputData.integration_status !== client.integration_status &&
+                user.role !== Role.ADMIN
+            ) {
+                await this.securityService.ensurePermission(
+                    user.id,
+                    'crm.edit_integration_status',
+                    'Sem permissão para alterar o status de integração deste lead.',
+                );
+            }
+
             if (inputData.integration_status === 'Cadastro salvo com sucesso!' && inputData.cnpj) {
                 const duplicate = await this.prisma.client.findUnique({
                     where: { cnpj: inputData.cnpj }
@@ -862,20 +876,11 @@ export class ClientsService {
     }
 
     private isLeadEligibleForOperatorPull(client: any) {
-        const cleanCnpj = String(client?.cnpj || '').replace(/\D/g, '');
-        const hasMinimumData =
-            Boolean(String(client?.name || '').trim()) &&
-            Boolean(String(client?.email || '').trim()) &&
-            Boolean(String(client?.phone || '').trim()) &&
-            cleanCnpj.length === 14;
-
         const integrated = client?.integration_status === 'Cadastro salvo com sucesso!';
 
         return {
-            eligible: integrated && hasMinimumData,
-            reason: integrated
-                ? 'Lead sem dados mínimos obrigatórios para operação.'
-                : `Lead não apto para seguir. Status atual: ${client?.integration_status || 'não informado'}.`,
+            eligible: integrated,
+            reason: `Lead não apto para seguir. Status atual: ${client?.integration_status || 'não informado'}.`,
         };
     }
 
@@ -891,37 +896,6 @@ export class ClientsService {
                 created_by: true,
             },
         });
-    }
-
-    private isDaviAbrao(user?: { name?: string; surname?: string; email?: string } | null) {
-        if (!user) return false;
-        const fullName = `${user.name || ''} ${user.surname || ''}`.trim().toLowerCase();
-        const email = String(user.email || '').trim().toLowerCase();
-        return fullName === 'davi abraão' || fullName === 'davi abraao' || email === 'davi.abraao@mbfinance.com.br';
-    }
-
-    private async pickRandomOperatorForDaviLead() {
-        const operators = await this.prisma.user.findMany({
-            where: {
-                role: Role.OPERATOR,
-                is_active: true,
-            },
-            select: {
-                id: true,
-                name: true,
-                surname: true,
-                email: true,
-                role: true,
-            },
-        });
-
-        const eligibleOperators = operators.filter((operator) => !this.isDaviAbrao(operator));
-        if (eligibleOperators.length === 0) {
-            throw new ConflictException('Não há operadores ativos disponíveis para redistribuir o lead do Davi Abraão.');
-        }
-
-        const selectedIndex = Math.floor(Math.random() * eligibleOperators.length);
-        return eligibleOperators[selectedIndex];
     }
 
     private async archiveAndDeleteInaptLead(client: any, attemptedBy: User, archiveReason: string) {
@@ -1076,7 +1050,6 @@ export class ClientsService {
         }
 
         const eligibility = this.isLeadEligibleForOperatorPull(client);
-        const ownerIsDavi = this.isDaviAbrao(client.created_by);
 
         return {
             lead_id: client.id,
@@ -1089,10 +1062,8 @@ export class ClientsService {
             is_eligible: eligibility.eligible,
             deny_reason: eligibility.eligible ? null : eligibility.reason,
             integration_status: client.integration_status,
-            transfer_target_mode: ownerIsDavi ? 'random_operator' : 'requester',
-            transfer_target_hint: ownerIsDavi
-                ? 'Este lead esta com Davi Abraao e sera redistribuido aleatoriamente para um operador ativo.'
-                : 'Se o lead estiver apto, a responsabilidade sera assumida no momento da confirmacao.',
+            transfer_target_mode: 'requester',
+            transfer_target_hint: 'Se o lead estiver apto, a responsabilidade sera assumida no momento da confirmacao.',
         };
     }
 
@@ -1115,29 +1086,6 @@ export class ClientsService {
 
         if (client.created_by_id === user.id) {
             throw new ConflictException('Voce ja e o responsavel por este lead.');
-        }
-
-        const ownerIsDavi = this.isDaviAbrao(client.created_by);
-        if (ownerIsDavi) {
-            const randomOperator = await this.pickRandomOperatorForDaviLead();
-            const updatedClient = await this.executeLeadTransfer(
-                client,
-                randomOperator,
-                user,
-                reason || 'Redistribuicao automatica de lead originalmente alocado ao Davi Abraao',
-                'operator_transfer_cnpj_randomized',
-            );
-
-            return {
-                success: true,
-                lead_id: client.id,
-                message: `Lead redistribuido automaticamente para ${this.getOwnerDisplayName(updatedClient.created_by)}.`,
-                assigned_to: {
-                    id: updatedClient.created_by.id,
-                    name: this.getOwnerDisplayName(updatedClient.created_by),
-                },
-                randomized: true,
-            };
         }
 
         await this.executeLeadTransfer(

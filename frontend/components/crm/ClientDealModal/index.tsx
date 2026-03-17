@@ -417,6 +417,9 @@ export function ClientDealModal({
     // [BLOCKER] Operadores não podem editar leads não integrados
     const integrationStatus = loadedData?.client?.integration_status || loadedData?.integration_status;
     const isBlockedForOperator = currentUser?.role === 'OPERATOR' && integrationStatus !== 'Cadastro salvo com sucesso!';
+    const canEditIntegrationStatus =
+        currentUser?.role === 'ADMIN' ||
+        (Array.isArray(currentUser?.permissions) && currentUser.permissions.includes('crm.edit_integration_status'));
 
     return (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-[2px] flex items-center justify-center z-[100] p-4 font-sans">
@@ -475,7 +478,10 @@ export function ClientDealModal({
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                                             <div className="flex flex-col gap-6">
                                                 <Div2_ClientData>
-                                                    <ClientForm isBlocked={isBlockedForOperator} />
+                                                    <ClientForm
+                                                        isBlocked={isBlockedForOperator}
+                                                        canEditIntegrationStatus={canEditIntegrationStatus}
+                                                    />
                                                 </Div2_ClientData>
                                                 <Div3_Responsible
                                                     users={users}

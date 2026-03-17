@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { Maximize, Minimize } from 'lucide-react';
 import api from '@/lib/api';
 
@@ -147,7 +148,7 @@ export default function TvDashboardPage() {
                                 <span className="text-lg font-mono uppercase tracking-wider text-zinc-400">Contas abertas consolidadas</span>
                             </div>
 
-                            <div className="flex-1 p-8 flex flex-col gap-6">
+                            <div className="flex-1 p-8 pb-40 flex flex-col gap-6">
                                 <div className="grid grid-cols-2 gap-6">
                                     <div className="rounded-2xl border border-red-200 bg-gradient-to-br from-red-50 to-white p-8 shadow-sm">
                                         <div className="flex items-center justify-between gap-4">
@@ -193,6 +194,18 @@ export default function TvDashboardPage() {
                                         </p>
                                     </div>
                                 )}
+                            </div>
+
+                            <div className="pointer-events-none absolute bottom-6 right-8">
+                                <div className="relative h-64 w-[32rem]">
+                                    <Image
+                                        src="/img/flexcall.png"
+                                        alt="Flexcall"
+                                        fill
+                                        className="object-contain object-right"
+                                        priority
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>

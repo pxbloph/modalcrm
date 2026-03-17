@@ -8,3 +8,8 @@ yarn-error.log*
 .next/
 coverage/
 .prisma/
+
+# Arquivos compactados grandes
+*.rar
+*.zip
+*.7z

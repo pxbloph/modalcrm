@@ -1,0 +1,13 @@
+
+> frontend@0.1.0 start
+> next start -H 0.0.0.0 -p 3600
+
+⨯ Failed to start server
+Error: listen EADDRINUSE: address already in use 0.0.0.0:3600
+    at <unknown> (Error: listen EADDRINUSE: address already in use 0.0.0.0:3600) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3600
+}

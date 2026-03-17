@@ -1,7 +1,0 @@
-- Futuramente a telefonia levar a informação de cadastro direto do banco de dados para fazer o cadastro automático e depois explodir na tela para o operador que atender. 
-- Criar sistemas de relatório para baixar relatório dos operadores. ✅
-- Ajustar a aba de filtros na página "Minha carteira" na tela do operador
-- Quando marcar um agendamento automaticamente no horário executar uma ligação na telefonia para o determinado cliente. 
-- Colocar um chat interno direto com o suporte do sistema. ✅
-- Colocar para selecionar vários cards de uma vez.✅
-- Colocar um processo para quando for para Fase Relatório Contas Abertas marcar como conta aberta no Modal

@@ -16,7 +16,10 @@
       "Bash(do echo:*)",
       "Read(//c/DEV/mbforms/backend/src/$dir/**)",
       "Bash(xargs -I {} basename {})",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(xargs grep:*)",
+      "Bash(npm install:*)",
+      "Bash(npx prisma:*)"
     ]
   }
 }

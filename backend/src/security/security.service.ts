@@ -21,6 +21,7 @@ const PERMISSION_CATALOG = [
             { key: 'crm.view', label: 'Visualizar CRM' },
             { key: 'crm.create_lead', label: 'Criar leads' },
             { key: 'crm.edit_lead', label: 'Editar leads' },
+            { key: 'crm.edit_integration_status', label: 'Editar status de integração' },
             { key: 'crm.delete_lead', label: 'Excluir leads' },
             { key: 'crm.move_kanban', label: 'Mover cards no Kanban' },
             { key: 'crm.assign_owner', label: 'Alterar responsável de leads' },
@@ -74,7 +75,7 @@ const PERMISSION_CATALOG = [
 ];
 
 const BASE_ADMIN_PERMISSIONS = [
-    'crm.view', 'crm.create_lead', 'crm.edit_lead', 'crm.delete_lead', 'crm.move_kanban', 'crm.assign_owner', 'crm.export',
+    'crm.view', 'crm.create_lead', 'crm.edit_lead', 'crm.edit_integration_status', 'crm.delete_lead', 'crm.move_kanban', 'crm.assign_owner', 'crm.export',
     'users.view', 'users.create', 'users.edit', 'users.delete',
     'security.manage_roles', 'security.assign_permissions',
     'settings.tabulations', 'settings.pipelines', 'settings.custom_fields', 'settings.form_templates', 'settings.dev_notes.manage',
@@ -86,7 +87,7 @@ const BASE_ADMIN_PERMISSIONS = [
 const DEFAULT_ROLE_PERMISSIONS: Record<Role, string[]> = {
     ADMIN: BASE_ADMIN_PERMISSIONS,
     SUPERVISOR: [
-        'crm.view', 'crm.create_lead', 'crm.edit_lead', 'crm.move_kanban', 'crm.assign_owner', 'crm.export',
+        'crm.view', 'crm.create_lead', 'crm.edit_lead', 'crm.edit_integration_status', 'crm.move_kanban', 'crm.assign_owner', 'crm.export',
         'users.view', 'imports.open_accounts', 'imports.leads', 'reports.view', 'audit.view',
     ],
     LEADER: ['crm.view', 'crm.create_lead', 'crm.edit_lead', 'crm.move_kanban', 'reports.view'],
