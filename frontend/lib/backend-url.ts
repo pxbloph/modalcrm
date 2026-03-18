@@ -29,11 +29,7 @@ export function resolveApiBaseUrl(): string {
         return normalizeConfiguredUrl(configuredApiUrl, '/api');
     }
 
-    if (typeof window !== 'undefined') {
-        return `http://${window.location.hostname}:3500/api`;
-    }
-
-    return 'http://localhost:3500/api';
+    return '/backend-api/api';
 }
 
 export function resolveBackendOrigin(): string {

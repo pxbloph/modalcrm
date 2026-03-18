@@ -884,6 +884,11 @@ export class ClientsService {
         };
     }
 
+    private isLeadWaitingExternalRegistration(client: any) {
+        const status = (client?.integration_status || '').trim().toLowerCase();
+        return status === 'cadastrando...';
+    }
+
     private async findActiveLeadByCnpj(cnpj: string) {
         const cleanCnpj = cnpj.replace(/\D/g, '');
         if (!cleanCnpj) throw new ConflictException('CNPJ inválido');
@@ -1073,6 +1078,12 @@ export class ClientsService {
 
         const eligibility = this.isLeadEligibleForOperatorPull(client);
         if (!eligibility.eligible) {
+            if (this.isLeadWaitingExternalRegistration(client)) {
+                throw new ConflictException(
+                    'Lead em cadastramento por outro programa. O registro sera mantido na base e podera seguir normalmente quando o processo terminar.',
+                );
+            }
+
             await this.archiveAndDeleteInaptLead(
                 client,
                 user,

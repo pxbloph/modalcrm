@@ -238,17 +238,6 @@ export default function ClientRegistrationForm({ onSuccess, onCancel, className 
             }
         });
 
-        // Basic Validation
-        if (payload.phone) {
-            const phoneDigits = String(payload.phone).replace(/\D/g, '');
-            const validPhone = phoneDigits.startsWith('55') && phoneDigits.length >= 12;
-            if (!validPhone) {
-                setError('Telefone inválido. Use 55 + DDD + número (ex: 5511999999999).');
-                setSubmitting(false);
-                return;
-            }
-        }
-
         try {
             const response = await api.post('/clients', payload);
             const clientId = response.data.id;
