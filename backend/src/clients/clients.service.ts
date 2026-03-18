@@ -155,7 +155,11 @@ export class ClientsService {
         }
     }
 
-    private async buildFilterConditions(user: User, query: any = {}): Promise<Prisma.ClientWhereInput> {
+    private async buildFilterConditions(
+        user: User,
+        query: any = {},
+        options: { bypassRoleScope?: boolean } = {},
+    ): Promise<Prisma.ClientWhereInput> {
         let {
             search,
             startDate, endDate,
@@ -278,15 +282,17 @@ export class ClientsService {
         }
 
         // RBAC Logic
-        if (user.role === Role.SUPERVISOR) {
-            andConditions.push({
-                OR: [
-                    { created_by_id: user.id },
-                    { created_by: { supervisor_id: user.id } },
-                ]
-            });
-        } else if (user.role === Role.OPERATOR) {
-            andConditions.push({ created_by_id: user.id });
+        if (!options.bypassRoleScope) {
+            if (user.role === Role.SUPERVISOR) {
+                andConditions.push({
+                    OR: [
+                        { created_by_id: user.id },
+                        { created_by: { supervisor_id: user.id } },
+                    ],
+                });
+            } else if (user.role === Role.OPERATOR) {
+                andConditions.push({ created_by_id: user.id });
+            }
         }
 
         return andConditions.length > 0 ? { AND: andConditions } : {};
@@ -773,7 +779,10 @@ export class ClientsService {
     }
 
     async exportClients(user: User, query: any = {}) {
-        const where = await this.buildFilterConditions(user, query);
+        const canExportAllLeads = await this.securityService.userHasPermission(user.id, 'crm.export_all_leads');
+        const where = await this.buildFilterConditions(user, query, {
+            bypassRoleScope: canExportAllLeads,
+        });
         const { columns } = query; // IDs from frontend
 
         const visibleColumns: string[] = Array.isArray(columns) ? columns : (typeof columns === 'string' ? columns.split(',') : []);

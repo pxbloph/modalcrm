@@ -26,6 +26,7 @@ const PERMISSION_CATALOG = [
             { key: 'crm.move_kanban', label: 'Mover cards no Kanban' },
             { key: 'crm.assign_owner', label: 'Alterar responsável de leads' },
             { key: 'crm.export', label: 'Exportar dados do CRM' },
+            { key: 'crm.export_all_leads', label: 'Exportar todos os leads, inclusive admins' },
         ],
     },
     {
@@ -75,7 +76,7 @@ const PERMISSION_CATALOG = [
 ];
 
 const BASE_ADMIN_PERMISSIONS = [
-    'crm.view', 'crm.create_lead', 'crm.edit_lead', 'crm.edit_integration_status', 'crm.delete_lead', 'crm.move_kanban', 'crm.assign_owner', 'crm.export',
+    'crm.view', 'crm.create_lead', 'crm.edit_lead', 'crm.edit_integration_status', 'crm.delete_lead', 'crm.move_kanban', 'crm.assign_owner', 'crm.export', 'crm.export_all_leads',
     'users.view', 'users.create', 'users.edit', 'users.delete',
     'security.manage_roles', 'security.assign_permissions',
     'settings.tabulations', 'settings.pipelines', 'settings.custom_fields', 'settings.form_templates', 'settings.dev_notes.manage',

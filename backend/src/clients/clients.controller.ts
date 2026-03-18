@@ -80,6 +80,14 @@ export class ClientsController {
 
     @Get('export')
     async exportClients(@Request() req, @Query() query, @Res() res: Response) {
+        if (req?.user?.role !== 'ADMIN') {
+            await this.securityService.ensurePermission(
+                req.user.id,
+                'crm.export',
+                'Sem permissão para exportar dados do CRM.',
+            );
+        }
+
         // query includes filters and 'columns' (visible columns array/string)
         const data = await this.clientsService.exportClients(req.user, query);
 
