@@ -14,8 +14,8 @@ interface ModalFooterProps {
 
 export function ModalFooter({ onClose, onSave, onDelete, onOpenAccount, saving, canDelete, isBlocked }: ModalFooterProps) {
     return (
-        <div className="px-6 py-4 border-t border-border bg-muted/80 backdrop-blur-sm flex justify-between items-center z-10 sticky bottom-0">
-            <div>
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border bg-muted/80 backdrop-blur-sm flex flex-wrap justify-between items-center gap-2 z-10 sticky bottom-0">
+            <div className="shrink-0">
                 {canDelete && onDelete && !isBlocked && (
                     <button
                         type="button"
@@ -26,20 +26,20 @@ export function ModalFooter({ onClose, onSave, onDelete, onOpenAccount, saving, 
                     </button>
                 )}
             </div>
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-2">
                 {onOpenAccount && !isBlocked && (
                     <button
                         type="button"
                         onClick={(e) => { e.preventDefault(); onOpenAccount(); }}
-                        className="px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs shadow-md shadow-primary/20 transition-all uppercase tracking-wide flex items-center gap-2 transform active:scale-95"
+                        className="px-3 sm:px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs shadow-md shadow-primary/20 transition-all uppercase tracking-wide flex items-center gap-2 transform active:scale-95"
                     >
-                        <CheckCircle size={14} /> Marcar Conta Aberta
+                        <CheckCircle size={14} /> <span className="hidden sm:inline">Marcar </span>Conta Aberta
                     </button>
                 )}
                 <button
                     type="button"
                     onClick={onClose}
-                    className="px-4 py-2 rounded-lg border border-border font-bold text-muted-foreground text-xs hover:bg-background shadow-sm hover:shadow transition-all uppercase tracking-wide"
+                    className="px-3 sm:px-4 py-2 rounded-lg border border-border font-bold text-muted-foreground text-xs hover:bg-background shadow-sm hover:shadow transition-all uppercase tracking-wide"
                 >
                     Fechar
                 </button>
@@ -49,7 +49,7 @@ export function ModalFooter({ onClose, onSave, onDelete, onOpenAccount, saving, 
                         onClick={onSave}
                         disabled={saving}
                         className={cn(
-                            "px-6 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs shadow-md shadow-primary/20 flex items-center gap-2 transition-all transform active:scale-95 uppercase tracking-wide",
+                            "px-4 sm:px-6 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs shadow-md shadow-primary/20 flex items-center gap-2 transition-all transform active:scale-95 uppercase tracking-wide",
                             "disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
                         )}
                     >

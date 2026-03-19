@@ -14,14 +14,22 @@ export class TvDashboardController {
     }
 
     @Get('contas-abertas')
-    async getOpenAccounts(@Query('date') date: string | undefined, @Request() req: any) {
+    async getOpenAccounts(
+        @Query('date') date: string | undefined,
+        @Query('allTeams') allTeams: string | undefined,
+        @Request() req: any,
+    ) {
         this.ensureTvAccess(req.user);
-        return this.desktopService.getOpenAccountsMetrics(date, req.user);
+        return this.desktopService.getOpenAccountsMetrics(date, req.user, allTeams === 'true');
     }
 
     @Get('v2-metrics')
-    async getV2Metrics(@Query('date') date: string | undefined, @Request() req: any) {
+    async getV2Metrics(
+        @Query('date') date: string | undefined,
+        @Query('allTeams') allTeams: string | undefined,
+        @Request() req: any,
+    ) {
         this.ensureTvAccess(req.user);
-        return this.desktopService.getExpandedMetrics(date, req.user);
+        return this.desktopService.getExpandedMetrics(date, req.user, allTeams === 'true');
     }
 }

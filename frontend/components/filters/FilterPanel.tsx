@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, X, Check, Calendar, User, List, Filter, Plus, Save, Trash2 } from 'lucide-react';
+import { Search, X, Check, Filter, Plus } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { DateRangePickerBtx } from './DateRangePickerBtx';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import { AddFieldModal } from './AddFieldModal';
 import { FILTER_FIELDS, FilterField } from '@/lib/filter-definitions';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -45,6 +45,8 @@ export function FilterPanel({
     const [isAddingField, setIsAddingField] = useState(false);
     const [isSavingPreset, setIsSavingPreset] = useState(false);
     const [presetName, setPresetName] = useState('');
+    const [userSearch, setUserSearch] = useState('');
+    const [optionSearch, setOptionSearch] = useState('');
 
     const getFieldValue = (id: string) => activeFilters.find(f => f.id === id)?.value || '';
 
@@ -91,6 +93,131 @@ export function FilterPanel({
                         </SelectContent>
                     </Select>
                 );
+            case 'user-multi': {
+                const selectedIds: string[] = Array.isArray(value) ? value : (value ? [value] : []);
+                const filteredUsers = userSearch.trim()
+                    ? users.filter(u =>
+                        `${u.name} ${u.surname ?? ''}`.toLowerCase().includes(userSearch.toLowerCase())
+                    )
+                    : users;
+                return (
+                    <div className="rounded-md border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 overflow-hidden">
+                        {/* Busca + contador */}
+                        <div className="flex items-center gap-2 px-2 py-1.5 border-b border-gray-100 dark:border-zinc-700">
+                            <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <input
+                                type="text"
+                                placeholder="Buscar responsável..."
+                                value={userSearch}
+                                onChange={e => setUserSearch(e.target.value)}
+                                className="flex-1 text-xs bg-transparent border-none outline-none text-gray-700 dark:text-gray-300 placeholder:text-gray-400"
+                            />
+                            {selectedIds.length > 0 && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 shrink-0">
+                                    {selectedIds.length} sel.
+                                </span>
+                            )}
+                        </div>
+                        {/* Lista com scroll limitado */}
+                        <div className="max-h-44 overflow-y-auto">
+                            {filteredUsers.length === 0 ? (
+                                <p className="text-xs text-gray-400 text-center py-4">Nenhum resultado</p>
+                            ) : (
+                                filteredUsers.map((u) => {
+                                    const isSelected = selectedIds.includes(u.id);
+                                    return (
+                                        <button
+                                            key={u.id}
+                                            type="button"
+                                            onClick={() => {
+                                                const next = isSelected
+                                                    ? selectedIds.filter(id => id !== u.id)
+                                                    : [...selectedIds, u.id];
+                                                onFilterChange(field.id, next.length > 0 ? next : '');
+                                            }}
+                                            className={cn(
+                                                'w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors',
+                                                isSelected
+                                                    ? 'bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400'
+                                                    : 'hover:bg-gray-50 dark:hover:bg-zinc-700/50 text-gray-700 dark:text-gray-300'
+                                            )}
+                                        >
+                                            <div className={cn(
+                                                'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+                                                isSelected ? 'bg-green-500 border-green-500' : 'border-gray-300 dark:border-zinc-600'
+                                            )}>
+                                                {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
+                                            </div>
+                                            <span className="truncate">{u.name}{u.surname ? ' ' + u.surname : ''}</span>
+                                        </button>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+            case 'select-multi': {
+                const selectedValues: string[] = Array.isArray(value) ? value : (value ? [value] : []);
+                const allOptions = field.id === 'tabulation' ? tabulationOptions : (field.options?.map(o => o.value) || []);
+                const filteredOptions = optionSearch.trim()
+                    ? allOptions.filter(o => o.toLowerCase().includes(optionSearch.toLowerCase()))
+                    : allOptions;
+                return (
+                    <div className="rounded-md border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 overflow-hidden">
+                        <div className="flex items-center gap-2 px-2 py-1.5 border-b border-gray-100 dark:border-zinc-700">
+                            <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <input
+                                type="text"
+                                placeholder="Buscar tabulação..."
+                                value={optionSearch}
+                                onChange={e => setOptionSearch(e.target.value)}
+                                className="flex-1 text-xs bg-transparent border-none outline-none text-gray-700 dark:text-gray-300 placeholder:text-gray-400"
+                            />
+                            {selectedValues.length > 0 && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 shrink-0">
+                                    {selectedValues.length} sel.
+                                </span>
+                            )}
+                        </div>
+                        <div className="max-h-44 overflow-y-auto">
+                            {filteredOptions.length === 0 ? (
+                                <p className="text-xs text-gray-400 text-center py-4">Nenhum resultado</p>
+                            ) : (
+                                filteredOptions.map((opt) => {
+                                    const isSelected = selectedValues.includes(opt);
+                                    return (
+                                        <button
+                                            key={opt}
+                                            type="button"
+                                            onClick={() => {
+                                                const next = isSelected
+                                                    ? selectedValues.filter(v => v !== opt)
+                                                    : [...selectedValues, opt];
+                                                onFilterChange(field.id, next.length > 0 ? next : '');
+                                            }}
+                                            className={cn(
+                                                'w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors',
+                                                isSelected
+                                                    ? 'bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400'
+                                                    : 'hover:bg-gray-50 dark:hover:bg-zinc-700/50 text-gray-700 dark:text-gray-300'
+                                            )}
+                                        >
+                                            <div className={cn(
+                                                'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+                                                isSelected ? 'bg-green-500 border-green-500' : 'border-gray-300 dark:border-zinc-600'
+                                            )}>
+                                                {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
+                                            </div>
+                                            <span className="truncate">{opt}</span>
+                                        </button>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                );
+            }
             case 'date-range':
                 // Assuming value is { from, to } or string?
                 // Let's stick to the DateRangePickerBtx component
@@ -126,9 +253,9 @@ export function FilterPanel({
     };
 
     return (
-        <div className="p-4 space-y-6 min-w-[320px] sm:min-w-[450px] bg-white dark:bg-zinc-900 h-full flex flex-col">
+        <div className="p-4 space-y-4 bg-white dark:bg-zinc-900 flex flex-col overflow-hidden min-h-0">
             {/* Header */}
-            <div className="flex items-center justify-between border-b pb-4">
+            <div className="flex items-center justify-between border-b pb-4 shrink-0">
                 <div className="flex items-center gap-2">
                     <div className="p-2 bg-green-50 dark:bg-green-500/10 rounded-lg">
                         <Filter className="w-4 h-4 text-green-600" />
@@ -144,9 +271,9 @@ export function FilterPanel({
             </div>
 
             {/* Presets / Favorites (Bitrix Style) */}
-            <div className="space-y-2">
+            <div className="space-y-2 shrink-0">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Favoritos</label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
                     {presets.map(p => (
                         <div key={p.id} className="group relative">
                             <Button
@@ -189,7 +316,7 @@ export function FilterPanel({
             </div>
 
             {/* Fields List */}
-            <div className="flex-1 overflow-y-auto space-y-5 pr-2 custom-scrollbar">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-5 pr-1 custom-scrollbar">
                 {visibleFields.map(fieldId => {
                     const field = FILTER_FIELDS.find(f => f.id === fieldId);
                     if (!field) return null;
@@ -224,7 +351,7 @@ export function FilterPanel({
             </div>
 
             {/* Footer */}
-            <div className="pt-4 border-t mt-4 flex gap-2">
+            <div className="pt-3 border-t shrink-0 flex gap-2">
                 <Button
                     className="flex-1 bg-green-500 hover:bg-green-600 text-white font-medium h-10 shadow-lg shadow-green-500/20"
                     onClick={onApply}

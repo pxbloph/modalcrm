@@ -151,6 +151,14 @@ export default function KanbanPage() {
         setDraftVisibleFields(visibleFields);
     }, [visibleFields]);
 
+    // Auto-apply search term after user stops typing (debounced)
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setSearchTerm(draftSearchTerm);
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [draftSearchTerm]);
+
     // Map active filters for backend consumption
     const filterParams = useMemo(() => {
         const params: any = {};
@@ -162,7 +170,9 @@ export default function KanbanPage() {
                 params.openAccountStartDate = f.value?.from ? format(new Date(f.value.from), 'yyyy-MM-dd') : undefined;
                 params.openAccountEndDate = f.value?.to ? format(new Date(f.value.to), 'yyyy-MM-dd') : undefined;
             } else if (f.id === 'responsibleId') {
-                params.responsible_id = f.value;
+                params.responsible_id = Array.isArray(f.value) ? f.value.join(',') : f.value;
+            } else if (f.id === 'tabulation') {
+                params.tabulation = Array.isArray(f.value) ? f.value.join(',') : f.value;
             } else {
                 params[f.id] = f.value;
             }
@@ -235,9 +245,19 @@ export default function KanbanPage() {
                     setVisibleFields(prefs.visible_fields);
                 }
 
-                                // Do not auto-apply persisted filters on load.
-                // Kanban must open clean (without default filters).
-                setActiveFilters([]);
+                // Restore persisted filters from DB
+                if (prefs.filters_config && typeof prefs.filters_config === 'object') {
+                    const restoredFilters = Object.entries(prefs.filters_config as Record<string, any>)
+                        .filter(([_, v]) => {
+                            if (v === null || v === undefined || v === '') return false;
+                            if (Array.isArray(v) && v.length === 0) return false;
+                            return true;
+                        })
+                        .map(([id, value]) => ({ id, value }));
+                    setActiveFilters(restoredFilters);
+                } else {
+                    setActiveFilters([]);
+                }
                 setSearchTerm('');
                 setDraftSearchTerm('');
             }
@@ -261,11 +281,13 @@ export default function KanbanPage() {
     useEffect(() => {
         if (isInitialLoading) return;
         const timer = setTimeout(() => {
+            const config: any = {};
+            activeFilters.forEach(f => { config[f.id] = f.value; });
             saveUserPreferences({
                 view_mode: viewMode,
                 page_size: pageSize,
                 visible_fields: visibleFields,
-                filters_config: filterParams // Current applied filters
+                filters_config: config
             });
         }, 1000);
         return () => clearTimeout(timer);
@@ -729,7 +751,11 @@ export default function KanbanPage() {
                                     const next = existing
                                         ? prev.map(f => f.id === id ? { ...f, value } : f)
                                         : [...prev, { id, value }];
-                                    return next.filter(f => f.value !== null && f.value !== undefined && f.value !== '');
+                                    return next.filter(f => {
+                            if (f.value === null || f.value === undefined || f.value === '') return false;
+                            if (Array.isArray(f.value) && f.value.length === 0) return false;
+                            return true;
+                        });
                                 });
                             }}
                             onRemoveField={(id) => {

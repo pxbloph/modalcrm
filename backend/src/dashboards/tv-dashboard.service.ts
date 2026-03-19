@@ -18,6 +18,21 @@ export class TvDashboardService {
         titas: { name: 'Equipe Tit\u00e3s', leadership: 'Henrique' },
     } as const;
 
+    // Cache em memória: chave = "date|userId|allTeams", valor = { data, expiresAt }
+    private readonly cache = new Map<string, { data: any; expiresAt: number }>();
+    private readonly CACHE_TTL_MS = 55_000; // 55 segundos
+
+    private getCached(key: string) {
+        const entry = this.cache.get(key);
+        if (!entry) return null;
+        if (Date.now() > entry.expiresAt) { this.cache.delete(key); return null; }
+        return entry.data;
+    }
+
+    private setCached(key: string, data: any) {
+        this.cache.set(key, { data, expiresAt: Date.now() + this.CACHE_TTL_MS });
+    }
+
     private resolveDateRange(queryDate?: string) {
         const now = new Date();
         const brazilOffset = 3 * 60 * 60 * 1000;
@@ -37,13 +52,13 @@ export class TvDashboardService {
         return { startDate, endDate };
     }
 
-    private buildResponsibleFilter(currentUser?: { id: string; role: string }) {
+    private buildResponsibleFilter(currentUser?: { id: string; role: string }, allTeams = false) {
         const base: any = {
             is_active: true,
             role: { not: 'ADMIN' },
         };
 
-        if (currentUser?.role === 'SUPERVISOR') {
+        if (currentUser?.role === 'SUPERVISOR' && !allTeams) {
             base.supervisor_id = currentUser.id;
         }
 
@@ -71,9 +86,13 @@ export class TvDashboardService {
         }));
     }
 
-    async getOpenAccountsMetrics(queryDate?: string, currentUser?: { id: string; role: string }) {
+    async getOpenAccountsMetrics(queryDate?: string, currentUser?: { id: string; role: string }, allTeams = false) {
+        const cacheKey = `open:${queryDate ?? 'today'}:${currentUser?.id ?? 'anon'}:${allTeams}`;
+        const cached = this.getCached(cacheKey);
+        if (cached) return cached;
+
         const { startDate, endDate } = this.resolveDateRange(queryDate);
-        const responsibleFilter = this.buildResponsibleFilter(currentUser);
+        const responsibleFilter = this.buildResponsibleFilter(currentUser, allTeams);
 
         const validDeals = await this.prisma.deal.findMany({
             where: {
@@ -111,7 +130,7 @@ export class TvDashboardService {
             where: {
                 role: 'OPERATOR',
                 is_active: true,
-                ...(currentUser?.role === 'SUPERVISOR' ? { supervisor_id: currentUser.id } : {}),
+                ...(currentUser?.role === 'SUPERVISOR' && !allTeams ? { supervisor_id: currentUser.id } : {}),
             },
             select: { id: true, name: true, surname: true, team: true }
         });
@@ -187,18 +206,24 @@ export class TvDashboardService {
 
         const team_summary = this.buildTeamSummary(responsibleCountsByTeam, totalOpenAccounts);
 
-        return {
+        const result = {
             date: startDate.toISOString().split('T')[0],
             total_open_accounts: totalOpenAccounts,
             ranking,
             team_summary,
             updated_at: new Date().toISOString(),
         };
+        this.setCached(cacheKey, result);
+        return result;
     }
 
-    async getExpandedMetrics(queryDate?: string, currentUser?: { id: string; role: string }) {
+    async getExpandedMetrics(queryDate?: string, currentUser?: { id: string; role: string }, allTeams = false) {
+        const cacheKey = `expanded:${queryDate ?? 'today'}:${currentUser?.id ?? 'anon'}:${allTeams}`;
+        const cached = this.getCached(cacheKey);
+        if (cached) return cached;
+
         const { startDate, endDate } = this.resolveDateRange(queryDate);
-        const responsibleFilter = this.buildResponsibleFilter(currentUser);
+        const responsibleFilter = this.buildResponsibleFilter(currentUser, allTeams);
 
         const openDealsGrouped = await this.prisma.deal.groupBy({
             by: ['responsible_id'],
@@ -280,7 +305,7 @@ export class TvDashboardService {
             ? ((totalOpenAccounts / totalLeadsCreated) * 100).toFixed(1)
             : '0.0';
 
-        return {
+        const result = {
             date: startDate.toISOString().split('T')[0],
             total_open_accounts: totalOpenAccounts,
             total_leads_created: totalLeadsCreated,
@@ -289,5 +314,7 @@ export class TvDashboardService {
             ranking,
             updated_at: new Date().toISOString(),
         };
+        this.setCached(cacheKey, result);
+        return result;
     }
 }

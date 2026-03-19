@@ -64,7 +64,19 @@ export function UnifiedFilterBar({
         const field = FILTER_FIELDS.find(f => f.id === id);
         if (!field) return String(value);
 
-        if (field.type === 'user') {
+        if (field.type === 'select-multi') {
+            if (Array.isArray(value)) return value.join(', ');
+            return String(value);
+        }
+
+        if (field.type === 'user' || field.type === 'user-multi') {
+            if (Array.isArray(value)) {
+                const names = value.map(id => {
+                    const u = users.find(u => u.id === id);
+                    return u ? u.name : 'Desconhecido';
+                });
+                return names.join(', ');
+            }
             const u = users.find(u => u.id === value);
             return u ? `${u.name} ${u.surname || ''}`.trim() : 'Desconhecido';
         }
@@ -134,7 +146,7 @@ export function UnifiedFilterBar({
                         </div>
                     </PopoverTrigger>
 
-                    <PopoverContent className="w-[calc(100vw-40px)] sm:w-[500px] p-0 border-none shadow-2xl" align="start" sideOffset={5}>
+                    <PopoverContent className="w-[calc(100vw-40px)] sm:w-[500px] p-0 border-none shadow-2xl max-h-[calc(100dvh-100px)] overflow-hidden flex flex-col" align="start" sideOffset={5}>
                         <FilterPanel
                             users={users}
                             tabulationOptions={tabulationOptions}

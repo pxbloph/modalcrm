@@ -42,8 +42,9 @@ export default function SupervisorDashboardPage() {
     const [nameFilter, setNameFilter] = useState('');
     const [teamFilter, setTeamFilter] = useState('');
     const [now, setNow] = useState(new Date());
+    const [allTeams, setAllTeams] = useState(false);
+    const [userRole, setUserRole] = useState<string>('');
 
-    
     useEffect(() => {
         const raw = localStorage.getItem('user');
         if (!raw || raw === 'undefined') {
@@ -55,14 +56,18 @@ export default function SupervisorDashboardPage() {
             const parsed = JSON.parse(raw);
             if (!['ADMIN', 'SUPERVISOR'].includes(parsed?.role)) {
                 window.location.href = '/';
+                return;
             }
+            setUserRole(parsed.role);
         } catch {
             window.location.href = '/login';
         }
     }, []);
+
     const fetchData = async () => {
         try {
-            const { data: jsonData } = await api.get('/dashboards/tv/contas-abertas');
+            const params = allTeams ? '?allTeams=true' : '';
+            const { data: jsonData } = await api.get(`/dashboards/tv/contas-abertas${params}`);
             setData(jsonData);
             setLastUpdated(new Date());
         } catch (error) {
@@ -76,7 +81,7 @@ export default function SupervisorDashboardPage() {
         fetchData();
         const interval = setInterval(fetchData, 60000); // Refresh every 60s
         return () => clearInterval(interval);
-    }, []);
+    }, [allTeams]);
 
     useEffect(() => {
         const tick = setInterval(() => setNow(new Date()), 1000);
@@ -145,7 +150,7 @@ export default function SupervisorDashboardPage() {
                 </header>
 
                 {/* Filters */}
-                <div className="flex items-center gap-3 mb-4 shrink-0">
+                <div className="flex items-center gap-3 mb-4 shrink-0 flex-wrap">
                     <div className="relative flex-1 max-w-sm">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
                         <input
@@ -161,7 +166,7 @@ export default function SupervisorDashboardPage() {
                             </button>
                         )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <button
                             onClick={() => setTeamFilter('')}
                             className={`px-4 py-2 text-sm font-semibold rounded-xl border shadow-sm transition-colors ${teamFilter === '' ? 'bg-orange-500 text-white border-orange-500' : 'bg-white/80 text-zinc-600 border-gray-200 hover:bg-gray-50'}`}
@@ -177,6 +182,15 @@ export default function SupervisorDashboardPage() {
                                 {label}
                             </button>
                         ))}
+                        {userRole === 'SUPERVISOR' && (
+                            <button
+                                onClick={() => { setAllTeams(prev => !prev); setTeamFilter(''); }}
+                                className={`px-4 py-2 text-sm font-semibold rounded-xl border shadow-sm transition-colors whitespace-nowrap ${allTeams ? 'bg-zinc-800 text-white border-zinc-800' : 'bg-white/80 text-zinc-600 border-gray-200 hover:bg-gray-50'}`}
+                                title={allTeams ? 'Mostrando todos os times — clique para ver apenas o seu time' : 'Ver todos os times'}
+                            >
+                                {allTeams ? '🌐 Todos os Times' : '👥 Meu Time'}
+                            </button>
+                        )}
                     </div>
                 </div>
 

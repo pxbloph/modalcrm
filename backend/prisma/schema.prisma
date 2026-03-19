@@ -75,6 +75,8 @@ model User {
   created_dev_notes      DevNote[] @relation("DevNoteCreator")
   dev_note_daily_views   DevNoteDailyView[]
 
+  @@index([supervisor_id])
+  @@index([is_active, role])
   @@map("users")
 }
 
@@ -212,6 +214,13 @@ model Client {
   limit_anticipacao_disponivel String? @default("Informação indisponível")
   
   transfer_audits      LeadOwnerTransferAudit[]
+
+  @@index([created_by_id])
+  @@index([created_at])
+  @@index([integration_status])
+  @@index([tabulacao])
+  @@index([account_opening_date])
+  @@index([has_open_account])
   @@map("clients")
 }
 
@@ -547,6 +556,15 @@ model Deal {
   history       DealHistory[]
   tags          DealTag[]
 
+  @@index([pipeline_id])
+  @@index([stage_id])
+  @@index([responsible_id])
+  @@index([client_id])
+  @@index([status])
+  @@index([created_at])
+  @@index([pipeline_id, stage_id])
+  @@index([pipeline_id, status])
+  @@index([responsible_id, status])
   @@map("deals")
 }
 
@@ -580,6 +598,8 @@ model DealHistory {
   
   created_at  DateTime @default(now())
 
+  @@index([deal_id])
+  @@index([deal_id, created_at])
   @@map("deal_history")
 }
 

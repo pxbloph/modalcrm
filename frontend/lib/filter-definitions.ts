@@ -1,4 +1,4 @@
-export type FilterFieldType = 'text' | 'select' | 'date-range' | 'boolean' | 'user';
+export type FilterFieldType = 'text' | 'select' | 'select-multi' | 'date-range' | 'boolean' | 'user' | 'user-multi';
 
 export interface FilterField {
     id: string;
@@ -22,12 +22,12 @@ export const FILTER_FIELDS: FilterField[] = [
     {
         id: 'responsibleId',
         label: 'Responsável',
-        type: 'user',
+        type: 'user-multi',
     },
     {
         id: 'tabulation',
         label: 'Tabulação',
-        type: 'select',
+        type: 'select-multi',
     },
     {
         id: 'hasOpenAccount',

@@ -127,7 +127,7 @@ function FieldInput({ field }: { field: any }) {
             )}
 
             {field.type === 'TEXTAREA' && (
-                <Textarea {...register(fieldName)} placeholder={field.placeholder} className="min-h-[80px] bg-input/20 border-input text-xs" />
+                <Textarea {...register(fieldName)} placeholder={field.placeholder} className="bg-input/20 border-input text-xs" />
             )}
 
             {(field.type === 'NUMBER') && (
@@ -152,7 +152,7 @@ function FieldInput({ field }: { field: any }) {
             )}
 
             {field.type === 'BOOLEAN' && (
-                <div className="flex items-center gap-2 h-10">
+                <div className="flex items-center gap-2 py-1">
                     <Switch
                         checked={value === true}
                         onCheckedChange={(checked) => setValue(fieldName, checked)}
@@ -173,7 +173,7 @@ function FieldInput({ field }: { field: any }) {
             {field.type === 'MULTI_SELECT' && (
                 // Fallback to simple multiple select native if shadcn MultiSelect not available widely
                 // Or implement a simple checkbox list
-                <div className="space-y-2 p-3 border rounded-md border-input bg-muted/50 max-h-40 overflow-y-auto">
+                <div className="space-y-2 p-3 border rounded-md border-input bg-muted/50 max-h-32 sm:max-h-40 overflow-y-auto">
                     {field.options_json?.map((opt: string) => {
                         const current = Array.isArray(value) ? value : [];
                         const isChecked = current.includes(opt);

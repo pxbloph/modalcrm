@@ -24,7 +24,7 @@ export function ClientForm({
                     error={errors.client?.name?.message}
                 />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <ModalInput
                         label="CNPJ / CPF"
                         placeholder="00.000.000/0000-00"

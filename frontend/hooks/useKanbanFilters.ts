@@ -22,7 +22,7 @@ export function useKanbanFilters() {
             const field = FILTER_FIELDS.find(f => f.id === key);
             if (field) {
                 let parsedValue: any = value;
-                if (field.type === 'date-range' || field.type === 'boolean') {
+                if (field.type === 'date-range' || field.type === 'boolean' || field.type === 'user-multi' || field.type === 'select-multi') {
                     try {
                         parsedValue = JSON.parse(value);
                     } catch (e) {

@@ -212,7 +212,14 @@ export class ClientsService {
         if (finalPipelineId) {
             const dealCondition: any = { pipeline_id: finalPipelineId };
             if (finalResponsibleId) {
-                dealCondition.responsible_id = finalResponsibleId === 'unassigned' ? null : finalResponsibleId;
+                if (finalResponsibleId === 'unassigned') {
+                    dealCondition.responsible_id = null;
+                } else if (typeof finalResponsibleId === 'string' && finalResponsibleId.includes(',')) {
+                    const ids = finalResponsibleId.split(',').map((id: string) => id.trim()).filter(Boolean);
+                    dealCondition.responsible_id = { in: ids };
+                } else {
+                    dealCondition.responsible_id = finalResponsibleId;
+                }
             }
 
             andConditions.push({
@@ -261,9 +268,12 @@ export class ClientsService {
 
         // Tabulation Filter
         if (tabulation) {
-            andConditions.push({
-                tabulacao: { contains: tabulation, mode: 'insensitive' }
-            });
+            if (tabulation.includes(',')) {
+                const tabs = tabulation.split(',').map((t: string) => t.trim()).filter(Boolean);
+                andConditions.push({ tabulacao: { in: tabs } });
+            } else {
+                andConditions.push({ tabulacao: { contains: tabulation, mode: 'insensitive' } });
+            }
         }
 
         // Conta Aberta Filter (Boolean OR Date Range)

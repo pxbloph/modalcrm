@@ -423,7 +423,7 @@ export function ClientDealModal({
 
     return (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-[2px] flex items-center justify-center z-[100] p-4 font-sans">
-            <div className="bg-card w-full max-w-5xl max-h-[95vh] rounded-xl shadow-2xl flex flex-col overflow-hidden border border-border animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-card w-full max-w-5xl max-h-[95dvh] rounded-xl shadow-2xl flex flex-col overflow-hidden border border-border animate-in fade-in zoom-in-95 duration-200">
                 <FormProvider {...methods}>
                     <form onSubmit={methods.handleSubmit(onSubmit, (errors) => {
                         console.error("Validation Errors:", errors);
@@ -437,7 +437,7 @@ export function ClientDealModal({
                         />
 
                         {/* TABS HEADER */}
-                        <div className="flex border-b border-border bg-card/50 px-6 pt-2">
+                        <div className="flex border-b border-border bg-card/50 px-4 sm:px-6 pt-2">
                             <button
                                 type="button"
                                 onClick={() => setActiveTab("data")}
@@ -455,18 +455,19 @@ export function ClientDealModal({
                         </div>
 
                         {/* CONTENT AREA */}
-                        <div className="flex-1 overflow-y-auto p-6 bg-card/50">
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-card/50">
                             {activeTab === "data" ? (
                                 <div className="flex flex-col gap-4">
                                     <div className="relative">
                                         {isBlockedForOperator && (
                                             <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/70 backdrop-blur-sm rounded-xl">
-                                                <div className="bg-destructive text-white rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-4 max-w-sm w-full mx-4 text-center border border-destructive/60">
-                                                    <div className="bg-white/20 rounded-full p-4">
-                                                        <AlertCircle size={40} strokeWidth={1.5} />
+                                                <div className="bg-destructive text-white rounded-2xl shadow-2xl px-6 py-6 sm:px-10 sm:py-8 flex flex-col items-center gap-4 max-w-sm w-full mx-4 text-center border border-destructive/60">
+                                                    <div className="bg-white/20 rounded-full p-3 sm:p-4">
+                                                        <AlertCircle size={32} strokeWidth={1.5} className="sm:hidden" />
+                                                        <AlertCircle size={40} strokeWidth={1.5} className="hidden sm:block" />
                                                     </div>
                                                     <div className="flex flex-col gap-2">
-                                                        <span className="text-2xl font-black uppercase tracking-widest">Lead Não Apto</span>
+                                                        <span className="text-xl sm:text-2xl font-black uppercase tracking-widest">Lead Não Apto</span>
                                                         <span className="text-sm font-medium opacity-90 leading-snug">
                                                             Este cadastro ainda não foi integrado ao banco de dados.
                                                         </span>
@@ -475,7 +476,7 @@ export function ClientDealModal({
                                                 </div>
                                             </div>
                                         )}
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 items-start">
                                             <div className="flex flex-col gap-6">
                                                 <Div2_ClientData>
                                                     <ClientForm

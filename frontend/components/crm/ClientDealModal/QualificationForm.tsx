@@ -68,7 +68,7 @@ export function QualificationForm({ tabulationOptions, users = [] }: Qualificati
             </div>
 
             {/* Grids de Inputs */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <ModalInput
                     label="Faturamento Mensal"
                     placeholder="R$ 0,00"
@@ -81,7 +81,7 @@ export function QualificationForm({ tabulationOptions, users = [] }: Qualificati
                 />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <ModalInput
                     label="Maquininha Atual"
                     {...register("qualification.maquininha_atual")}
@@ -116,7 +116,7 @@ export function QualificationForm({ tabulationOptions, users = [] }: Qualificati
                     Informações Adicionais
                 </label>
                 <textarea
-                    className="w-full bg-input/50 border border-input rounded-lg px-3 py-2.5 text-sm font-medium text-foreground outline-none transition-all focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/10 min-h-[100px] resize-none leading-relaxed"
+                    className="w-full bg-input/50 border border-input rounded-lg px-3 py-2.5 text-sm font-medium text-foreground outline-none transition-all focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/10 resize-none leading-relaxed"
                     {...register("qualification.informacoes_adicionais")}
                 />
             </div>

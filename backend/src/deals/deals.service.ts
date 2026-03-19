@@ -51,17 +51,22 @@ export class DealsService {
     const deal = await this.prisma.$transaction(async (tx) => {
       // [FIX] Sync Deal Creation with Client Creation (if client exists)
       let finalCreatedAt = new Date();
+      let clientCreatedById: string | undefined;
       if (dealData.client_id) {
-        const client = await tx.client.findUnique({ where: { id: dealData.client_id } });
+        const client = await tx.client.findUnique({
+          where: { id: dealData.client_id },
+          select: { created_at: true, created_by_id: true },
+        });
         if (client) {
           finalCreatedAt = client.created_at;
+          clientCreatedById = client.created_by_id;
         }
       }
 
       const newDeal = await tx.deal.create({
         data: {
           ...dealData,
-          responsible_id: dealData.responsible_id || (dealData.client_id ? (await tx.client.findUnique({ where: { id: dealData.client_id } }))?.created_by_id : undefined),
+          responsible_id: dealData.responsible_id || clientCreatedById,
           created_at: finalCreatedAt, // Override with Client Date
           stage_id: stageId,
           stage_entered_at: initialSlaStart,
@@ -90,8 +95,8 @@ export class DealsService {
       return newDeal;
     });
 
-    // Fetched full deal for Event emission (need responsible info etc)
-    const fullDeal = await this.findOne(deal.id);
+    // Versão leve para o WebSocket (sem histórico)
+    const fullDeal = await this.findOneLight(deal.id);
     this.kanbanGateway.notifyDealCreated(deal.pipeline_id, fullDeal);
 
     // Trigger ENTER_STAGE for initial stage
@@ -246,19 +251,25 @@ export class DealsService {
 
     if (pipelineId) where.AND.push({ pipeline_id: pipelineId });
     if (responsibleId) {
-      where.AND.push({
-        responsible_id: responsibleId === 'unassigned' ? null : responsibleId
-      });
+      if (responsibleId === 'unassigned') {
+        where.AND.push({ responsible_id: null });
+      } else if (responsibleId.includes(',')) {
+        const ids = responsibleId.split(',').map((id: string) => id.trim()).filter(Boolean);
+        where.AND.push({ responsible_id: { in: ids } });
+      } else {
+        where.AND.push({ responsible_id: responsibleId });
+      }
     }
     if (clientId) where.AND.push({ client_id: clientId });
     if (stageId) where.AND.push({ stage_id: stageId });
 
     if (tabulation) {
-      where.AND.push({
-        client: {
-          tabulacao: { contains: tabulation, mode: 'insensitive' }
-        }
-      });
+      if (tabulation.includes(',')) {
+        const tabs = tabulation.split(',').map((t: string) => t.trim()).filter(Boolean);
+        where.AND.push({ client: { tabulacao: { in: tabs } } });
+      } else {
+        where.AND.push({ client: { tabulacao: { contains: tabulation, mode: 'insensitive' } } });
+      }
     }
 
     if (startDate || endDate) {
@@ -316,11 +327,11 @@ export class DealsService {
         stage: true,
         client: true,
         responsible: true,
-
         custom_values: { include: { field: true } },
         history: {
           orderBy: { created_at: 'desc' },
-          include: { actor: true }
+          take: 50,
+          include: { actor: { select: { id: true, name: true, surname: true } } },
         },
       },
     });
@@ -329,9 +340,41 @@ export class DealsService {
       throw new NotFoundException(`Deal with ID ${id} not found`);
     }
 
-    // Attach "latest_qualification" flat property for convenience?
-    // Frontend handles array[0] fine, sticking to standard return.
     return deal;
+  }
+
+  // Versão leve para eventos WebSocket — sem histórico
+  private async findOneLight(id: string) {
+    return this.prisma.deal.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        value: true,
+        stage_id: true,
+        pipeline_id: true,
+        status: true,
+        priority: true,
+        created_at: true,
+        updated_at: true,
+        stage_entered_at: true,
+        sla_due_date: true,
+        sla_start_date: true,
+        is_overdue: true,
+        responsible_id: true,
+        client_id: true,
+        stage: { select: { id: true, name: true, color: true, sla_minutes: true } },
+        client: {
+          select: {
+            id: true, name: true, surname: true, cnpj: true, phone: true,
+            tabulacao: true, faturamento_mensal: true, created_at: true,
+            account_opening_date: true, integration_status: true,
+          },
+        },
+        responsible: { select: { id: true, name: true, surname: true } },
+        tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
+      },
+    });
   }
 
   async update(id: string, updateDealDto: UpdateDealDto, actorId?: string) {
@@ -514,7 +557,8 @@ export class DealsService {
       });
     });
 
-    const fullDeal = await this.findOne(deal.id);
+    // Versão leve para o WebSocket (sem histórico)
+    const fullDeal = await this.findOneLight(deal.id);
     if (mutableDealData.stage_id && oldStageId && oldStageId !== mutableDealData.stage_id) {
       this.kanbanGateway.notifyDealMoved(pipelineId, fullDeal);
     } else {
