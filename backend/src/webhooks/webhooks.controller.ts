@@ -52,6 +52,14 @@ export class WebhooksController {
             };
 
         } catch (error) {
+            // CNPJ duplicado: retorna 200 para o N8N não retentar
+            if (error.status === HttpStatus.CONFLICT || error?.response?.statusCode === 409) {
+                return {
+                    success: true,
+                    duplicate: true,
+                    message: 'Cliente já existe com este CNPJ. Nenhuma ação necessária.',
+                };
+            }
             console.error('[WEBHOOK N8N] Erro ao criar cliente:', error.message);
             throw new HttpException(
                 error.message || 'Erro interno ao processar webhook',

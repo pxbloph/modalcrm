@@ -13,15 +13,13 @@ export type DatabaseQueryLog = {
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
     private readonly logger = new Logger(PrismaService.name);
-    private readonly maxQueryLogs = 5000;
+    private readonly maxQueryLogs = 100;
     private readonly queryLogs: DatabaseQueryLog[] = [];
 
     constructor() {
         super({
             log: [
                 { emit: 'event', level: 'query' },
-                { emit: 'stdout', level: 'error' },
-                { emit: 'stdout', level: 'warn' },
             ],
         });
 
@@ -64,8 +62,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         await this.$disconnect();
     }
 
-    getQueryLogs(limit = 200) {
-        const safeLimit = Math.max(1, Math.min(5000, Number(limit) || 200));
+    getQueryLogs(limit = 100) {
+        const safeLimit = Math.max(1, Math.min(100, Number(limit) || 100));
         return [...this.queryLogs].reverse().slice(0, safeLimit);
     }
 

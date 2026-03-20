@@ -11,8 +11,6 @@ export interface TeamSummary {
 
 @Injectable()
 export class TvDashboardService {
-    constructor(private prisma: PrismaService) { }
-
     private readonly teamMeta = {
         fenix: { name: 'Equipe F\u00eanix', leadership: 'Luana' },
         titas: { name: 'Equipe Tit\u00e3s', leadership: 'Henrique' },
@@ -21,6 +19,16 @@ export class TvDashboardService {
     // Cache em memória: chave = "date|userId|allTeams", valor = { data, expiresAt }
     private readonly cache = new Map<string, { data: any; expiresAt: number }>();
     private readonly CACHE_TTL_MS = 55_000; // 55 segundos
+
+    constructor(private prisma: PrismaService) {
+        // Limpeza proativa do cache a cada 2 minutos
+        setInterval(() => {
+            const now = Date.now();
+            for (const [key, entry] of this.cache.entries()) {
+                if (now > entry.expiresAt) this.cache.delete(key);
+            }
+        }, 120_000);
+    }
 
     private getCached(key: string) {
         const entry = this.cache.get(key);
@@ -178,7 +186,7 @@ export class TvDashboardService {
             const teamKey = (deal.responsible as any).team || 'nao_mapeado';
             responsibleCountsByTeam.set(teamKey, (responsibleCountsByTeam.get(teamKey) || 0) + 1);
 
-            if (deal.client) {
+            if (deal.client && agg.clients.length < 50) {
                 agg.clients.push({
                     id: deal.client.id,
                     name: deal.client.name,
