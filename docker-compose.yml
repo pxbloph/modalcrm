@@ -11,12 +11,15 @@ services:
     networks:
       - app-network
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        - NEXT_PUBLIC_API_URL=http://147.79.86.104:3013/api
     restart: always
     ports:
       - "3012:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://http://147.79.86.104/:3013/api
+      - NEXT_PUBLIC_API_URL=http://147.79.86.104:3013/api
     networks:
       - app-network
 networks:
