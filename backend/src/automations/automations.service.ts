@@ -1,7 +1,6 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAutomationDto } from './dto/create-automation.dto';
-import axios from 'axios';
 import { KanbanGateway } from '../deals/kanban.gateway';
 
 @Injectable()
