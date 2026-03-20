@@ -40,8 +40,8 @@ export function resolveBackendOrigin(): string {
     }
 
     if (typeof window !== 'undefined') {
-        return `http://${window.location.hostname}:3500`;
+        return `http://${window.location.hostname}:3013`;
     }
 
-    return 'http://localhost:3500';
+    return 'http://localhost:3013';
 }
