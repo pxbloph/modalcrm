@@ -1,15 +1,7 @@
-
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: '/backend-api/:path*',
-        destination: 'http://127.0.0.1:3500/:path*',
-      },
-    ]
-  },
+  output: 'standalone',
   async redirects() {
     return [
       {
