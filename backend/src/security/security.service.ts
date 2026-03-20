@@ -218,6 +218,7 @@ export class SecurityService {
         return this.resolveEffectivePermissions(user as any);
     }
 
+
     async userHasPermission(userId: string, permission: string): Promise<boolean> {
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
