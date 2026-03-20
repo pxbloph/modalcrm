@@ -25,7 +25,15 @@ export class ClientsService {
         private securityService: SecurityService,
         @Inject(forwardRef(() => ResponsibilityService))
         private responsibilityService: ResponsibilityService
-    ) { }
+    ) {
+        // Limpeza proativa do lookupCache a cada 2 minutos para evitar crescimento ilimitado
+        setInterval(() => {
+            const now = Date.now();
+            for (const [key, entry] of this.lookupCache.entries()) {
+                if (now > entry.expiresAt) this.lookupCache.delete(key);
+            }
+        }, 120_000);
+    }
 
     async create(data: Prisma.ClientCreateInput, user: User) {
         try {
