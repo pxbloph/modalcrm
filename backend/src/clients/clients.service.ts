@@ -14,6 +14,9 @@ import { SecurityService } from '../security/security.service';
 
 @Injectable()
 export class ClientsService {
+    private readonly lookupCache = new Map<string, { result: any; expiresAt: number }>();
+    private readonly LOOKUP_CACHE_TTL = 30_000;
+
     constructor(
         private prisma: PrismaService,
         private dealsService: DealsService,
@@ -1065,17 +1068,22 @@ export class ClientsService {
     }
 
     async lookupForTransfer(cnpj: string, user: User) {
+        const cacheKey = cnpj.replace(/\D/g, '');
+        const cached = this.lookupCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.result;
+        }
+
         const client = await this.findActiveLeadByCnpj(cnpj);
 
-        console.log(`[LOOKUP TRANSFER] User ${user.email} searching CNPJ ${cnpj}. Found: ${!!client}`);
-
         if (!client) {
+            this.lookupCache.set(cacheKey, { result: null, expiresAt: Date.now() + this.LOOKUP_CACHE_TTL });
             return null;
         }
 
         const eligibility = this.isLeadEligibleForOperatorPull(client);
 
-        return {
+        const result = {
             lead_id: client.id,
             company_name: client.name,
             cnpj_masked: client.cnpj,
@@ -1089,6 +1097,9 @@ export class ClientsService {
             transfer_target_mode: 'requester',
             transfer_target_hint: 'Se o lead estiver apto, a responsabilidade sera assumida no momento da confirmacao.',
         };
+
+        this.lookupCache.set(cacheKey, { result, expiresAt: Date.now() + this.LOOKUP_CACHE_TTL });
+        return result;
     }
 
     async transferByCnpj(cnpj: string, user: User, reason?: string) {
