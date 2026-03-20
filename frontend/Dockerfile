@@ -5,7 +5,7 @@ RUN npm install
 COPY . .
 
 # URL hardcoded diretamente
-ENV NEXT_PUBLIC_API_URL=http://147.79.86.104:3013/api
+ENV NEXT_PUBLIC_API_URL=http://147.79.86.104:3001/api
 
 RUN npm run build
 
