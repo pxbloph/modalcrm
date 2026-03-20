@@ -1,3 +1,6 @@
+import { webcrypto } from 'crypto';
+// @ts-ignore
+if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
