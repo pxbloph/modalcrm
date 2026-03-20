@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { AuditService } from '../modules/audit/audit.service';
 import { SecurityService } from '../security/security.service';
+import { CacheService } from '../cache/cache.service';
 
 @Injectable()
 export class AuthService {
@@ -12,14 +13,19 @@ export class AuthService {
         private jwtService: JwtService,
         private auditService: AuditService,
         private securityService: SecurityService,
+        private cacheService: CacheService,
     ) { }
 
     private async buildAuthUser(user: any) {
+        const cacheKey = `auth:user:${user.id}`;
+        const cached = this.cacheService.get(cacheKey);
+        if (cached) return cached;
+
         const permissions = await this.securityService.getEffectivePermissionsByUserId(user.id);
         const systemSettings = await this.securityService.getPublicSystemSettings();
         const initialPage = await this.securityService.getResolvedInitialPageByUserId(user.id);
 
-        return {
+        const result = {
             id: user.id,
             name: user.name,
             email: user.email,
@@ -28,6 +34,8 @@ export class AuthService {
             initial_page: initialPage,
             system_settings: systemSettings,
         };
+        this.cacheService.set(cacheKey, result, 60_000);
+        return result;
     }
 
     async validateUser(email: string, pass: string): Promise<any> {

@@ -32,6 +32,7 @@ import { DatabaseSettingsModule } from './database-settings/database-settings.mo
 import { VpsTerminalModule } from './vps-terminal/vps-terminal.module';
 import { SystemNotificationsModule } from './system-notifications/system-notifications.module';
 import { DevNotesModule } from './dev-notes/dev-notes.module';
+import { CacheModule } from './cache/cache.module';
 
 // Audit System Imports
 import { ClsModule } from 'nestjs-cls';
@@ -45,6 +46,7 @@ import { RequestContextMiddleware } from './common/middleware/request-context.mi
         ConfigModule.forRoot({
             isGlobal: true,
         }),
+        CacheModule,
 
         // Rate Limiting
         ThrottlerModule.forRoot([{

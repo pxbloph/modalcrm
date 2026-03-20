@@ -1,5 +1,6 @@
 ﻿import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CacheService } from '../cache/cache.service';
 import { Role } from '@prisma/client';
 
 export const CRITICAL_INFRA_PERMISSIONS = [
@@ -107,7 +108,10 @@ const SUPER_ADMIN_TEMPLATE = {
 
 @Injectable()
 export class SecurityService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private cacheService: CacheService,
+    ) { }
 
     getPermissionsCatalog() {
         return PERMISSION_CATALOG;
@@ -317,7 +321,7 @@ export class SecurityService {
             if (!role) throw new NotFoundException('Role personalizada não encontrada.');
         }
 
-        return this.prisma.user.update({
+        const updated = await this.prisma.user.update({
             where: { id: userId },
             data: {
                 role: data.role || user.role,
@@ -327,6 +331,8 @@ export class SecurityService {
                     : (data.permissions_override === null ? null : user.permissions_override),
             },
         });
+        this.cacheService.invalidate(`auth:user:${userId}`);
+        return updated;
     }
 
     async getPublicSystemSettings() {

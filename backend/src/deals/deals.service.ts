@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AutomationsService } from '../automations/automations.service';
 import { KanbanGateway } from './kanban.gateway';
 import { AuditService } from '../modules/audit/audit.service';
+import { CacheService } from '../cache/cache.service';
 import { Role } from '@prisma/client';
 
 @Injectable()
@@ -14,6 +15,7 @@ export class DealsService {
     private readonly automationsService: AutomationsService,
     private readonly kanbanGateway: KanbanGateway,
     private readonly auditService: AuditService,
+    private readonly cacheService: CacheService,
   ) { }
 
   async create(createDealDto: CreateDealDto, actorId?: string) {
@@ -186,6 +188,10 @@ export class DealsService {
   }
 
   async countByStage(pipelineId?: string, responsibleId?: string, clientId?: string, search?: string, tabulation?: string, startDate?: string, endDate?: string, openAccountStartDate?: string, openAccountEndDate?: string) {
+    const cacheKey = `deals:counts:${JSON.stringify([pipelineId, responsibleId, clientId, search, tabulation, startDate, endDate, openAccountStartDate, openAccountEndDate])}`;
+    const cached = this.cacheService.get(cacheKey);
+    if (cached) return cached;
+
     const where = this.buildWhere(pipelineId, responsibleId, clientId, search, tabulation, startDate, endDate, openAccountStartDate, openAccountEndDate);
 
     const counts = await this.prisma.deal.groupBy({
@@ -195,14 +201,21 @@ export class DealsService {
     });
 
     // Convert to easier format: { stage_id: count }
-    return counts.reduce((acc, curr) => {
+    const result = counts.reduce((acc, curr) => {
       acc[curr.stage_id] = curr._count.id;
       return acc;
     }, {});
+
+    this.cacheService.set(cacheKey, result, 30_000);
+    return result;
   }
 
 
   async getStalledByStage(pipelineId?: string, responsibleId?: string, clientId?: string, search?: string, tabulation?: string, startDate?: string, endDate?: string, openAccountStartDate?: string, openAccountEndDate?: string) {
+    const cacheKey = `deals:stalled:${JSON.stringify([pipelineId, responsibleId, clientId, search, tabulation, startDate, endDate, openAccountStartDate, openAccountEndDate])}`;
+    const cached = this.cacheService.get(cacheKey);
+    if (cached) return cached;
+
     const where = this.buildWhere(pipelineId, responsibleId, clientId, search, tabulation, startDate, endDate, openAccountStartDate, openAccountEndDate);
 
     const deals = await this.prisma.deal.findMany({
@@ -244,6 +257,7 @@ export class DealsService {
       }
     });
 
+    this.cacheService.set(cacheKey, summary, 30_000);
     return summary;
   }
   private buildWhere(pipelineId?: string, responsibleId?: string, clientId?: string, search?: string, tabulation?: string, startDate?: string, endDate?: string, openAccountStartDate?: string, openAccountEndDate?: string, stageId?: string) {
@@ -559,6 +573,8 @@ export class DealsService {
 
     // Versão leve para o WebSocket (sem histórico)
     const fullDeal = await this.findOneLight(deal.id);
+    this.cacheService.invalidate('deals:counts:');
+    this.cacheService.invalidate('deals:stalled:');
     if (mutableDealData.stage_id && oldStageId && oldStageId !== mutableDealData.stage_id) {
       this.kanbanGateway.notifyDealMoved(pipelineId, fullDeal);
     } else {

@@ -10,6 +10,7 @@ import { ResponsibilityService } from '../modules/responsibility/responsibility.
 import { forwardRef, Inject } from '@nestjs/common';
 import axios from 'axios';
 import { SecurityService } from '../security/security.service';
+import { CacheService } from '../cache/cache.service';
 
 
 @Injectable()
@@ -23,6 +24,7 @@ export class ClientsService {
         private automationsService: AutomationsService,
         private tabulationsService: TabulationsService,
         private securityService: SecurityService,
+        private cacheService: CacheService,
         @Inject(forwardRef(() => ResponsibilityService))
         private responsibilityService: ResponsibilityService
     ) {
@@ -640,6 +642,10 @@ export class ClientsService {
     }
 
     async getDashboardMetrics(user: User, query: any = {}) {
+        const cacheKey = `clients:metrics:${user.id}:${JSON.stringify(query)}`;
+        const cached = this.cacheService.get(cacheKey);
+        if (cached) return cached;
+
         const where = await this.buildFilterConditions(user, query);
 
 
@@ -678,12 +684,14 @@ export class ClientsService {
         // Conversion: (Contas / Leads) * 100
         const conversionRate = leads > 0 ? ((openAccounts / leads) * 100).toFixed(0) : 0;
 
-        return {
+        const result = {
             leads: leads,
             accounts: openAccounts,
             pending: pending,
             conversionRate: Number(conversionRate)
         };
+        this.cacheService.set(cacheKey, result, 30_000);
+        return result;
     }
 
     async findAll(user: User, query: any = {}) {
