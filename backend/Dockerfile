@@ -1,27 +1,25 @@
-
-FROM node:20-alpine AS builder
-
+FROM node:18-alpine AS builder
 WORKDIR /app
 
-COPY package*.json ./
-COPY prisma ./prisma/
+# Instala OpenSSL (necessário para o Prisma)
+RUN apk add --no-cache openssl openssl-dev libc6-compat
 
-RUN npm install
+COPY package*.json ./
+RUN npm ci
 
 COPY . .
-
 RUN npx prisma generate
 RUN npm run build
 
-FROM node:20-alpine
-
+FROM node:18-alpine AS runner
 WORKDIR /app
 
+# Instala OpenSSL também no estágio final
+RUN apk add --no-cache openssl libc6-compat
+
+COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3001
-
-CMD ["npm", "run", "start:prod"]
+CMD ["node", "dist/main.js"]
