@@ -1,6 +1,4 @@
-
 version: '3.8'
-
 services:
   backend:
     build: ./backend
@@ -12,15 +10,15 @@ services:
       - JWT_SECRET=${JWT_SECRET}
     networks:
       - app-network
-
   frontend:
     build: ./frontend
     restart: always
     ports:
       - "3012:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://SEU_IP_DO_SERVIDOR:3013/api
     networks:
       - app-network
-
 networks:
   app-network:
     driver: bridge
