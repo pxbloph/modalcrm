@@ -4,9 +4,8 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 
-# Declara e injeta a variável antes do build
-ARG NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# URL hardcoded diretamente
+ENV NEXT_PUBLIC_API_URL=http://147.79.86.104:3013/api
 
 RUN npm run build
 
