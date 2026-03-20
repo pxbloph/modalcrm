@@ -16,7 +16,7 @@ services:
     ports:
       - "3012:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://SEU_IP_DO_SERVIDOR:3013/api
+      - NEXT_PUBLIC_API_URL=http://http://147.79.86.104/:3013/api
     networks:
       - app-network
 networks:
