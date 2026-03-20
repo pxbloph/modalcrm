@@ -1,7 +1,7 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { ClsService } from 'nestjs-cls';
 import { Request, Response, NextFunction } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class RequestContextMiddleware implements NestMiddleware {
@@ -9,8 +9,8 @@ export class RequestContextMiddleware implements NestMiddleware {
 
     use(req: Request, res: Response, next: NextFunction) {
         this.cls.run(() => {
-            const requestId = req.headers['x-request-id'] || uuidv4();
-            const traceId = req.headers['x-trace-id'] || uuidv4();
+            const requestId = req.headers['x-request-id'] || randomUUID();
+            const traceId = req.headers['x-trace-id'] || randomUUID();
 
             this.cls.set('requestContext', {
                 requestId,
