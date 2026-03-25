@@ -211,11 +211,20 @@ export class ClientsService {
             } catch (e) { }
         }
         if (search) {
+            const cleanSearch = search.replace(/\D/g, '');
+            const cnpjConditions =
+                cleanSearch.length === 14
+                    ? [
+                        { cnpj: { contains: cleanSearch } },
+                        { cnpj: { contains: search } },
+                    ]
+                    : [{ cnpj: { contains: search, mode: 'insensitive' as const } }];
+
             andConditions.push({
                 OR: [
                     { name: { contains: search, mode: 'insensitive' } },
                     { surname: { contains: search, mode: 'insensitive' } },
-                    { cnpj: { contains: search } },
+                    ...cnpjConditions,
                     { email: { contains: search, mode: 'insensitive' } },
                 ]
             });
@@ -1403,10 +1412,19 @@ export class ClientsService {
 
         const where: any = {};
         if (search) {
+            const cleanSearch = search.replace(/\D/g, '');
+            const cnpjConditions =
+                cleanSearch.length === 14
+                    ? [
+                        { cnpj: { contains: cleanSearch } },
+                        { cnpj: { contains: search } },
+                    ]
+                    : [{ cnpj: { contains: search, mode: 'insensitive' as const } }];
+
             where.OR = [
                 { name: { contains: search, mode: 'insensitive' } },
                 { surname: { contains: search, mode: 'insensitive' } },
-                { cnpj: { contains: search } },
+                ...cnpjConditions,
                 { email: { contains: search, mode: 'insensitive' } },
                 { original_owner_name: { contains: search, mode: 'insensitive' } },
             ];

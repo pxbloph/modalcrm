@@ -104,6 +104,8 @@ export default function KanbanPage() {
 
     const [draftFilters, setDraftFilters] = useState<{ id: string, value: any }[]>([]);
     const [draftVisibleFields, setDraftVisibleFields] = useState<string[]>([]);
+    // Evita que fetchUserPreferences seja disparado mais de uma vez para o mesmo par pipeline+usuário
+    const prefsLoadedRef = useRef<string | null>(null);
 
     // Elevated Column State for KanbanList/Export logic
     const [columnOrder, setColumnOrder] = useState<string[]>([]);
@@ -140,12 +142,6 @@ export default function KanbanPage() {
 
     const INITIAL_STAGE_PAGE_SIZE = 80;
     const [loadingMoreByStage, setLoadingMoreByStage] = useState<Record<string, boolean>>({});
-
-    // SYNC DRAFT WITH ACTIVE (Only when preferences load or on mount)
-    useEffect(() => {
-        setDraftFilters(activeFilters);
-        setDraftSearchTerm(searchTerm);
-    }, [activeFilters, searchTerm]);
 
     useEffect(() => {
         setDraftVisibleFields(visibleFields);
@@ -227,11 +223,15 @@ export default function KanbanPage() {
     }, []);
 
     // Load Preferences from DB when pipeline is selected
+    // Usa currentUser?.id (não o objeto inteiro) para não disparar de novo quando /auth/me atualiza campos do usuário
     useEffect(() => {
-        if (selectedPipeline && currentUser) {
+        if (selectedPipeline && currentUser?.id) {
+            const key = `${selectedPipeline}-${currentUser.id}`;
+            if (prefsLoadedRef.current === key) return;
+            prefsLoadedRef.current = key;
             fetchUserPreferences(selectedPipeline);
         }
-    }, [selectedPipeline, currentUser]);
+    }, [selectedPipeline, currentUser?.id]);
 
     const fetchUserPreferences = async (pipelineId: string) => {
         try {
@@ -255,8 +255,10 @@ export default function KanbanPage() {
                         })
                         .map(([id, value]) => ({ id, value }));
                     setActiveFilters(restoredFilters);
+                    setDraftFilters(restoredFilters);
                 } else {
                     setActiveFilters([]);
+                    setDraftFilters([]);
                 }
                 setSearchTerm('');
                 setDraftSearchTerm('');

@@ -317,12 +317,21 @@ export class DealsService {
     }
 
     if (search) {
+      const cleanSearch = search.replace(/\D/g, '');
+      const cnpjConditions =
+        cleanSearch.length === 14
+          ? [
+              { client: { cnpj: { contains: cleanSearch } } },
+              { client: { cnpj: { contains: search } } },
+            ]
+          : [{ client: { cnpj: { contains: search, mode: 'insensitive' as const } } }];
+
       where.AND.push({
         OR: [
           { title: { contains: search, mode: 'insensitive' } },
           { client: { name: { contains: search, mode: 'insensitive' } } },
           { client: { surname: { contains: search, mode: 'insensitive' } } },
-          { client: { cnpj: { contains: search, mode: 'insensitive' } } },
+          ...cnpjConditions,
           { client: { email: { contains: search, mode: 'insensitive' } } },
           { client: { phone: { contains: search, mode: 'insensitive' } } },
         ]
