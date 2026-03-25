@@ -74,6 +74,7 @@ model User {
   created_security_roles SecurityRole[] @relation("SecurityRoleCreator")
   created_dev_notes      DevNote[] @relation("DevNoteCreator")
   dev_note_daily_views   DevNoteDailyView[]
+  dev_note_reads         DevNoteRead[]
 
   @@index([supervisor_id])
   @@index([is_active, role])
@@ -263,18 +264,31 @@ model SystemSetting {
 }
 
 model DevNote {
-  id                  String   @id @default(uuid())
+  id                  String        @id @default(uuid())
   title               String
   content             String
-  is_active           Boolean  @default(true)
-  show_in_daily_popup Boolean  @default(true)
+  is_active           Boolean       @default(true)
+  show_in_daily_popup Boolean       @default(true)
   created_by_id       String?
-  created_by          User?    @relation("DevNoteCreator", fields: [created_by_id], references: [id])
-  created_at          DateTime @default(now())
-  updated_at          DateTime @updatedAt
+  created_by          User?         @relation("DevNoteCreator", fields: [created_by_id], references: [id])
+  created_at          DateTime      @default(now())
+  updated_at          DateTime      @updatedAt
+  reads               DevNoteRead[]
 
   @@index([is_active, created_at])
   @@map("dev_notes")
+}
+
+model DevNoteRead {
+  id         String   @id @default(uuid())
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  note_id    String
+  note       DevNote  @relation(fields: [note_id], references: [id], onDelete: Cascade)
+  created_at DateTime @default(now())
+
+  @@unique([user_id, note_id])
+  @@map("dev_note_reads")
 }
 
 model DevNoteDailyView {

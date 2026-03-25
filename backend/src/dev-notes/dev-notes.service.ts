@@ -1,69 +1,61 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-const BRAZIL_TZ = 'America/Sao_Paulo';
-
 @Injectable()
 export class DevNotesService {
     constructor(private readonly prisma: PrismaService) { }
 
-    private getTodayKey(date = new Date()) {
-        return new Intl.DateTimeFormat('en-CA', {
-            timeZone: BRAZIL_TZ,
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-        }).format(date);
-    }
-
     async getUserFeed(userId: string) {
-        const [notes, seenToday] = await Promise.all([
-            (this.prisma as any).devNote.findMany({
-                where: { is_active: true },
-                orderBy: [{ show_in_daily_popup: 'desc' }, { created_at: 'desc' }],
-                include: {
-                    created_by: {
-                        select: { id: true, name: true, surname: true },
-                    },
+        const notes = await (this.prisma as any).devNote.findMany({
+            where: { is_active: true },
+            orderBy: [{ show_in_daily_popup: 'desc' }, { created_at: 'desc' }],
+            include: {
+                created_by: {
+                    select: { id: true, name: true, surname: true },
                 },
-            }),
-            (this.prisma as any).devNoteDailyView.findUnique({
-                where: {
-                    user_id_day_key: {
-                        user_id: userId,
-                        day_key: this.getTodayKey(),
-                    },
+                reads: {
+                    where: { user_id: userId },
+                    select: { id: true },
                 },
-            }),
-        ]);
+            },
+        });
 
-        const popupEligibleNotes = notes.filter((note: any) => note.show_in_daily_popup);
+        // Notas de popup que o usuário ainda não leu
+        const unreadPopupNotes = notes.filter(
+            (note: any) => note.show_in_daily_popup && note.reads.length === 0,
+        );
+
+        // Remove o campo reads do retorno (detalhe interno)
+        const notesClean = notes.map(({ reads, ...note }: any) => note);
 
         return {
-            notes,
-            should_auto_open: popupEligibleNotes.length > 0 && !seenToday,
-            day_key: this.getTodayKey(),
+            notes: notesClean,
+            should_auto_open: unreadPopupNotes.length > 0,
         };
     }
 
     async markSeenToday(userId: string) {
-        const dayKey = this.getTodayKey();
-
-        await (this.prisma as any).devNoteDailyView.upsert({
+        // Busca todas as notas de popup ativas ainda não lidas por este usuário
+        const unreadNotes = await (this.prisma as any).devNote.findMany({
             where: {
-                user_id_day_key: {
-                    user_id: userId,
-                    day_key: dayKey,
-                },
+                is_active: true,
+                show_in_daily_popup: true,
+                reads: { none: { user_id: userId } },
             },
-            create: {
-                user_id: userId,
-                day_key: dayKey,
-            },
-            update: {},
+            select: { id: true },
         });
 
-        return { ok: true, day_key: dayKey };
+        if (unreadNotes.length > 0) {
+            await (this.prisma as any).devNoteRead.createMany({
+                data: unreadNotes.map((note: any) => ({
+                    user_id: userId,
+                    note_id: note.id,
+                })),
+                skipDuplicates: true,
+            });
+        }
+
+        return { ok: true, marked: unreadNotes.length };
     }
 
     async listAll() {
